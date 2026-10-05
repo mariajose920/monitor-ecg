@@ -1,56 +1,64 @@
 <script setup>
+import { watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
+import ToastHost from '@/components/layout/ToastHost.vue'
+import { useAuthStore } from '@/stores/auth.js'
+import { notify } from '@/services/notifications/notifier.js'
+import { getPref } from '@/utils/prefs.js'
+
+const auth = useAuthStore()
+const router = useRouter()
+const route = useRoute()
+
+// Tema guardado (preferencia no sensible)
+document.documentElement.dataset.theme = getPref('tema', 'dark')
+
+// SEC-10: al expirar la sesión de admin se limpia el estado y se redirige a '/'.
+watch(
+  () => auth.isAdmin,
+  (ahora, antes) => {
+    if (antes && !ahora && route.matched.some((r) => r.meta.requiresAdmin)) {
+      notify('La sesión de administrador terminó.', { tipo: 'info' })
+      router.push('/')
+    }
+  },
+)
 </script>
 
 <template>
-  <div class="app-container">
-    <header>
-      <h1>Plataforma de Monitorización ECG</h1>
-      <nav>
-        <a href="#login">Inicio de Sesión</a> | 
-        <a href="#medicion">Medición</a> | 
-        <a href="#educacion">Educación</a> | 
-        <a href="#admin">Admin</a>
-      </nav>
-    </header>
-
-    <main>
-      <h2>Bienvenido al sistema de Bioinstrumentación Avanzada</h2>
-      <p>Aquí se visualizarán las señales de frecuencia cardíaca obtenidas desde tu ESP32/Arduino con el sensor AD8232.</p>
-      
-      <div class="status-box">
-        <p>Estado del sensor: <strong>Desconectado</strong></p>
-      </div>
-    </main>
-  </div>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+  <AppHeader />
+  <main id="contenido" class="container page" tabindex="-1">
+    <RouterView />
+  </main>
+  <AppFooter />
+  <ToastHost />
 </template>
 
-<style scoped>
-.app-container {
-  font-family: Arial, sans-serif;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
+<style>
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
-header {
-  border-bottom: 2px solid #ccc;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
+
+#app > main {
+  flex: 1;
 }
-h1 {
-  color: #2c3e50;
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  padding: 8px 12px;
+  z-index: 100;
 }
-nav a {
-  margin-right: 10px;
-  color: #42b983;
-  text-decoration: none;
-  font-weight: bold;
-}
-.status-box {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #f8d7da;
-  color: #721c24;
-  border-radius: 5px;
-  border: 1px solid #f5c6cb;
+
+.skip-link:focus {
+  left: 8px;
 }
 </style>

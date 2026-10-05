@@ -1,0 +1,20 @@
+/* Ajustes de uPlot al tema (el CSS base se importa desde 'uplot/dist/uPlot.min.css'). */
+.uplot,
+.uplot * {
+  font-family: var(--font-sans);
+}
+
+.uplot .u-legend {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.uplot .u-select {
+  background: rgb(90 169 255 / 0.15);
+}
+
+.chart-box {
+  width: 100%;
+  min-height: 160px;
+  position: relative;
+}

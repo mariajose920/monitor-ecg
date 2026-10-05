@@ -1,0 +1,52 @@
+/* Tema clínico oscuro por defecto (RNF04) con variante clara opcional. Fuentes del sistema (SEC-51). */
+:root {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Liberation Mono', monospace;
+
+  --bg: #0b1220;
+  --bg-elev: #111a2c;
+  --bg-elev-2: #17223a;
+  --border: #24324f;
+  --text: #e6edf7;
+  --text-muted: #9fb0c8;
+  --accent: #3ddc97;
+  --accent-contrast: #062016;
+  --info: #5aa9ff;
+  --warn: #ffb547;
+  --danger: #ff5c6c;
+  --ok: #3ddc97;
+  --signal: #3ddc97;
+  --signal-ref: #5aa9ff;
+  --grid: #1d2a44;
+  --focus: #ffd166;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --gap: 16px;
+  --gap-sm: 8px;
+  --shadow: 0 4px 18px rgb(0 0 0 / 0.35);
+  --touch: 44px; /* objetivos táctiles ≥ 44 px (RNF01) */
+  --maxw: 1400px;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f7fb;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #eef2f8;
+  --border: #ccd6e4;
+  --text: #0e1a2b;
+  --text-muted: #4b5d76;
+  --accent: #0f9d63;
+  --accent-contrast: #ffffff;
+  --info: #1f6fd1;
+  --warn: #a8670a;
+  --danger: #c62837;
+  --ok: #0f9d63;
+  --signal: #0f8a57;
+  --signal-ref: #1f6fd1;
+  --grid: #dfe6f0;
+  --focus: #b7791f;
+  --shadow: 0 4px 14px rgb(15 30 60 / 0.12);
+  color-scheme: light;
+}

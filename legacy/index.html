@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor ECG en Tiempo Real</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Usamos uPlot para gráficos de alto rendimiento (250Hz es bastante rápido) -->
+    <link rel="stylesheet" href="https://unpkg.com/uplot/dist/uPlot.min.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>Monitor ECG - Bioinstrumentación Avanzada</h1>
+            <div class="controls">
+                <button id="connectBtn" class="btn primary">Conectar Arduino</button>
+                <button id="disconnectBtn" class="btn danger" disabled>Desconectar</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="alert-box" id="warningBox">
+                ⚠️ <strong>ADVERTENCIA DE SEGURIDAD:</strong> Alimenta el Arduino con batería o usa un módulo Bluetooth aislado si vas a conectar electrodos a tu cuerpo.
+            </div>
+            
+            <div class="alert-box danger-alert hidden" id="leadsOffBox">
+                ⚠️ <strong>CABLES DESCONECTADOS (Leads-off):</strong> Revisa los electrodos.
+            </div>
+
+            <div class="metrics-container">
+                <div class="metric-card">
+                    <h3>Frecuencia Cardíaca</h3>
+                    <div class="value"><span id="bpmValue">--</span> <span class="unit">BPM</span></div>
+                </div>
+                <div class="metric-card">
+                    <h3>Estado</h3>
+                    <div class="value status-disconnected" id="statusValue">Desconectado</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2>Onda de Electrocardiograma (ECG)</h2>
+                <div id="ecgChart"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://unpkg.com/uplot/dist/uPlot.iife.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
