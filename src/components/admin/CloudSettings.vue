@@ -6,7 +6,7 @@ import { audit } from '@/services/audit/auditService.js'
 import { notify } from '@/services/notifications/notifier.js'
 
 /**
- * Cuenta de administrador en Supabase (8.5: autenticación real en el servidor).
+ * Cuenta de administrador en Supabase (A.9.4.2: autenticación real en el servidor).
  * Con esta sesión iniciada, los cambios de parámetros se publican para todos los equipos.
  */
 const settings = useSettingsStore()

@@ -2,7 +2,7 @@
 
 > Documento de arquitectura para reescribir el monitor ECG actual (HTML + JS puro) como SPA en **Vue 3 + Vite + Vue Router + Pinia**, cumpliendo los 27 RF y 9 RNF de `Requerimientos funcionales.md`.
 > Proyecto destino: `software/monitor-ecg-vue/`. Los archivos originales (`index.html`, `app.js`, `style.css`, `sensor_ecg_ad8232.ino`, `esquema_circuito.svg`) **no se modifican**.
-> Los controles de seguridad (ISO 27001) los define otro documento; aquí solo se fijan los **puntos de enganche** (almacenamiento cifrado, auditoría, guard de administración).
+> Los controles de seguridad (ISO/IEC 27001:2013, UNE-EN ISO/IEC 27001:2017) los define otro documento; aquí solo se fijan los **puntos de enganche** (almacenamiento cifrado, auditoría, guard de administración).
 
 **Decisiones de base:** Composition API con `<script setup>`, JavaScript (sin TypeScript), uPlot como dependencia npm, solo frontend, persistencia local (IndexedDB + localStorage), despliegue en Vercel.
 

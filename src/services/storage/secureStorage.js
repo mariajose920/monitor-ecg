@@ -1,7 +1,7 @@
 import { bytesToBase64, base64ToBytes } from '@/utils/base64.js'
 
 /**
- * ENGANCHE ISO: almacenamiento cifrado (SEC-24..SEC-29).
+ * ENGANCHE ISO 27001:2013 A.10.1.1/A.10.1.2: almacenamiento cifrado (SEC-24..SEC-29).
  *  - AES-GCM 256 con clave NO extraíble guardada en IndexedDB (nunca en localStorage ni en el código).
  *  - IV aleatorio de 12 bytes por cada cifrado; additionalData = nombre de la clave (ata el texto
  *    cifrado a su ranura: no se puede mover un registro a otra clave).
@@ -9,7 +9,7 @@ import { bytesToBase64, base64ToBytes } from '@/utils/base64.js'
  *  - Fallo seguro (SEC-27): si el descifrado falla, se descarta el registro, se avisa y se audita.
  *  - wipe(): borra los datos Y la clave (crypto-shredding, SEC-31).
  *
- * Limitación (sección 4.0 ISO): protege frente a copias/volcados del almacenamiento, no frente a
+ * Limitación (sección 5.0 del documento ISO): protege frente a copias/volcados del almacenamiento, no frente a
  * XSS ni a quien controla el navegador abierto.
  */
 

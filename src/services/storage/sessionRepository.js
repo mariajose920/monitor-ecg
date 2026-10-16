@@ -32,7 +32,7 @@ export async function getSession(id) {
   return secureStorage.getItem(`session:${id}`)
 }
 
-/** Lista metadatos de sesiones (opcionalmente solo las de un usuario: SEC-43/8.3). */
+/** Lista metadatos de sesiones (opcionalmente solo las de un usuario: SEC-43/A.9.4.1). */
 export async function listSessions({ usuarioId = null } = {}) {
   const idx = await getIndex()
   const ids = idx.filter((e) => !usuarioId || e.usuarios.includes(usuarioId)).map((e) => e.id)

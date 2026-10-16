@@ -3,6 +3,7 @@ import { useAuthStore } from './auth.js'
 import { useUsersStore } from './users.js'
 import { useSettingsStore } from './settings.js'
 import { useChannelsStore } from './channels.js'
+import { useIsmsStore } from './isms.js'
 import { auditLog, audit } from '@/services/audit/auditService.js'
 import { buildSessionsCsv } from '@/services/export/sessionExport.js'
 import { exportFilename, downloadText } from '@/services/export/csvExporter.js'
@@ -61,6 +62,7 @@ export const useAdminStore = defineStore('admin', () => {
     await wipeAllData({ conservarCredencial: true, actor: 'admin', motivo: 'borrado-total-admin' })
     useUsersStore().reset()
     useSettingsStore().reset()
+    useIsmsStore().reset()
     await useUsersStore().ensureLoaded()
   }
 

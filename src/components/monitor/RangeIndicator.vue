@@ -22,7 +22,7 @@ const info = computed(() => {
 </script>
 
 <template>
-  <div class="range">
+  <div class="range" role="status" aria-live="polite" aria-atomic="true">
     <span :class="['chip', info.clase]"><span aria-hidden="true">{{ info.icono }}</span> {{ info.texto }}</span>
     <span v-if="rango" class="muted small">rango {{ rango.min }}–{{ rango.max }} BPM</span>
   </div>

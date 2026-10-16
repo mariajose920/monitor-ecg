@@ -34,6 +34,15 @@ const activo = computed(() => ['connecting', 'streaming', 'leads-off', 'signal-l
 const enSesion = computed(() => session.participa(props.canal.id))
 const rango = computed(() => settings.rangoPara(props.canal.actividad))
 const ventana = computed(() => settings.parametros.adquisicion.ventanaVisualSeg)
+/** Alternativa textual del gráfico para lectores de pantalla (WCAG 1.1.1 y 1.4.1). */
+const descripcionGrafico = computed(() => {
+  const c = props.canal
+  const partes = [c.bpmCalculado == null ? 'BPM sin dato válido' : `${c.bpmCalculado} BPM`]
+  if (c.leadsOff) partes.push('electrodos desconectados')
+  if (c.rango && c.rango !== 'sin-dato') partes.push(`${c.rango} del rango`)
+  if (c.enAlerta) partes.push('en alerta')
+  return partes.join(', ')
+})
 const fuentes = SOURCE_KINDS.map((f) => ({ ...f, ok: f.soportado() }))
 const perfiles = Object.values(DEVICE_PROFILES).filter((p) => p.id !== 'simulador')
 
@@ -138,7 +147,7 @@ async function cargarEjemplo() {
 
     <template v-if="activo">
       <LeadsOffAlert v-if="canal.leadsOff" />
-      <EcgChart :channel-id="canal.id" :window-sec="ventana" />
+      <EcgChart :channel-id="canal.id" :window-sec="ventana" :descripcion="descripcionGrafico" />
       <div class="metricas">
         <BpmDisplay :calculado="canal.bpmCalculado" :dispositivo="canal.bpmDispositivo" :mostrar-dispositivo="canal.fuente !== 'simulator'" />
         <RangeIndicator :estado="canal.rango" :rango="rango" :en-alerta="canal.enAlerta" />

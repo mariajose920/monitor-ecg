@@ -21,7 +21,7 @@ const prohibicionesHtml = [
 ]
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'coverage/**'] },
+  { ignores: ['dist/**', 'dist-e2e/**', 'node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**'] },
   js.configs.recommended,
   ...pluginVue.configs['flat/essential'],
   security.configs.recommended,
@@ -58,7 +58,7 @@ export default [
     rules: { 'no-restricted-properties': 'off' },
   },
   {
-    files: ['tests/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
+    files: ['tests/**/*.js', 'e2e/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
     languageOptions: { globals: { ...globals.node } },
     rules: { 'no-console': 'off', 'security/detect-non-literal-fs-filename': 'off' },
   },

@@ -1,9 +1,33 @@
 <script setup>
 import { useSettingsStore } from '@/stores/settings.js'
+import { ref } from 'vue'
 import { CONSENT_VERSION } from '@/stores/users.js'
+import { cloudEnabled, deleteAllMyCloudData } from '@/services/cloud/cloudSync.js'
+import { audit } from '@/services/audit/auditService.js'
+import { notify } from '@/services/notifications/notifier.js'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 
-/** SEC-19: aviso de privacidad completo (ruta pública /privacidad). */
+/** SEC-19: aviso de privacidad completo (ruta pública /privacidad). ISO/IEC 27001:2013 A.18.1.4. */
 const settings = useSettingsStore()
+const confirmar = ref(false)
+const borrando = ref(false)
+const resultado = ref('')
+
+/** SUG-06: derecho de supresión en la nube para la identidad (anónima) de este navegador. */
+async function borrarNube() {
+  borrando.value = true
+  try {
+    const r = await deleteAllMyCloudData()
+    resultado.value = r ? `Se eliminaron ${r.sesiones} sesión(es) y ${r.incidentes} notificación(es) de la nube.` : 'La nube no está configurada.'
+    await audit('CLOUD_DATA_DELETED', 'system', { sesiones: r?.sesiones ?? 0 })
+    notify(resultado.value, { tipo: 'ok' })
+  } catch (e) {
+    notify(e.message || 'No se pudo borrar en la nube.', { tipo: 'error' })
+  } finally {
+    borrando.value = false
+    confirmar.value = false
+  }
+}
 </script>
 
 <template>
@@ -26,27 +50,60 @@ const settings = useSettingsStore()
     </ul>
 
     <h2>Base legal</h2>
-    <p>Consentimiento informado, libre y revocable del participante (Ley 19.628 sobre protección de la vida privada y Ley 21.719 de protección de datos personales de Chile; Ley 20.584 como referencia de confidencialidad de datos de salud; RGPD art. 9 como buena práctica).</p>
+    <p>Consentimiento expreso, informado, libre y revocable del participante, exigido para datos sensibles de salud (Ley 19.628 sobre protección de la vida privada y Ley 21.719 de protección de datos personales de Chile; Ley 20.584 como referencia de confidencialidad de datos de salud; RGPD art. 9 como buena práctica).</p>
+    <p class="muted small">Control de referencia: ISO/IEC 27001:2013 A.18.1.1 (legislación aplicable) y A.18.1.4 (protección y privacidad de la información de carácter personal). Política de seguridad: <RouterLink to="/seguridad">/seguridad</RouterLink>.</p>
 
     <h2>Dónde se guardan y quién accede</h2>
-    <p>Solo en este navegador y equipo, cifrados con AES-GCM 256 (Web Crypto) en IndexedDB. No hay servidor ni base de datos remota y no se envían datos a terceros (sin analítica ni telemetría). Accede el administrador del curso desde este equipo.</p>
+    <p>En este navegador y equipo, cifrados con AES-GCM 256 (Web Crypto) en IndexedDB. Si el proyecto tiene la nube configurada, se replica una copia seudonimizada en Supabase (PostgreSQL con TLS, cifrado en reposo y Row Level Security: cada sesión anónima solo ve lo suyo y solo el administrador autenticado ve todo). No hay analítica ni telemetría y no se ceden datos a terceros. Supabase y Vercel actúan como proveedores en la nube (ISO/IEC 27001:2013 A.15.1).</p>
 
     <h2>Retención</h2>
     <p>Las mediciones se borran automáticamente a los <strong>{{ settings.retencionDias }} días</strong> (plazo configurable por el administrador, máximo 180).</p>
 
-    <h2>Tus derechos</h2>
-    <p>Puedes acceder a tus datos, retirar el consentimiento (borra de inmediato los datos opcionales) y solicitar la supresión con el botón "Eliminar mis datos" en la sección Participantes. Para rectificación u oposición, contacta al responsable.</p>
+    <h2>Transferencia internacional</h2>
+    <p>Si la nube está activa, la copia seudonimizada se aloja en la región elegida al crear el proyecto Supabase (por defecto fuera de Chile, p. ej. EE. UU.) y el sitio se sirve desde la red de Vercel. Esto se informa en el consentimiento, se minimizan los datos (solo seudónimos) y los proveedores declaran cifrado en tránsito y en reposo. Si no aceptas la transferencia, la app funciona en modo 100 % local (sin variables de la nube).</p>
+
+    <h2>Tus derechos y cómo ejercerlos</h2>
+    <table class="derechos">
+      <caption class="sr-only">Derechos del titular y vía de ejercicio</caption>
+      <thead><tr><th scope="col">Derecho</th><th scope="col">Cómo ejercerlo en la app</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Acceso</th><td>Sección Sesiones: ver tus mediciones y su detalle.</td></tr>
+        <tr><th scope="row">Rectificación</th><td>Participantes → editar datos opcionales; para otros datos, contacta al responsable.</td></tr>
+        <tr><th scope="row">Supresión</th><td>Participantes → "Eliminar mis datos" (local y su réplica) y el botón de abajo para todo lo de este navegador en la nube.</td></tr>
+        <tr><th scope="row">Oposición / retiro del consentimiento</th><td>Participantes → retirar consentimiento (borra de inmediato los datos opcionales).</td></tr>
+        <tr><th scope="row">Portabilidad</th><td>Sesiones → exportar CSV (formato abierto y legible por máquina).</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Plazo de respuesta:</strong> las acciones de la app son inmediatas; las solicitudes al responsable se atienden en un máximo de 30 días corridos. Si no quedas conforme puedes recurrir a la autoridad de protección de datos que establezca la ley.</p>
+
+    <section class="borrado-nube" aria-labelledby="borrar-nube">
+      <h3 id="borrar-nube">Eliminar mis datos en la nube</h3>
+      <p v-if="!cloudEnabled" class="muted small">La nube no está configurada en este despliegue: tus datos solo existen en este navegador.</p>
+      <template v-else>
+        <p class="small">Borra en Supabase todas las sesiones (y sus muestras) y las notificaciones de incidentes creadas desde este navegador. No afecta a otros participantes.</p>
+        <button class="btn danger" :disabled="borrando" data-testid="borrar-nube" @click="confirmar = true">Eliminar mis datos en la nube</button>
+        <p v-if="resultado" class="small" role="status">{{ resultado }}</p>
+      </template>
+    </section>
+
+    <BaseDialog v-if="confirmar" titulo="¿Eliminar tus datos en la nube?" @cerrar="confirmar = false">
+      <p>Esta acción es irreversible. Las copias locales de este navegador no se tocan.</p>
+      <template #acciones>
+        <button class="btn ghost" @click="confirmar = false">Cancelar</button>
+        <button class="btn danger" :disabled="borrando" @click="borrarNube">Sí, eliminar</button>
+      </template>
+    </BaseDialog>
 
     <h2>Limitaciones de seguridad (transparencia)</h2>
     <ul>
       <li>La autenticación del administrador ocurre en el navegador: disuade el uso indebido casual, pero no detiene a alguien con control del equipo y de las herramientas de desarrollo.</li>
       <li>El cifrado protege frente a la lectura casual y a copias del almacenamiento, no frente a código malicioso que se ejecute en la propia página ni frente a quien controla el navegador abierto.</li>
-      <li>No hay respaldo central: si se borra el almacenamiento del navegador, los datos se pierden.</li>
+      <li>Sin nube configurada no hay respaldo central: si se borra el almacenamiento del navegador, los datos se pierden.</li>
       <li>Los CSV exportados quedan bajo la responsabilidad de quien los descarga.</li>
     </ul>
 
     <h2 id="contacto">Contacto y reporte de problemas</h2>
-    <p>Para ejercer tus derechos o reportar un problema de seguridad, contacta al docente responsable de la asignatura o al correo del equipo del proyecto. No incluyas datos de salud en el mensaje.</p>
+    <p>Para ejercer tus derechos, contacta al docente responsable de la asignatura o al correo del equipo del proyecto. Para reportar un problema de seguridad usa el formulario de la <RouterLink :to="{ name: 'seguridad', hash: '#reportar' }">página de Seguridad</RouterLink> (ISO/IEC 27001:2013 A.16.1.2/A.16.1.3). No incluyas datos de salud en el mensaje.</p>
   </article>
 </template>
 
@@ -57,5 +114,26 @@ const settings = useSettingsStore()
 
 h2 {
   margin-top: 20px;
+}
+
+.derechos {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.derechos th,
+.derechos td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.borrado-nube {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
 }
 </style>

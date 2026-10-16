@@ -50,7 +50,7 @@ export const useSettingsStore = defineStore('settings', () => {
     cargarDesdeNube() // en segundo plano: no retrasa el arranque si no hay red
   }
 
-  /** Los parámetros publicados por el admin en la nube prevalecen (validados: fallo seguro, 8.9). */
+  /** Los parámetros publicados por el admin en la nube prevalecen (validados: fallo seguro, A.14.2.5). */
   async function cargarDesdeNube() {
     if (!cloudEnabled) return
     try {

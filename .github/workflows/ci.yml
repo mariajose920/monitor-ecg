@@ -1,0 +1,81 @@
+# CI del Monitor ECG (SUG-10/SUG-11; ISO/IEC 27001:2013 A.14.2.8, A.14.2.9, A.12.6.1, A.14.2.4).
+# En GitHub la app vive en la RAÍZ del repositorio (contenido de monitor-ecg-vue/ + docs/, supabase/, legacy/).
+# Si algún día se versiona con la carpeta monitor-ecg-vue/, reemplazar "." por "monitor-ecg-vue" en working-directory y en las rutas.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  calidad:
+    name: Lint, pruebas, build y auditoría
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: npm audit (vulnerabilidades altas o críticas)
+        run: npm audit --audit-level=high --omit=dev
+      - name: npm audit (todas las dependencias, informativo)
+        run: npm audit --audit-level=high || true
+
+  e2e:
+    name: Pruebas E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: calidad
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: ./playwright-report
+          retention-days: 7
+
+  secretos:
+    name: Escaneo de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

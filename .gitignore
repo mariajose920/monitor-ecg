@@ -7,6 +7,9 @@ coverage/
 # SEC-55: nunca versionar variables de entorno
 .env
 .env.*
-.vscode/*
-!.vscode/extensions.json
 !.env.example
+# Pruebas E2E (Playwright)
+dist-e2e/
+playwright-report/
+test-results/
+blob-report/

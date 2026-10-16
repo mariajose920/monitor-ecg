@@ -4,7 +4,8 @@
       <span class="muted small">Proyecto académico · Uso educativo · <strong>No es un dispositivo médico</strong> ni realiza diagnósticos.</span>
       <span class="links">
         <RouterLink to="/privacidad">Aviso de privacidad</RouterLink>
-        <RouterLink :to="{ name: 'privacidad', hash: '#contacto' }">Reportar un problema</RouterLink>
+        <RouterLink to="/seguridad">Política de seguridad</RouterLink>
+        <RouterLink :to="{ name: 'seguridad', hash: '#reportar' }">Reportar un incidente</RouterLink>
       </span>
     </div>
   </footer>

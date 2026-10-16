@@ -9,7 +9,7 @@ defineProps({
 
 <template>
   <div class="bpm">
-    <div class="principal" aria-live="polite">
+    <div class="principal" role="status" aria-live="polite" aria-atomic="true" data-testid="bpm">
       <span class="valor mono">{{ calculado ?? '--' }}</span>
       <span class="unidad">BPM</span>
     </div>

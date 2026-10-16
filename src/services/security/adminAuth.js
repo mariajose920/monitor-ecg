@@ -5,8 +5,8 @@ import {
 } from './lockout.js'
 
 /**
- * ENGANCHE ISO (RF25, SEC-06..SEC-12). Autenticación del administrador en el cliente.
- * IMPORTANTE (sección 4.0 del documento ISO): disuade el uso casual, no detiene a quien
+ * ENGANCHE ISO 27001:2013 A.9.2.4/A.9.4.2/A.9.4.3 (RF25, SEC-06..SEC-12). Autenticación del administrador en el cliente.
+ * IMPORTANTE (sección 5.0 del documento ISO 27001:2013): disuade el uso casual, no detiene a quien
  * controla el navegador. La credencial (hash) y el bloqueo van en localStorage; la sesión
  * solo en sessionStorage (se pierde al cerrar la pestaña).
  */

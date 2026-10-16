@@ -14,7 +14,7 @@ import { notify } from '@/services/notifications/notifier.js'
 import { formatFecha, formatDuracion } from '@/utils/time.js'
 import { nombreActividad, ACTIVIDADES } from '@/data/activities.js'
 
-/** Historial de sesiones. El participante solo ve y exporta las suyas (8.3, SEC-43). */
+/** Historial de sesiones. El participante solo ve y exporta las suyas (A.9.4.1, SEC-43). */
 const users = useUsersStore()
 const auth = useAuthStore()
 const sessionStore = useSessionStore()

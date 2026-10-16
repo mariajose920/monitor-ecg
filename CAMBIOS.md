@@ -41,3 +41,42 @@ Bugs del diagnóstico (1.3) corregidos: 1 (RingBuffer), 2 (rAF), 3 (escalares a 
 - No se exportan ni se cifran las preferencias de UI (tema): son no sensibles por diseño.
 - `npm audit`/Dependabot/protección de rama (SEC-52, SEC-58) dependen del repositorio y CI, que no se inicializaron (por instrucción, sin git).
 - Limitación inherente solo-frontend (sección 4.0 ISO): controles evitables por quien controla el navegador.
+
+## Alineación ISO/IEC 27001:2013
+
+La asignatura entrega **UNE-EN ISO/IEC 27001:2017 = ISO/IEC 27001:2013** (+Cor 1:2014, Cor 2:2015; Anexo A de 114 controles, A.5–A.18). La documentación y el código citaban la edición 2022 (5.x–8.x); se alineó todo a 2013.
+
+| Ámbito | Cambio | Archivos |
+|---|---|---|
+| Documentación | `ISO27001_controles.md` v2.0: estructura por cláusulas 4–10, riesgos R01–R20 (nuevos R15–R20 de Supabase: RLS, auth anónima, admin de la nube, transferencia internacional, incidentes, reloj), **SoA de 114 controles** (71 Sí, 27 Parcial, 16 No) con justificación, estado y evidencia `archivo:línea`, SEC-01..SEC-62 renumerados + SEC-63..SEC-69, tabla de equivalencia 2022→2013 y mapeo RNF06 | `docs/ISO27001_controles.md`, `docs/VERIFICACION.md`, `docs/ARQUITECTURA_VUE.md` |
+| SGSI | 11 documentos nuevos: política, roles (RACI), metodología de riesgos, plan de tratamiento, objetivos e indicadores, incidentes, continuidad, control de acceso, uso aceptable y clasificación, auditoría interna y revisión por la dirección (plantillas), no conformidades | `docs/sgsi/*.md` |
+| Política visible (A.5.1.1, A.8.1.3) | Ruta pública `/seguridad` con política, uso aceptable, roles y clasificación; enlaces en el pie | `src/views/SecurityView.vue`, `src/data/securityPolicy.js`, `src/router/index.js`, `AppFooter.vue` |
+| Incidentes (A.16.1.2–A.16.1.6) | Formulario para cualquier usuario (sin datos personales ni de salud), ciclo abierto → en análisis → cerrado/descartado con respuesta y lección obligatorias, cifrado local y tabla `incidentes` con RLS | `src/services/security/incidents.js`, `src/stores/isms.js`, `src/components/security/IncidentReportForm.vue`, `supabase/schema.sql` |
+| Panel SGSI (admin) | Aceptación de la política (A.7.2.2), revisión de derechos de acceso cada 90 días (A.9.2.5), indicadores 9.1 y objetivos 6.2, reloj frente a `hora_servidor()` (A.12.4.4), gestión de incidentes | `src/components/admin/IsmsPanel.vue`, `src/services/security/isms.js`, `src/views/admin/AdminView.vue` |
+| Auditoría | Eventos `INCIDENT_REPORTED`, `INCIDENT_UPDATED`, `POLICY_ACCEPTED`, `ACCESS_REVIEW_DONE`, `CLOCK_SKEW`; marcas UTC visibles en `/admin/auditoria` | `src/services/audit/auditLog.js`, `src/views/admin/AuditView.vue` |
+| Supabase | Cabecera con controles 2013; tabla `incidentes` (RLS: notifica cualquiera, lee reportante/admin, gestiona admin, sin DELETE) y función `hora_servidor()`; idempotente | `supabase/schema.sql` |
+| Contenido visible | `/privacidad` actualizado (nube, RLS, proveedores, A.18.1.4); Aprende → "Seguridad de la información"; insignias con A.8.2.1/A.8.2.2 | `PrivacyView.vue`, `src/data/learn/informationSecurity.js`, `LearnView.vue`, `DataClassBadge.vue` |
+| Comentarios | Referencias 5.16, 8.3, 8.5, 8.9, 8.15, 8.28… → A.9.2.1, A.9.4.1, A.9.4.2, A.12.1.2/A.14.2.5, A.12.4.1, A.14.2.5 | `src/**`, `README.md` |
+| Pruebas | +10 pruebas (`tests/isms.spec.js`): validación y ciclo de vida de incidentes, política, revisión de accesos, desfase de reloj, indicadores y objetivos | `tests/isms.spec.js` |
+
+Verificación: `npm run build` OK, `npm test` 94/94 (8 archivos), `npm run lint` 0 problemas.
+
+Pendiente: volver a ejecutar `supabase/schema.sql` en el proyecto (crea `incidentes` y `hora_servidor`); CI con `npm audit`; prueba automatizada de RLS; aprobación firmada del plan de tratamiento por el docente.
+
+## 2026-10-15 — Sugerencias SUG-01..SUG-28 (revisión ISO/IEC 27001:2013)
+
+Estado detallado por sugerencia en `../docs/SUGERENCIAS_CAMBIOS.md` §4 (10 ya resueltas, 16 implementadas, 2 pendientes).
+
+| Ámbito | Cambio | Archivos |
+|---|---|---|
+| Supabase (SUG-05/14) | `CHECK` de tamaño, lista blanca de tipos de auditoría, triggers de cuota por usuario, `ts`/`usuario` de auditoría fijados por el servidor, `borrar_mis_datos()`, purga con `pg_cron` documentada. **Corregidos** dos errores de sintaxis que impedían ejecutar el script (literales sin comillas en `incidentes`, `$` en `hora_servidor`) | `../supabase/schema.sql` |
+| Abuso de sesiones anónimas (SUG-04) | CAPTCHA opcional (Turnstile/hCaptcha) activable por variables públicas; límites de tasa del cliente | `src/services/cloud/captcha.js`, `src/utils/rateLimiter.js`, `src/services/cloud/cloudSync.js`, `.env.example`, `src/assets/styles/base.css` |
+| Privacidad (SUG-06) | Base legal, transferencia internacional, tabla de derechos, plazos y "Eliminar mis datos en la nube" | `src/views/PrivacyView.vue`, `cloudSync.js` (`deleteAllMyCloudData`) |
+| Seguridad eléctrica (SUG-09) | Acuse registrado en auditoría (`ELECTRICAL_SAFETY_ACK`) y advertencias explícitas | `src/views/MonitorView.vue`, `src/services/audit/auditLog.js` |
+| Accesibilidad (SUG-20) | `aria-live` en BPM/rango, alternativa textual del gráfico, trampa de foco en diálogos, contraste AA en tema claro | `BpmDisplay.vue`, `RangeIndicator.vue`, `ChannelPanel.vue`, `EcgChart.vue`, `BaseDialog.vue`, `tokens.css` |
+| CI y pruebas (SUG-10/11/18/24/28) | GitHub Actions, Dependabot, plantilla de PR, Playwright (9 E2E), `.editorconfig`, `supabase-js` con `~` | `.github/`, `playwright.config.js`, `e2e/`, `tests/abuseControls.spec.js`, `package.json`, `eslint.config.js`, `.gitignore` |
+| Documentación (SUG-07/08/13/15/26) | Matriz de trazabilidad y erratas, esquema AD8232, política criptográfica, proveedores y vulnerabilidades, README, SoA actualizada | `../docs/TRAZABILIDAD.md`, `../docs/esquema_circuito_ad8232.svg`, `../docs/sgsi/politica_criptografica.md`, `../docs/sgsi/proveedores.md`, `README.md`, `../docs/ISO27001_controles.md` |
+
+Verificación: `npm run lint` 0 problemas · `npm test` 103/103 (9 archivos) · `npm run build` OK · `npm run test:e2e` 9/9 (Chromium) · `schema.sql` ejecutado dos veces en PostgreSQL embebido (PGlite) con pruebas de cuota, lista blanca y supresión · `npm audit --omit=dev` 0 vulnerabilidades (en desarrollo: `tinypool` crítica vía `vitest` 3, registrada).
+
+Pendiente (humano): volver a ejecutar `schema.sql`; activar CAPTCHA/rate limit en Supabase y, si se activa, ampliar la CSP; protección de rama en GitHub; región y DPA en `docs/sgsi/proveedores.md`; Lighthouse/axe; medición de rendimiento; capturas en README; presentación.

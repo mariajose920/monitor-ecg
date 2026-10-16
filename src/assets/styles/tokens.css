@@ -37,12 +37,12 @@
   --border: #ccd6e4;
   --text: #0e1a2b;
   --text-muted: #4b5d76;
-  --accent: #0f9d63;
+  --accent: #0b7a4c; /* WCAG 1.4.3: 5.4:1 sobre blanco (antes #0f9d63 = 3.5:1) */
   --accent-contrast: #ffffff;
   --info: #1f6fd1;
-  --warn: #a8670a;
+  --warn: #8a5508; /* 6.2:1 sobre blanco */
   --danger: #c62837;
-  --ok: #0f9d63;
+  --ok: #0b7a4c;
   --signal: #0f8a57;
   --signal-ref: #1f6fd1;
   --grid: #dfe6f0;

@@ -9,8 +9,27 @@ const emit = defineEmits(['cerrar'])
 const caja = ref(null)
 let previo = null
 
+const ENFOCABLES = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/** Escape cierra; Tab y Shift+Tab quedan atrapados dentro del diálogo modal (WCAG 2.1.2 / 2.4.3). */
 function onKey(e) {
-  if (e.key === 'Escape') emit('cerrar')
+  if (e.key === 'Escape') {
+    emit('cerrar')
+    return
+  }
+  if (e.key !== 'Tab' || !caja.value) return
+  const items = [...caja.value.querySelectorAll(ENFOCABLES)]
+  if (!items.length) return
+  const primero = items[0]
+  const ultimo = items[items.length - 1]
+  const dentro = caja.value.contains(document.activeElement)
+  if (e.shiftKey && (!dentro || document.activeElement === primero)) {
+    e.preventDefault()
+    ultimo.focus()
+  } else if (!e.shiftKey && (!dentro || document.activeElement === ultimo)) {
+    e.preventDefault()
+    primero.focus()
+  }
 }
 
 onMounted(async () => {

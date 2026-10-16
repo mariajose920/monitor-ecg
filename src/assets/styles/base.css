@@ -233,3 +233,16 @@ th { color: var(--text-muted); font-weight: 600; }
   color: var(--text);
   border-bottom-color: var(--accent);
 }
+
+/* Contenedor del CAPTCHA opcional (SUG-04): solo existe mientras dura la verificación. */
+.captcha-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  box-shadow: var(--shadow);
+}

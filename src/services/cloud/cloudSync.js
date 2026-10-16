@@ -1,5 +1,7 @@
 import { ref } from 'vue'
 import { supabase, cloudEnabled } from './supabaseClient.js'
+import { captchaEnabled, getCaptchaToken } from './captcha.js'
+import { createRateLimiter, CLIENT_LIMITS } from '@/utils/rateLimiter.js'
 
 /**
  * Sincronización con Supabase. Lo local (IndexedDB cifrado) sigue siendo la fuente principal:
@@ -9,6 +11,17 @@ import { supabase, cloudEnabled } from './supabaseClient.js'
 export { cloudEnabled }
 export const cloudEstado = ref(cloudEnabled ? 'desconectado' : 'deshabilitado') // | 'conectado' | 'error'
 export const cloudAdmin = ref(false)
+
+// Límites de tasa del cliente (SUG-04/SUG-05): defensa en profundidad frente a bucles o abuso;
+// el control efectivo está en los triggers de cuota del servidor (supabase/schema.sql).
+const limites = Object.fromEntries(Object.entries(CLIENT_LIMITS).map(([k, v]) => [k, createRateLimiter(v)]))
+const sesionesConocidas = new Set()
+export const cloudDescartes = ref(0)
+function permitir(tipo) {
+  if (limites[tipo].tryAcquire()) return true
+  cloudDescartes.value++
+  return false
+}
 
 let cola = Promise.resolve()
 function encolar(fn) {
@@ -23,7 +36,21 @@ export async function ensureCloudSession() {
   if (!cloudEnabled) return false
   const { data } = await supabase.auth.getSession()
   if (!data.session) {
-    const { error } = await supabase.auth.signInAnonymously()
+    // SUG-04: máximo de intentos de alta anónima por ventana y CAPTCHA opcional.
+    if (!permitir('anonSignIn')) {
+      cloudEstado.value = 'error'
+      return false
+    }
+    let captchaToken = null
+    if (captchaEnabled) {
+      try {
+        captchaToken = await getCaptchaToken()
+      } catch {
+        cloudEstado.value = 'error'
+        return false
+      }
+    }
+    const { error } = await supabase.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined)
     if (error) {
       cloudEstado.value = 'error'
       return false
@@ -46,6 +73,9 @@ function sinError({ error }) {
 /** Sube/actualiza los metadatos de una sesión (participantes seudonimizados). */
 export function pushSession(meta) {
   if (!cloudEnabled) return Promise.resolve()
+  const nueva = !sesionesConocidas.has(meta.id)
+  if (nueva && !permitir('session')) return Promise.resolve()
+  sesionesConocidas.add(meta.id)
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
     sinError(await supabase.from('sesiones').upsert({
@@ -62,7 +92,7 @@ export function pushSession(meta) {
 
 /** Sube un bloque de ~2 s de muestras. */
 export function pushChunk(sessionId, canal, chunk) {
-  if (!cloudEnabled) return Promise.resolve()
+  if (!cloudEnabled || !permitir('chunk')) return Promise.resolve()
   return encolar(async () => {
     sinError(await supabase.from('bloques_muestras').upsert({
       sesion_id: sessionId,
@@ -85,6 +115,26 @@ export function deleteCloudSessions(ids) {
   })
 }
 
+/**
+ * SUG-06 / A.18.1.4: supresión de TODOS los datos del usuario actual en la nube (sesiones, bloques
+ * en cascada e incidentes que reportó). Usa la función borrar_mis_datos() del servidor; si aún no
+ * existe (schema.sql antiguo), borra las sesiones propias filtrando por propietario (nunca las de otros,
+ * aunque la sesión sea de administrador). @returns {Promise<{sesiones:number, incidentes:number}|null>}
+ */
+export async function deleteAllMyCloudData() {
+  if (!cloudEnabled) return null
+  await cola.catch(() => {})
+  if (!(await ensureCloudSession())) throw new Error('No hay conexión con la nube.')
+  const { data, error } = await supabase.rpc('borrar_mis_datos')
+  if (!error && data) return { sesiones: Number(data.sesiones ?? 0), incidentes: Number(data.incidentes ?? 0) }
+  const { data: u } = await supabase.auth.getUser()
+  if (!u?.user?.id) throw new Error('No hay usuario de la nube.')
+  const r = await supabase.from('sesiones').delete({ count: 'exact' }).eq('propietario', u.user.id)
+  sinError(r)
+  sesionesConocidas.clear()
+  return { sesiones: r.count ?? 0, incidentes: 0 }
+}
+
 /** Borra los bloques de un canal de una sesión (cuando un participante elimina sus datos). */
 export function deleteCloudChunks(sessionId, canal) {
   if (!cloudEnabled) return Promise.resolve()
@@ -94,9 +144,9 @@ export function deleteCloudChunks(sessionId, canal) {
   })
 }
 
-/** Réplica de auditoría (8.15). Los detalles ya vienen saneados por el auditLog local. */
+/** Réplica de auditoría (A.12.4.1). Los detalles ya vienen saneados por el auditLog local. */
 export function pushAudit(tipo, actor, detalle) {
-  if (!cloudEnabled) return Promise.resolve()
+  if (!cloudEnabled || !permitir('audit')) return Promise.resolve()
   const actorTipo = actor === 'admin' ? 'admin' : String(actor).startsWith('participant') ? 'participant' : 'system'
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
@@ -128,7 +178,7 @@ export async function pushCloudParametros({ parametros, sincronizacion }) {
   return true
 }
 
-/** Inicio de sesión del administrador en la nube (autenticación real en el servidor, 8.5). */
+/** Inicio de sesión del administrador en la nube (autenticación real en el servidor, A.9.4.2). */
 export async function cloudAdminLogin(email, password) {
   if (!cloudEnabled) throw new Error('La nube no está configurada.')
   const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -146,4 +196,32 @@ export async function cloudAdminLogout() {
   await supabase.auth.signOut()
   cloudAdmin.value = false
   await ensureCloudSession()
+}
+
+/** Réplica de una notificación de incidente o debilidad (A.16.1.2 / A.16.1.3). Sin datos de salud. */
+export function pushIncident(inc) {
+  if (!cloudEnabled || !permitir('incident')) return Promise.resolve()
+  return encolar(async () => {
+    if (!(await ensureCloudSession())) return
+    sinError(await supabase.from('incidentes').upsert({
+      id: inc.id,
+      creado_en: inc.creadoUtc,
+      actualizado_en: inc.actualizadoUtc,
+      tipo: inc.tipo,
+      severidad: inc.severidad,
+      descripcion: inc.descripcion,
+      reportado_por: inc.reportadoPor,
+      estado: inc.estado,
+      respuesta: inc.respuesta || null,
+      leccion: inc.leccion || null,
+    }))
+  })
+}
+
+/** Hora del servidor (fuente única acordada para la sincronización del reloj, A.12.4.4). */
+export async function fetchServerTime() {
+  if (!(await ensureCloudSession())) return null
+  const { data, error } = await supabase.rpc('hora_servidor')
+  if (error) return null
+  return typeof data === 'string' ? data : null
 }

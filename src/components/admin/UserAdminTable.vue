@@ -5,7 +5,7 @@ import { useChannelsStore } from '@/stores/channels.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { formatFecha } from '@/utils/time.js'
 
-/** Gestión de identificadores (5.16): alta desde Participantes, baja aquí. Sin datos opcionales visibles. */
+/** Gestión de identificadores (A.9.2.1): alta desde Participantes, baja aquí. Sin datos opcionales visibles. */
 const users = useUsersStore()
 const admin = useAdminStore()
 const channels = useChannelsStore()

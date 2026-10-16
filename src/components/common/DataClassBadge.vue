@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 
-/** Etiqueta de clasificación visible (SEC-22). */
+/** Etiqueta de clasificación visible (SEC-22, A.8.2.2 etiquetado de la información). */
 const props = defineProps({
   level: { type: String, default: 'sensitive', validator: (v) => ['sensitive', 'confidential', 'internal', 'public'].includes(v) },
   texto: { type: String, default: '' },
@@ -19,5 +19,5 @@ const etiqueta = computed(() => [props.texto || n.value.defecto, n.value.nombre]
 </script>
 
 <template>
-  <span :class="['chip', n.clase]" :title="`Clasificación: ${n.nombre}`">🔒 {{ etiqueta }}</span>
+  <span :class="['chip', n.clase]" :title="`Clasificación (ISO 27001:2013 A.8.2.1/A.8.2.2): ${n.nombre}`">🔒 {{ etiqueta }}</span>
 </template>

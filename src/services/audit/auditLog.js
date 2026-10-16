@@ -1,7 +1,8 @@
 import { bytesToHex } from '@/utils/base64.js'
 
 /**
- * ENGANCHE ISO: registro de auditoría append-only con cadena de hashes SHA-256 (SEC-38..SEC-42).
+ * ENGANCHE ISO/IEC 27001:2013 (A.12.4.1, A.12.4.2, A.12.4.3, A.16.1.7): registro de auditoría
+ * append-only con cadena de hashes SHA-256 (SEC-38..SEC-42). Marcas de tiempo ISO-8601 UTC (A.12.4.4).
  * hash = SHA-256(JSON canónico de { seq, ts, event, actor, details, prevHash }).
  * Detecta alteraciones (no las impide: riesgo residual R11 aceptado en un sistema solo-frontend).
  */
@@ -13,6 +14,10 @@ export const AUDIT_EVENTS = Object.freeze([
   'SERIAL_INVALID_DATA', 'DEVICE_RESET', 'INTEGRITY_ERROR', 'AUDIT_EXPORTED',
   // Eventos adicionales del documento de arquitectura
   'SESSION_STARTED', 'SESSION_ENDED', 'ALERT_TRIGGERED',
+  // SGSI ISO/IEC 27001:2013 (A.16.1, A.7.2.2, A.9.2.5, A.12.4.4)
+  'INCIDENT_REPORTED', 'INCIDENT_UPDATED', 'POLICY_ACCEPTED', 'ACCESS_REVIEW_DONE', 'CLOCK_SKEW',
+  // Seguridad eléctrica antes de Web Serial (SUG-09) y supresión en la nube (SUG-06, A.18.1.4)
+  'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED',
 ])
 
 export const GENESIS = '0'.repeat(64)

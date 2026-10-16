@@ -12,6 +12,7 @@ import { useUsersStore } from '@/stores/users.js'
 import { useSessionStore } from '@/stores/session.js'
 import { MAX_CHANNELS } from '@/data/defaultSettings.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { audit } from '@/services/audit/auditService.js'
 
 const channels = useChannelsStore()
 const users = useUsersStore()
@@ -52,9 +53,13 @@ function conectar(canal) {
 }
 
 function aceptarSeguridad() {
+  if (!confirmado.value) return
   sessionStorage.setItem(SAFETY_KEY, '1')
   const c = pendiente.value
   pendiente.value = null
+  // SUG-09: el acuse queda en la auditoría (sin datos de salud).
+  const actor = users.activeUser ? `participant:${users.activeUser.etiqueta}` : 'system'
+  audit('ELECTRICAL_SAFETY_ACK', actor, { canal: c?.id ?? null, version: 'v1' })
   // El clic en "Conectar" es el gesto de usuario que exige requestPort() (SEC-35).
   if (c) channels.connect(c.id)
 }
@@ -103,8 +108,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         Confirma que el Arduino/ESP32 está alimentado por <strong>batería</strong> o conectado mediante un
         <strong>módulo Bluetooth aislado</strong> si los electrodos están puestos, o que el computador está desenchufado de la red.
       </p>
+      <ul class="small">
+        <li>Usa un portátil a batería: <strong>nunca</strong> con el cargador enchufado mientras los electrodos están puestos.</li>
+        <li>No lo uses en personas con marcapasos u otro implante electrónico.</li>
+        <li>Este acuse se registra en la auditoría (sin datos de salud).</li>
+      </ul>
       <label class="check">
-        <input v-model="confirmado" type="checkbox">
+        <input v-model="confirmado" type="checkbox" data-testid="safety-ack">
         Entiendo el riesgo y la conexión es segura.
       </label>
       <template #acciones>

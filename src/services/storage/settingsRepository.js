@@ -7,7 +7,7 @@ import {
 /**
  * Configuración del administrador (A05). Se guarda cifrada con AES-GCM, lo que aporta integridad
  * (SEC-28), y se valida con esquema al cargar: si no es válida se usan los valores por defecto
- * seguros (8.9, fallo seguro).
+ * seguros (A.12.1.2/A.14.2.5, fallo seguro).
  */
 export async function loadParametros() {
   const p = await secureStorage.getItem('settings:parametros')

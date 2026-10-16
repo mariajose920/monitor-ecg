@@ -12,6 +12,8 @@ import { registerChart, unregisterChart } from '@/services/acquisition/renderSch
 const props = defineProps({
   channelId: { type: Number, required: true },
   windowSec: { type: Number, default: 8 },
+  /** Alternativa textual (WCAG 1.1.1): resumen de BPM y estado que acompaña al gráfico. */
+  descripcion: { type: String, default: '' },
 })
 
 const box = ref(null)
@@ -109,5 +111,5 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="box" class="chart-box" role="img" :aria-label="`Señal ECG en vivo del canal ${channelId}`" />
+  <div ref="box" class="chart-box" role="img" :aria-label="`Señal ECG en vivo del canal ${channelId}${descripcion ? '. ' + descripcion : ''}`" />
 </template>

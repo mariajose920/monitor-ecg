@@ -5,10 +5,13 @@ import SyncSettingsForm from '@/components/admin/SyncSettingsForm.vue'
 import UserAdminTable from '@/components/admin/UserAdminTable.vue'
 import DataManagement from '@/components/admin/DataManagement.vue'
 import CloudSettings from '@/components/admin/CloudSettings.vue'
+import IsmsPanel from '@/components/admin/IsmsPanel.vue'
+import { useIsmsStore } from '@/stores/isms.js'
 import { useAuthStore } from '@/stores/auth.js'
 
 /** RF25–RF27: panel de administración (protegido por guard + assertAdmin en las acciones). */
 const auth = useAuthStore()
+const isms = useIsmsStore()
 const tab = ref('parametros')
 const TABS = [
   { id: 'parametros', texto: 'Parámetros' },
@@ -16,7 +19,10 @@ const TABS = [
   { id: 'usuarios', texto: 'Participantes' },
   { id: 'datos', texto: 'Datos y seguridad' },
   { id: 'nube', texto: 'Nube' },
+  { id: 'sgsi', texto: 'SGSI (ISO 27001)' },
 ]
+// A.7.2.2: si la política vigente no está aceptada, se abre directamente la pestaña SGSI.
+if (isms.debeAceptarPolitica) tab.value = 'sgsi'
 const ahora = ref(Date.now())
 const t = setInterval(() => (ahora.value = Date.now()), 1000)
 onBeforeUnmount(() => clearInterval(t))
@@ -36,6 +42,7 @@ const restante = computed(() => {
         <button class="btn small danger" @click="auth.logout()">Cerrar sesión</button>
       </div>
     </div>
+    <p v-if="isms.debeAceptarPolitica && tab !== 'sgsi'" class="alert warn small" role="status">Falta aceptar la política de seguridad vigente (A.7.2.2): pestaña SGSI.</p>
     <div class="tabs" role="tablist">
       <button v-for="tb in TABS" :key="tb.id" role="tab" :aria-selected="tab === tb.id" :class="{ active: tab === tb.id }" @click="tab = tb.id">{{ tb.texto }}</button>
     </div>
@@ -43,6 +50,7 @@ const restante = computed(() => {
     <SyncSettingsForm v-else-if="tab === 'sincronizacion'" />
     <UserAdminTable v-else-if="tab === 'usuarios'" />
     <CloudSettings v-else-if="tab === 'nube'" />
+    <IsmsPanel v-else-if="tab === 'sgsi'" />
     <DataManagement v-else />
   </section>
 </template>

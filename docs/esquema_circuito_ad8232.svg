@@ -1,0 +1,64 @@
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="titulo desc">
+  <title id="titulo">Esquema de conexión AD8232 con Arduino UNO o ESP32</title>
+  <desc id="desc">Electrodos RA, LA y RL al módulo AD8232. El AD8232 se alimenta con 3,3 V y GND. OUTPUT va a A0 en Arduino UNO o a GPIO34 en ESP32. LO+ va a D10 o GPIO32, LO- a D11 o GPIO33. SDN puede quedar sin conectar o ir a un pin digital para apagar el módulo. El microcontrolador envía CSV t_ms,ecg_raw,leads_off,bpm a 250 Hz por USB, HC-05 o BLE al navegador.</desc>
+  <rect width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="22" font-weight="700" fill="#0e1a2b">Monitor ECG — AD8232 ↔ Arduino UNO / ESP32</text>
+  <text x="480" y="58" text-anchor="middle" font-size="13" fill="#4b5d76">Reemplaza a esquema_circuito.svg de la raíz (que corresponde a un sensor de lactato). Uso educativo, no es un dispositivo médico.</text>
+
+  <!-- Electrodos -->
+  <g font-size="14" fill="#0e1a2b">
+    <rect x="30" y="120" width="170" height="220" rx="10" fill="#eef2f8" stroke="#24324f"/>
+    <text x="115" y="145" text-anchor="middle" font-weight="700">Electrodos</text>
+    <circle cx="70" cy="190" r="14" fill="#c62837"/><text x="95" y="195">RA (brazo der.)</text>
+    <circle cx="70" cy="245" r="14" fill="#1f6fd1"/><text x="95" y="250">LA (brazo izq.)</text>
+    <circle cx="70" cy="300" r="14" fill="#0b7a4c"/><text x="95" y="305">RL (referencia)</text>
+  </g>
+
+  <!-- AD8232 -->
+  <g font-size="14" fill="#0e1a2b">
+    <rect x="300" y="100" width="210" height="300" rx="10" fill="#fff7e6" stroke="#8a5508" stroke-width="2"/>
+    <text x="405" y="128" text-anchor="middle" font-weight="700">Módulo AD8232</text>
+    <text x="315" y="195">RA</text><text x="315" y="250">LA</text><text x="315" y="305">RL</text>
+    <text x="495" y="170" text-anchor="end">3.3V</text>
+    <text x="495" y="205" text-anchor="end">GND</text>
+    <text x="495" y="245" text-anchor="end">OUTPUT</text>
+    <text x="495" y="285" text-anchor="end">LO+</text>
+    <text x="495" y="325" text-anchor="end">LO−</text>
+    <text x="495" y="365" text-anchor="end">SDN</text>
+  </g>
+  <g stroke="#24324f" stroke-width="2">
+    <line x1="84" y1="190" x2="300" y2="190"/>
+    <line x1="84" y1="245" x2="300" y2="245"/>
+    <line x1="84" y1="300" x2="300" y2="300"/>
+  </g>
+
+  <!-- MCU -->
+  <g font-size="14" fill="#0e1a2b">
+    <rect x="640" y="100" width="290" height="300" rx="10" fill="#eef7f2" stroke="#0b7a4c" stroke-width="2"/>
+    <text x="785" y="128" text-anchor="middle" font-weight="700">Arduino UNO  |  ESP32</text>
+    <text x="655" y="170">3.3V        |  3V3</text>
+    <text x="655" y="205">GND         |  GND</text>
+    <text x="655" y="245">A0          |  GPIO34 (ADC1)</text>
+    <text x="655" y="285">D10         |  GPIO32</text>
+    <text x="655" y="325">D11         |  GPIO33</text>
+    <text x="655" y="365">(libre / D9) |  (libre / GPIO25)</text>
+  </g>
+  <g stroke-width="2">
+    <line x1="510" y1="165" x2="640" y2="165" stroke="#c62837"/>
+    <line x1="510" y1="200" x2="640" y2="200" stroke="#0e1a2b"/>
+    <line x1="510" y1="240" x2="640" y2="240" stroke="#1f6fd1"/>
+    <line x1="510" y1="280" x2="640" y2="280" stroke="#8a5508"/>
+    <line x1="510" y1="320" x2="640" y2="320" stroke="#8a5508"/>
+    <line x1="510" y1="360" x2="640" y2="360" stroke="#4b5d76" stroke-dasharray="6 4"/>
+  </g>
+
+  <!-- Salida -->
+  <g font-size="14" fill="#0e1a2b">
+    <rect x="300" y="440" width="630" height="90" rx="10" fill="#f4f7fb" stroke="#24324f"/>
+    <text x="320" y="468" font-weight="700">Salida al navegador (Web Serial, Chrome/Edge)</text>
+    <text x="320" y="492">CSV  t_ms,ecg_raw,leads_off,bpm  a 250 Hz y 115 200 baudios — USB, Bluetooth HC-05 (recomendado) o BLE (ESP32)</text>
+    <text x="320" y="516" fill="#c62837" font-weight="700">Seguridad eléctrica: portátil a batería, sin cargador, nunca en personas con marcapasos.</text>
+  </g>
+  <line x1="785" y1="400" x2="785" y2="440" stroke="#24324f" stroke-width="2"/>
+  <text x="30" y="540" font-size="12" fill="#4b5d76">Pines según sensor_ecg_ad8232.ino (UNO: A0, D10, D11). En ESP32 usar ADC1 (GPIO32–39) porque ADC2 no funciona con Wi-Fi activo.</text>
+</svg>

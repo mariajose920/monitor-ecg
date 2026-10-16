@@ -11,6 +11,7 @@ const routes = [
   { path: '/sesiones/:id', name: 'sesion-detalle', component: () => import('@/views/SessionDetailView.vue'), meta: { title: 'Detalle de sesión', requiresUser: true, allowAdmin: true } },
   { path: '/aprende/:tema?', name: 'aprende', component: () => import('@/views/LearnView.vue'), meta: { title: 'Aprende' } },
   { path: '/privacidad', name: 'privacidad', component: () => import('@/views/PrivacyView.vue'), meta: { title: 'Aviso de privacidad' } },
+  { path: '/seguridad', name: 'seguridad', component: () => import('@/views/SecurityView.vue'), meta: { title: 'Política de seguridad' } },
   { path: '/admin/setup', name: 'admin-setup', component: () => import('@/views/admin/AdminLoginView.vue'), meta: { title: 'Configurar administrador' } },
   { path: '/admin/acceso', name: 'admin-login', component: () => import('@/views/admin/AdminLoginView.vue'), meta: { title: 'Acceso administrador' } },
   { path: '/admin', name: 'admin', component: () => import('@/views/admin/AdminView.vue'), meta: { title: 'Administración', requiresAdmin: true } },

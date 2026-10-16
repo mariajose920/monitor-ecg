@@ -84,7 +84,7 @@ Tras la corrección del punto 5, volví a ejecutar build, test y lint: los tres 
 - AD8232: amplificador de instrumentación, paso alto ~0,5 Hz y paso bajo ~40 Hz, LO+/LO− en D10/D11 (coincide con el .ino:38-39). La línea base de unas 338 cuentas (1,65 V con AREF de 5 V en un ADC de 10 bits) es correcta.
 - Nyquist: señal de ~40 Hz, mínimo de 80 Hz; se eligen 250 Hz (4 ms). Coincide con el .ino:54-55.
 - Coherencia con el .ino: 115200 baudios (:76), refractario de 300 ms (:63), umbral del 60 % (:65), filtro de 30-220 BPM (:137) y formato CSV `t_ms,ecg_raw,leads_off,bpm`. Coincide.
-- Las referencias ISO 27001:2022 del Anexo A citadas en el código (5.16 gestión de identidades, 8.3 restricción de acceso, 8.9 gestión de la configuración) tienen la numeración correcta.
+- Las referencias del Anexo A citadas en el código se migraron a ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): 5.16 → A.9.2.1 (registro y baja de usuario), 8.3 → A.9.4.1 (restricción del acceso a la información), 8.9 → A.12.1.2/A.14.2.5, 8.5 → A.9.4.2, 8.15 → A.12.4.1. Equivalencia completa en ISO27001_controles.md §9.
 - **Corregido:** faltaba la definición explícita de bradicardia (<60 BPM) y taquicardia (>100 BPM) en reposo. Se añadió en src/data/learn/heartRate.js:36.
 - Observación: el rango por defecto en reposo es de 50-100 BPM (defaultSettings.js:20), es decir, no marca bradicardia leve. Es razonable para población joven o activa y el administrador puede cambiarlo; no es un error.
 

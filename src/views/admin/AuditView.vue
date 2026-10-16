@@ -7,7 +7,7 @@ import { AUDIT_EVENTS } from '@/services/audit/auditLog.js'
 import { formatFecha } from '@/utils/time.js'
 import { notify } from '@/services/notifications/notifier.js'
 
-/** SEC-41: auditoría filtrable con verificación de la cadena de hashes al abrir. */
+/** SEC-41 (ISO 27001:2013 A.12.4.1–A.12.4.3): auditoría filtrable con verificación de la cadena de hashes al abrir. */
 const admin = useAdminStore()
 const auth = useAuthStore()
 const entradas = ref([])
@@ -66,7 +66,7 @@ async function exportar() {
       Integridad de la cadena:
       <strong v-if="integridad.ok">OK</strong>
       <strong v-else>ROTA en #{{ integridad.brokenAt }}</strong>
-      ({{ integridad.count }} entradas; se conservan como máximo 5000 o 180 días).
+      ({{ integridad.count }} entradas; se conservan como máximo 5000 o 180 días). Marcas de tiempo guardadas en UTC ISO-8601 (A.12.4.4); se muestran en hora local.
     </p>
 
     <div class="row filtros">
@@ -89,7 +89,7 @@ async function exportar() {
         <tbody>
           <tr v-for="e in filtradas" :key="e.seq" :class="{ rota: integridad && !integridad.ok && e.seq === integridad.brokenAt }">
             <td class="mono">{{ e.seq }}</td>
-            <td class="small">{{ formatFecha(e.ts) }}</td>
+            <td class="small" :title="`${e.ts} (UTC)`">{{ formatFecha(e.ts) }}</td>
             <td class="mono small">{{ e.event }}</td>
             <td class="small">{{ e.actor }}</td>
             <td class="small">{{ detalle(e.details) }}</td>

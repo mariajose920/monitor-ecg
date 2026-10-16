@@ -8,9 +8,10 @@ import variationFactors from '@/data/learn/variationFactors.js'
 import sensorAd8232 from '@/data/learn/sensorAd8232.js'
 import engineering from '@/data/learn/engineering.js'
 import electricalSafety from '@/data/learn/electricalSafety.js'
+import informationSecurity from '@/data/learn/informationSecurity.js'
 
 /** RF21–RF24: contenido educativo por pestañas (/aprende/:tema). */
-const TEMAS = [heartRate, variationFactors, sensorAd8232, engineering, electricalSafety]
+const TEMAS = [heartRate, variationFactors, sensorAd8232, engineering, electricalSafety, informationSecurity]
 const route = useRoute()
 const tema = computed(() => TEMAS.find((t) => t.id === route.params.tema) || TEMAS[0])
 </script>
