@@ -8,7 +8,7 @@ import { bpmFromRR } from './bpm.js'
  */
 
 export const PPG_FS = 30
-export const PPG_BAND = Object.freeze([0.7, 4]) // Hz (42 a 240 lpm)
+export const PPG_BAND = Object.freeze([0.7, 3.2]) // Hz (42 a 192 lpm): corta la onda dicrotica y el ruido rapido
 
 /** Biquad (RBJ cookbook) de 2.o orden, Butterworth (Q = 1/sqrt 2). */
 export class Biquad {
@@ -60,16 +60,21 @@ export function bandpassPpg(values, fs = PPG_FS, [lo, hi] = PPG_BAND) {
 
 /**
  * Detector incremental de latidos sobre la senal ya filtrada (picos hacia arriba).
- * Maximo local con umbral adaptativo (fraccion de la envolvente), periodo refractario y
- * refinamiento parabolico del instante del pico. Misma interfaz que RPeakDetector.
+ * Robusto frente a la onda dicrotica (segundo pico de cada latido) y al ruido:
+ *  - umbral adaptativo (50 % de la envolvente) y periodo refractario ADAPTATIVO (65 % del RR tipico);
+ *  - si llega un pico mucho mayor justo despues de uno menor, el menor era dicrotico y se reemplaza;
+ *  - el BPM se contrasta con la autocorrelacion de los ultimos 6 s: si el detector marca ~el doble
+ *    (cuenta la onda dicrotica) se corrige, y si la senal no es periodica no se informa BPM.
+ * Misma interfaz que RPeakDetector.
  */
 export class PpgPeakDetector {
-  constructor({ fs = PPG_FS, refractoryMs = 300, warmupMs = 2500, thresholdFactor = 0.35 } = {}) {
+  constructor({ fs = PPG_FS, refractoryMs = 300, warmupMs = 2500, thresholdFactor = 0.5 } = {}) {
     this.fs = fs
     this.refractoryMs = refractoryMs
     this.warmupMs = warmupMs
     this.thresholdFactor = thresholdFactor
     this.decay = Math.pow(0.5, 1 / (3 * fs)) // vida media de la envolvente ~3 s
+    this.win = new Float32Array(Math.round(fs * 6))
     this.reset()
   }
 
@@ -82,12 +87,31 @@ export class PpgPeakDetector {
     this.n = 0
     this.firstT = null
     this.lastBeatT = null
+    this.prevBeatT = null
+    this.lastAmp = 0
     this.rr = []
+    this.win.fill(0)
+    this.wi = 0
+    this.wn = 0
+    this._acfT = -1e9
+    this._acf = null
+  }
+
+  /** Separacion minima entre latidos: 65 % del RR tipico (rechaza la onda dicrotica y el ruido). */
+  _minGap() {
+    if (this.rr.length >= 3) {
+      const s = [...this.rr].sort((a, b) => a - b)
+      return Math.max(this.refractoryMs, 0.65 * s[s.length >> 1])
+    }
+    return this.refractoryMs
   }
 
   /** @returns {boolean} true si se detecto un latido (en la muestra anterior). */
   push(tMs, x) {
     if (this.firstT === null) this.firstT = tMs
+    this.win[this.wi] = x
+    this.wi = (this.wi + 1) % this.win.length
+    if (this.wn < this.win.length) this.wn++
     const ax = Math.abs(x)
     this.env = ax > this.env ? ax : this.env * this.decay
     let beat = false
@@ -100,7 +124,7 @@ export class PpgPeakDetector {
         const den = this.s2 - 2 * this.s1 + x
         const off = den !== 0 ? (0.5 * (this.s2 - x)) / den : 0
         const tPeak = this.t1 + Math.max(-0.5, Math.min(0.5, off)) * (1000 / this.fs)
-        if (this.lastBeatT === null || tPeak - this.lastBeatT > this.refractoryMs) {
+        if (this.lastBeatT === null || tPeak - this.lastBeatT > this._minGap()) {
           if (this.lastBeatT !== null) {
             const rr = tPeak - this.lastBeatT
             if (rr >= 273 && rr <= 2000) {
@@ -110,10 +134,20 @@ export class PpgPeakDetector {
               this.rr = [] // hueco o latido perdido: reinicia la serie de RR
             }
           }
+          this.prevBeatT = this.lastBeatT
           this.lastBeatT = tPeak
+          this.lastAmp = this.s1
           beat = true
+        } else if (this.s1 > 1.3 * this.lastAmp) {
+          // Pico claramente mayor dentro del intervalo: el anterior era la onda dicrotica; se reemplaza.
+          if (this.prevBeatT !== null && this.rr.length) {
+            this.rr.pop()
+            const rr = tPeak - this.prevBeatT
+            if (rr >= 273 && rr <= 2000) this.rr.push(rr)
+          }
+          this.lastBeatT = tPeak
+          this.lastAmp = this.s1
         }
-        // Un pico espurio dentro del periodo refractario se ignora.
       }
     }
     this.s2 = this.s1
@@ -124,11 +158,71 @@ export class PpgPeakDetector {
     return beat
   }
 
-  /** BPM = mediana de los ultimos RR, filtro de sanidad 30-220; null si no hay latidos recientes. */
+  /**
+   * BPM de la autocorrelacion de los ultimos 6 s (40-180 lpm). Elige el menor retardo entre los picos
+   * fuertes (evita tomar el doble periodo). Cache de ~0,8 s para no recalcular en cada consulta.
+   * @returns {{bpm:number|null, period:number}|null}
+   */
+  acf(nowMs) {
+    if (this.wn < this.fs * 4) return null
+    if (nowMs - this._acfT < 800 && this._acf) return this._acf
+    const n = this.wn
+    const start = (this.wi - n + this.win.length) % this.win.length
+    const x = new Float32Array(n)
+    let mean = 0
+    for (let i = 0; i < n; i++) {
+      x[i] = this.win[(start + i) % this.win.length]
+      mean += x[i]
+    }
+    mean /= n
+    let e0 = 0
+    for (let i = 0; i < n; i++) {
+      x[i] -= mean
+      e0 += x[i] * x[i]
+    }
+    this._acfT = nowMs
+    if (!(e0 > 0)) return (this._acf = { bpm: null, period: 0 })
+    const lagMin = Math.max(2, Math.ceil((this.fs * 60) / 180))
+    const lagMax = Math.min(n - 3, Math.floor((this.fs * 60) / 40))
+    const r = new Float32Array(lagMax + 2)
+    let best = 0
+    for (let lag = lagMin - 1; lag <= lagMax + 1; lag++) {
+      let sum = 0
+      for (let i = 0; i + lag < n; i++) sum += x[i] * x[i + lag]
+      r[lag] = (sum / e0) * (n / (n - lag))
+      if (lag >= lagMin && lag <= lagMax && r[lag] > best) best = r[lag]
+    }
+    if (best < 0.4) return (this._acf = { bpm: null, period: Math.max(0, best) })
+    let lagSel = 0
+    for (let lag = lagMin; lag <= lagMax; lag++) {
+      if (r[lag] >= 0.9 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) {
+        lagSel = lag
+        break
+      }
+    }
+    if (!lagSel) return (this._acf = { bpm: null, period: best })
+    const den = r[lagSel - 1] - 2 * r[lagSel] + r[lagSel + 1]
+    const off = den !== 0 ? (0.5 * (r[lagSel - 1] - r[lagSel + 1])) / den : 0
+    const lag = lagSel + Math.max(-0.5, Math.min(0.5, off))
+    return (this._acf = { bpm: (60 * this.fs) / lag, period: Math.min(1, best) })
+  }
+
+  /**
+   * BPM = mediana de los ultimos RR (filtro de sanidad 30-220), contrastada con la autocorrelacion:
+   * corrige el "doble" por onda dicrotica y no informa nada si la senal no es periodica.
+   */
   getBpm(nowMs, staleMs = 4000) {
     if (this.lastBeatT === null || nowMs - this.lastBeatT > staleMs) return null
     if (this.rr.length < 3) return null
-    return bpmFromRR(this.rr.slice(-7))
+    const base = bpmFromRR(this.rr.slice(-7))
+    if (base === null) return null
+    const a = this.acf(nowMs)
+    if (!a) return base
+    if (a.bpm === null) return a.period < 0.4 ? null : base
+    const ratio = base / a.bpm
+    if ((ratio > 1.7 && ratio < 2.4) || (ratio > 2.6 && ratio < 3.4)) return a.bpm
+    if (ratio < 0.6 && a.period >= 0.6) return a.bpm
+    return base
   }
 }
 

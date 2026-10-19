@@ -138,3 +138,53 @@ describe('PPG por camara: filtros', () => {
     expect(periodicity(ruido, n, FS)).toBeLessThan(0.4)
   })
 })
+
+/** Pulso realista de dedo: onda sistólica + onda dicrótica (rebote) más pequeña. */
+function pulsoDicrotico(t, bpm, amp2 = 0.55) {
+  const ph = (t * bpm / 60) % 1
+  const g = (c, s) => Math.exp(-0.5 * ((ph - c) / s) ** 2)
+  return g(0.15, 0.055) + amp2 * g(0.46, 0.07)
+}
+
+function generarDicrotico({ seg, bpm, amp2, ruido = 0.2, seed = 3 }) {
+  const rnd = rng(seed)
+  const out = []
+  for (let i = 0; i < seg * FS; i++) {
+    const t = i / FS
+    out.push({ t: (i * 1000) / FS, r: 200 - 2.0 * pulsoDicrotico(t, bpm, amp2) + (rnd() - 0.5) * 2 * ruido, g: 30, b: 20 })
+  }
+  return out
+}
+
+describe('PPG por camara: onda dicrotica (no duplicar el pulso)', () => {
+  for (const bpm of [55, 65, 75, 85, 95]) {
+    for (const amp2 of [0.4, 0.55, 0.7]) {
+      it(`${bpm} lpm con onda dicrotica ${amp2} no se duplica (+-4)`, () => {
+        const { p, tEnd } = procesar(generarDicrotico({ seg: 40, bpm, amp2 }))
+        const est = p.getBpm(tEnd)
+        expect(est).not.toBeNull()
+        expect(Math.abs(est - bpm)).toBeLessThanOrEqual(4)
+      })
+    }
+  }
+})
+
+describe('PPG por camara: ruido (no inventar pulsos altos)', () => {
+  for (const ruido of [0.5, 1.0, 2.0]) {
+    it(`con ruido ${ruido} el BPM es correcto o no se informa (nunca el doble)`, () => {
+      for (const bpm of [60, 75]) {
+        const { p, tEnd } = procesar(generarDicrotico({ seg: 40, bpm, amp2: 0.55, ruido, seed: 11 }))
+        const est = p.getBpm(tEnd)
+        if (est !== null) expect(est).toBeLessThanOrEqual(bpm * 1.15)
+      }
+    })
+  }
+
+  it('ruido puro sin pulso no produce BPM', () => {
+    const rnd = rng(5)
+    const frames = []
+    for (let i = 0; i < 40 * FS; i++) frames.push({ t: (i * 1000) / FS, r: 200 + (rnd() - 0.5) * 3, g: 30, b: 20 })
+    const { p, tEnd } = procesar(frames)
+    expect(p.getBpm(tEnd)).toBeNull()
+  })
+})

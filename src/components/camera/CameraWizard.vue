@@ -30,7 +30,6 @@ const pct = computed(() => Math.round(((DURACION - restante.value) / DURACION) *
 const clase = computed(() => ({ buena: 'ok', calibrando: 'info', debil: 'warn' })[calidad.value.estado] || 'warn')
 const anuncio = computed(() => `${calidad.value.texto}. ${calidad.value.consejo}`)
 
-const flashFallo = ref(false)
 const preview = ref(null)
 
 /** Muestra la cámara en el cuadro pequeño (solo en tu pantalla; no se guarda ni se envía). */
@@ -48,19 +47,12 @@ async function alternarFlash() {
   if (!rt) return
   if (rt.source.torchOn) {
     await rt.source.apagarFlash?.()
-    flashFallo.value = false
   } else {
-    flashFallo.value = !(await rt.source.encenderFlash?.())
+    await rt.source.encenderFlash?.()
   }
   calidad.value = rt.source.quality
 }
 
-const motivoFlash = computed(() => {
-  const r = calidad.value.torchReason
-  if (r === 'permiso') return 'El navegador no dio permiso para controlar el flash. Revisa los permisos del sitio (cámara) y vuelve a tocar el botón.'
-  if (r === 'no-soportado') return 'Este celular o navegador no deja encender el flash desde la web.'
-  return 'El flash no respondió.'
-})
 
 function enfocarTitulo() {
   nextTick(() => titulo.value?.focus())
@@ -196,10 +188,7 @@ onBeforeUnmount(() => timer && clearInterval(timer))
           <p class="muted small preview-nota">Así se ve tu cámara. Apoya la yema sobre el lente y el flash: tapa la huella dibujada.</p>
           <p class="muted small">Flash: <strong data-testid="camara-flash-estado">{{ flashActivo ? 'encendido' : 'apagado' }}</strong></p>
           <button class="btn" type="button" data-testid="camara-encender-flash" @click="alternarFlash">{{ flashActivo ? 'Apagar flash' : 'Encender flash' }}</button>
-          <div v-if="!flashActivo" class="alert warn small" role="status" data-testid="camara-flash-aviso">
-            <p>El flash está apagado. Toca <strong>Encender flash</strong>. <span v-if="flashFallo || calidad.torchReason">{{ motivoFlash }}</span></p>
-            <p v-if="flashFallo || calidad.torchReason">Alternativa: enciende la linterna del celular desde el panel rápido y apoya el dedo sobre la cámara y la luz; si la cámara se queda sin imagen, apunta a una luz fuerte (lámpara) y tapa el lente con el dedo.</p>
-          </div>
+          <p v-if="!flashActivo" class="alert warn small" role="status" data-testid="camara-flash-aviso">Prende el flash manualmente: este navegador no lo permite desde la web.</p>
           <div :class="['calidad', 'chip', clase]" data-testid="camara-calidad">{{ calidad.texto }}</div>
           <p class="small" aria-live="polite" role="status">{{ anuncio }}</p>
           <template v-if="paso === 3">
