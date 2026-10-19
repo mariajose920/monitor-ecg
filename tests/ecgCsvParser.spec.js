@@ -147,3 +147,30 @@ describe('csvImporter (SEC-37)', () => {
     expect(() => parseSignalCsv('t_ms,valor\n0,1\n')).toThrow()
   })
 })
+
+describe('diagnóstico de perfil incorrecto', () => {
+  function flujo(maxRaw, valorRaw, lineas = 300) {
+    const eventos = []
+    const p = new EcgStreamParser({ maxRaw, onEvent: (e) => eventos.push(e) })
+    let txt = 'basura\n'
+    for (let i = 0; i < lineas; i++) txt += `${i * 4},${valorRaw(i)},0,0.0\n`
+    p.push(txt)
+    return { p, eventos }
+  }
+  it('un ESP32 de 12 bits con perfil de 10 bits emite profile-mismatch', () => {
+    const { p, eventos } = flujo(1023, (i) => 1500 + (i % 50))
+    expect(p.stats.outOfRange).toBeGreaterThan(200)
+    const e = eventos.find((x) => x.type === 'profile-mismatch')
+    expect(e).toBeTruthy()
+    expect(e.primeraVez).toBe(true)
+    expect(e.maxRaw).toBe(1023)
+  })
+  it('con el perfil correcto (12 bits) no hay aviso', () => {
+    const { eventos } = flujo(4095, (i) => 1500 + (i % 50))
+    expect(eventos.filter((x) => x.type === 'profile-mismatch')).toHaveLength(0)
+  })
+  it('unas pocas muestras fuera de rango no disparan el aviso', () => {
+    const { eventos } = flujo(1023, (i) => (i % 40 === 0 ? 2000 : 500), 500)
+    expect(eventos.filter((x) => x.type === 'profile-mismatch')).toHaveLength(0)
+  })
+})

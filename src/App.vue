@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import ToastHost from '@/components/layout/ToastHost.vue'
+import PwaPrompt from '@/components/pwa/PwaPrompt.vue'
 import { useAuthStore } from '@/stores/auth.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { getPref } from '@/utils/prefs.js'
@@ -35,6 +36,7 @@ watch(
   </main>
   <AppFooter />
   <ToastHost />
+  <PwaPrompt />
 </template>
 
 <style>

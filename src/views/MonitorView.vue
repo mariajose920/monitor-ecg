@@ -6,6 +6,9 @@ import CapabilityNotice from '@/components/common/CapabilityNotice.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import SessionControls from '@/components/monitor/SessionControls.vue'
+import PendingMonitoringPanel from '@/components/monitoreos/PendingMonitoringPanel.vue'
+import QuickUserDialog from '@/components/users/QuickUserDialog.vue'
+import { getPref, setPref } from '@/utils/prefs.js'
 import ChannelGrid from '@/components/monitor/ChannelGrid.vue'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useUsersStore } from '@/stores/users.js'
@@ -18,10 +21,47 @@ const channels = useChannelsStore()
 const users = useUsersStore()
 const session = useSessionStore()
 const pendiente = ref(null)
+const panel = ref(null)
 const confirmado = ref(false)
 const SAFETY_KEY = 'ecg.safetyAck'
+const nuevoUsuario = ref(false)
 
-onMounted(() => {
+/** Asigna el usuario al primer canal libre (fuera de una sesión) y lo recuerda como último elegido. */
+function elegirUsuario(id) {
+  if (!id) {
+    users.clearActive()
+    return
+  }
+  users.selectUser(id)
+  setPref('ultimoUsuario', id)
+  if (channels.channels.some((c) => c.usuarioId === id)) return
+  const libre = channels.channels.find((c) => !session.participa(c.id))
+  if (!libre) return
+  try {
+    channels.setUsuario(libre.id, id)
+  } catch (e) {
+    notify(e.message, { tipo: 'error' })
+  }
+}
+
+function alCambiarSelector(e) {
+  if (e.target.value === '__nuevo__') {
+    e.target.value = users.activeUserId || ''
+    nuevoUsuario.value = true
+  } else elegirUsuario(e.target.value)
+}
+
+function usuarioCreado(u) {
+  nuevoUsuario.value = false
+  elegirUsuario(u.id)
+}
+
+onMounted(async () => {
+  await users.ensureLoaded()
+  if (!users.activeUserId) {
+    const ultimo = getPref('ultimoUsuario', null)
+    if (ultimo && users.byId(ultimo)) users.selectUser(ultimo)
+  }
   if (!channels.channels.length) {
     const id = channels.addChannel()
     if (users.activeUserId) {
@@ -66,7 +106,7 @@ function aceptarSeguridad() {
 
 // useConfirmLeave: evita perder una sesión activa al navegar o cerrar.
 onBeforeRouteLeave(() => {
-  if (session.activa) return window.confirm('Hay una sesión de medición activa. Si sales, seguirá grabando en segundo plano. ¿Salir de todos modos?')
+  if (session.activa) return window.confirm('Hay un monitoreo activo. Si sales, seguirá grabando en segundo plano. ¿Salir de todos modos?')
   return true
 })
 
@@ -83,17 +123,30 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 <template>
   <section>
     <div class="page-header">
-      <h1>Monitor en tiempo real</h1>
+      <h1>Monitor</h1>
       <DataClassBadge level="sensitive" texto="Datos de salud" />
     </div>
     <SafetyBanner />
     <CapabilityNotice />
     <p class="muted">
-      Flujo: <RouterLink to="/usuarios">elige o crea participantes</RouterLink> → configura cada canal (fuente + participante) →
-      conecta → <strong>inicia la sesión</strong> para grabar. La vista previa en vivo no se guarda.
+      Aquí solo se mide. Usuarios, historial y comparaciones están en <RouterLink to="/usuarios">Usuarios</RouterLink> y
+      <RouterLink to="/monitoreos">Monitoreos</RouterLink>.
     </p>
 
-    <SessionControls />
+    <section class="card quien" aria-label="Usuario que se mide">
+      <div class="field">
+        <label for="quien-se-mide">¿Quién se mide?</label>
+        <select id="quien-se-mide" :value="users.activeUserId || ''" :disabled="session.activa" data-testid="quien-se-mide" @change="alCambiarSelector">
+          <option value="">— Elige un usuario —</option>
+          <option v-for="u in users.users" :key="u.id" :value="u.id">{{ u.etiqueta }}{{ u.alias ? ' · ' + u.alias : '' }}</option>
+          <option value="__nuevo__">+ Nuevo usuario</option>
+        </select>
+        <p class="hint">Puedes conectar la fuente y ver la señal sin usuario; para iniciar y guardar un monitoreo necesitas uno.</p>
+      </div>
+    </section>
+
+    <SessionControls @guardar="panel?.abrir()" />
+    <PendingMonitoringPanel v-if="session.pendiente" :id="session.pendiente.id" :key="session.pendiente.id" ref="panel" />
 
     <div class="row barra">
       <button class="btn" :disabled="!channels.puedeAgregar" @click="agregar">+ Agregar canal</button>
@@ -101,6 +154,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     </div>
 
     <ChannelGrid @conectar="conectar" />
+
+    <QuickUserDialog v-if="nuevoUsuario" @creado="usuarioCreado" @cerrar="nuevoUsuario = false" />
 
     <BaseDialog v-if="pendiente" titulo="Antes de conectar el sensor" @cerrar="pendiente = null">
       <SafetyBanner />
@@ -126,6 +181,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 </template>
 
 <style scoped>
+.quien {
+  margin-bottom: var(--gap);
+}
+
 .barra {
   margin-bottom: var(--gap);
 }

@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/((?!assets/|icons/|sw\\.js|manifest\\.webmanifest|icon\\.svg|favicon\\.svg|referencias/).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",
@@ -12,11 +12,19 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "Permissions-Policy", "value": "serial=(self), usb=(), bluetooth=(), camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()" },
+        { "key": "Permissions-Policy", "value": "serial=(self), usb=(), bluetooth=(), camera=(self),microphone=(), geolocation=(), payment=(), interest-cohort=()" },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
         { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" }
       ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }, { "key": "Service-Worker-Allowed", "value": "/" }]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
     },
     {
       "source": "/assets/(.*)",

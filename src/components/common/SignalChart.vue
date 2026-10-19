@@ -11,6 +11,8 @@ const props = defineProps({
   series: { type: Array, required: true }, // [{ label, color: '--signal' }]
   height: { type: Number, default: 260 },
   yLabel: { type: String, default: '' },
+  /** Puntos a resaltar (p. ej. picos R): [{ x (s), y }] en coordenadas de datos. */
+  marcas: { type: Array, default: () => [] },
 })
 
 const box = ref(null)
@@ -31,6 +33,25 @@ function crear() {
     height: props.height,
     cursor: { drag: { x: true, y: false }, points: { show: false } },
     legend: { show: true, live: true },
+    hooks: {
+      draw: [
+        (u) => {
+          if (!props.marcas.length) return
+          const ctx = u.ctx
+          ctx.save()
+          ctx.fillStyle = cssVar('--danger', '#ff5c6c')
+          for (const m of props.marcas) {
+            const cx = u.valToPos(m.x, 'x', true)
+            const cy = u.valToPos(m.y, 'y', true)
+            if (cx < u.bbox.left || cx > u.bbox.left + u.bbox.width) continue
+            ctx.beginPath()
+            ctx.arc(cx, cy, 4 * devicePixelRatio, 0, Math.PI * 2)
+            ctx.fill()
+          }
+          ctx.restore()
+        },
+      ],
+    },
     scales: { x: { time: false } },
     axes: [
       { stroke: muted, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, label: 'Tiempo (s)' },
@@ -60,7 +81,7 @@ onMounted(() => {
   ro.observe(box.value)
 })
 
-watch(() => [props.data, props.series], () => crear())
+watch(() => [props.data, props.series, props.marcas], () => crear())
 
 onBeforeUnmount(() => {
   ro?.disconnect()

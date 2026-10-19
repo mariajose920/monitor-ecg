@@ -50,14 +50,21 @@ flowchart LR
 Detalle en `../docs/ARQUITECTURA_VUE.md` y trazabilidad requerimientos → componentes → pruebas → controles en `../docs/TRAZABILIDAD.md`.
 Conexión del hardware: `../docs/esquema_circuito_ad8232.svg`.
 
-## Flujo de uso
+## Flujo de uso y rutas
 
-1. **Participantes**: crear/elegir "Usuario N" (sin contraseña). Datos opcionales solo con consentimiento.
-2. **Monitor**: hasta 5 canales; fuente (puerto serie, simulador o CSV), perfil y participante. Antes de Web Serial se exige el **acuse de seguridad eléctrica** (queda en la auditoría). "Iniciar sesión de medición" para grabar.
-3. **Sesiones**: historial, detalle y exportación CSV seudonimizada (portabilidad).
-4. **Comparar**: referencia frente a señal simulada, sesión, canal en vivo o CSV; sincronización por pico R, correlación cruzada o manual.
-5. **Admin** (`/admin`): PIN local; rangos, sincronización, retención, usuarios, auditoría, panel SGSI.
-6. **Privacidad** (`/privacidad`): base legal, derechos y botón **"Eliminar mis datos en la nube"**. **Seguridad** (`/seguridad`): política y reporte de incidentes.
+| Ruta | Sección | Qué hace |
+|---|---|---|
+| `/` | Inicio | Accesos y compatibilidad |
+| `/usuarios` | Usuarios | Mantenedor (CRUD): buscar, ordenar, crear, ver, editar alias y datos opcionales (con consentimiento), eliminar (cascada local y nube), contador de monitoreos, "Descargar historial" |
+| `/monitor` | Monitor | Elegir usuario → conectar fuente → **Iniciar monitoreo** → **Detener** → **Guardar monitoreo** (nombre, nota, actividad) o **Descartar** |
+| `/monitoreos`, `/monitoreos/:id` | Monitoreos | Filtros (usuario, fechas, actividad, estado, texto), selección múltiple, detalle con picos, editar, eliminar, exportar CSV/JSON, informe PDF/CSV, historial. `/sesiones*` redirige aquí |
+| `/comparar` | Comparar | A y B desde monitoreos guardados (selector usuario → medición con miniatura), simulador, CSV (incluye CSV exportados por la app) o canal en vivo; informe PDF/CSV |
+| `/aprende/:tema`, `/aprende/mis-monitoreos` | Aprende | Teoría y lectura guiada de un monitoreo propio (picos, RR, BPM, actividad, calidad PPG) |
+| `/admin*`, `/privacidad`, `/seguridad` | Admin y políticas | Sin cambios |
+
+Un monitoreo detenido es un **borrador** (cifrado, solo local) hasta que se guarda; no aparece en Comparar ni Aprende. Si no se guarda ni descarta, queda como "Borrador" en Monitoreos y un aviso en la cabecera: nunca se pierde por accidente. Los informes y exportaciones van seudonimizados (Usuario N, sin alias ni datos opcionales); los PDF los genera un escritor propio sin dependencias (`src/services/report/pdfWriter.js`).
+
+Si el sensor envía valores fuera del rango del perfil elegido (p. ej. un ESP32 de 12 bits con perfil de 10 bits) el canal muestra "El perfil del dispositivo no coincide: elige ESP32". Análisis y decisiones de interfaz: `../docs/ANALISIS_VISUAL.md`.
 
 ## Configuración de Supabase (opcional)
 

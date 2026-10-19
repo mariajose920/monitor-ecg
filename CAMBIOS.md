@@ -80,3 +80,30 @@ Estado detallado por sugerencia en `../docs/SUGERENCIAS_CAMBIOS.md` §4 (10 ya r
 Verificación: `npm run lint` 0 problemas · `npm test` 103/103 (9 archivos) · `npm run build` OK · `npm run test:e2e` 9/9 (Chromium) · `schema.sql` ejecutado dos veces en PostgreSQL embebido (PGlite) con pruebas de cuota, lista blanca y supresión · `npm audit --omit=dev` 0 vulnerabilidades (en desarrollo: `tinypool` crítica vía `vitest` 3, registrada).
 
 Pendiente (humano): volver a ejecutar `schema.sql`; activar CAPTCHA/rate limit en Supabase y, si se activa, ampliar la CSP; protección de rama en GitHub; región y DPA en `docs/sgsi/proveedores.md`; Lighthouse/axe; medición de rendimiento; capturas en README; presentación.
+
+## Móvil, PWA y cámara (PPG)
+
+- **PWA instalable**: manifiesto, íconos 192/512/maskable generados por `npm run gen:iconos` desde `public/icon.svg`, service worker propio (`public/sw.js`, versión estampada en el build), banner "Instalar aplicación" (beforeinstallprompt, "Ahora no" recordado), instrucciones iOS y aviso de nueva versión. CSP intacta; `Permissions-Policy` pasa a `camera=(self)`.
+- **Fuente "Cámara del celular"** (`CameraSource`, perfil `camara-movil`, 30 Hz): linterna (torch) automática con botón "Encender flash" de respaldo, promedio R/G/B de región central, pasa-banda 0,7–4 Hz, BPM con sanidad 30–220, calidad (SNR/movimiento/presión/dedo) y dedo ausente como leads-off. Los fotogramas nunca se guardan ni envían.
+- **Asistente paso a paso** (`CameraWizard.vue`) accesible (aria-live, foco) y no médico.
+- **Auditoría**: `CAMERA_STARTED`, `CAMERA_STOPPED`, `CAMERA_DENIED`, `TORCH_UNAVAILABLE` (`supabase/migracion_eventos_camara.sql`).
+- **Responsivo**: `responsive.css`, encabezado que se esconde al bajar y vuelve al subir, tablas-tarjeta (`table.cards`).
+- Pruebas: `ppgCamera.spec.js` (unitarias), `pwa.spec.js` y `camara.spec.js` (E2E). Guía: `docs/MOVIL_PWA_CAMARA.md`.
+
+## 2026-10-19 — Rediseño visual y funcional (usuarios, monitoreos, comparar, aprende, informes)
+
+Análisis y diagramas en `../docs/ANALISIS_VISUAL.md`.
+
+| Ámbito | Cambio | Archivos |
+|---|---|---|
+| Usuarios (/usuarios) | Mantenedor CRUD con búsqueda, orden, contador de monitoreos, detalle, edición de alias y datos opcionales (solo con consentimiento vigente), eliminación con diálogo (reutiliza `deleteUserData`: cascada local y nube); editar/eliminar exigen usuario activo o admin; evento `USER_UPDATED` | `views/UserSelectView.vue`, `services/users/userList.js`, `stores/users.js` |
+| Monitor | Pasos usuario → fuente → iniciar → detener → guardar; la sesión nace como borrador (`guardado:false`); al detener se abre "Guardar monitoreo" (nombre, nota, actividad) con "Descartar" y "Decidir después"; vista previa con picos; chip "sin guardar" en la cabecera | `components/monitor/SessionControls.vue`, `components/monitoreos/*`, `stores/session.js` |
+| Monitoreos (/monitoreos) | Filtros, orden, selección múltiple, detalle (gráfico con picos, BPM, % fuera de rango, eventos, parámetros), editar, eliminar (local + `deleteCloudSessions`), CSV/JSON, informe PDF/CSV, historial; `/sesiones` redirige | `views/SessionsView.vue`, `SessionDetailView.vue`, `services/monitoreos/*`, `stores/monitoreos.js`, `composables/useExportMonitoreos.js` |
+| Comparar / Aprende | Selector guiado usuario → medición (búsqueda, actividad, miniatura); monitoreos como señal A o B; "Mis monitoreos" con picos R, RR, BPM, variabilidad, actividad y calidad PPG; importación de CSV exportados por la app (monitoreo e historial) | `components/compare/MonitoreoPicker.vue`, `components/learn/MyMonitorings.vue`, `services/export/csvImporter.js` |
+| Informes | PDF (escritor propio, sin dependencias nuevas, JPEG del canvas) y CSV de monitoreo, comparación e historial con tendencia, fecha UTC, parámetros, aviso de no dispositivo médico y clasificación; seudonimizados; nota solo si se pide; evento `EXPORT_REPORT` | `services/report/*` |
+| Diagnóstico de perfil | El parser cuenta ecg_raw fuera del rango del ADC y emite `profile-mismatch`: "El perfil del dispositivo no coincide: elige ESP32" | `services/parsing/ecgCsvParser.js`, `stores/channels.js`, `ChannelPanel.vue` |
+| Navegación | Inicio, Usuarios, Monitor, Monitoreos, Comparar, Aprende, Admin; chip de usuario activo | `components/layout/AppHeader.vue`, `router/*` |
+| Auditoría | Nuevos eventos `USER_UPDATED`, `SESSION_SAVED`, `SESSION_UPDATED`, `SESSION_DISCARDED`, `SESSION_DELETED`, `EXPORT_REPORT` en `AUDIT_EVENTS` y en la lista blanca de `supabase/schema.sql` (**volver a ejecutar el script**) | `services/audit/auditLog.js`, `../supabase/schema.sql`, `tests/schema.spec.js` |
+| Pruebas | Unitarias: catálogo/filtros, servicio de monitoreos, informes y PDF, análisis, historial, importación, parser de perfil, esquema; E2E `e2e/monitoreos.spec.js` | `tests/*`, `e2e/*` |
+
+Pendiente: probar el aviso de perfil con un ESP32 + MAX30100 físico; la serie de BPM del historial usa el tramo continuo más largo (≤ 10 min) de cada monitoreo; los PDF no se firman ni cifran.

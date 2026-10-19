@@ -18,6 +18,10 @@ export const AUDIT_EVENTS = Object.freeze([
   'INCIDENT_REPORTED', 'INCIDENT_UPDATED', 'POLICY_ACCEPTED', 'ACCESS_REVIEW_DONE', 'CLOCK_SKEW',
   // Seguridad eléctrica antes de Web Serial (SUG-09) y supresión en la nube (SUG-06, A.18.1.4)
   'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED',
+  // Gestión de usuarios y monitoreos guardados (los detalles nunca llevan nombres ni notas)
+  'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT',
+  // Cámara del celular (PPG): A.18.1.4, A.14.2.5
+  'CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE',
 ])
 
 export const GENESIS = '0'.repeat(64)

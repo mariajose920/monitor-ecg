@@ -19,7 +19,7 @@ export function createRuntime(channelId, { source, profile, windowSec = 8, alert
     profile,
     windowSec,
     ring: new RingBuffer(Math.ceil(fs * 10) + fs), // 10 s + margen (SEC-60)
-    detector: new RPeakDetector({ fs }),
+    detector: source.createDetector ? source.createDetector() : new RPeakDetector({ fs }),
     evaluator: createRangeEvaluator(alertas),
     recorder: null,
     lastSampleAt: 0, // performance.now() de la última muestra recibida

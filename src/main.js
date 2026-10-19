@@ -6,6 +6,8 @@ import 'uplot/dist/uPlot.min.css'
 import './assets/styles/tokens.css'
 import './assets/styles/base.css'
 import './assets/styles/uplot-theme.css'
+import './assets/styles/responsive.css'
+import { initPwa } from '@/composables/usePwaInstall.js'
 import { setIntegrityHandler } from '@/services/storage/index.js'
 import { audit } from '@/services/audit/auditService.js'
 import { notify } from '@/services/notifications/notifier.js'
@@ -47,4 +49,5 @@ async function bootstrap() {
   }
 }
 
+initPwa()
 bootstrap().finally(() => app.mount('#app'))

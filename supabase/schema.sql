@@ -267,7 +267,9 @@ alter table public.auditoria add constraint auditoria_tipo_lista_blanca check (t
   'SERIAL_DISCONNECTED', 'SERIAL_LOST', 'SERIAL_INVALID_DATA', 'DEVICE_RESET', 'INTEGRITY_ERROR', 'AUDIT_EXPORTED',
   'SESSION_STARTED', 'SESSION_ENDED', 'ALERT_TRIGGERED',
   'INCIDENT_REPORTED', 'INCIDENT_UPDATED', 'POLICY_ACCEPTED', 'ACCESS_REVIEW_DONE', 'CLOCK_SKEW',
-  'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED'
+  'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED',
+  'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT',
+  'CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE'
 )) not valid;
 select public._agregar_check('public.auditoria', 'auditoria_detalle_tamano',
   'pg_column_size(detalle) <= 2048 and jsonb_typeof(detalle) = ''object''');

@@ -84,7 +84,14 @@ export function pushSession(meta) {
       fin: meta.fin,
       estado: meta.estado,
       motivo_fin: meta.motivoFin,
-      datos: { participantes: meta.participantes, parametrosAplicados: meta.parametrosAplicados, notas: meta.notas },
+      datos: {
+        participantes: meta.participantes,
+        parametrosAplicados: meta.parametrosAplicados,
+        notas: meta.notas,
+        nombre: meta.nombre ?? null,
+        guardado: meta.guardado !== false,
+        actividadPrincipal: meta.actividadPrincipal ?? null,
+      },
       actualizado_en: new Date().toISOString(),
     }))
   })

@@ -15,6 +15,8 @@
 
 Bloqueo de pantalla activo; navegador actualizado; no usar perfiles de navegador sincronizados o compartidos para la app; no instalar extensiones no autorizadas en el perfil usado para medir.
 
+**Cámara del celular (PPG):** conceder el permiso de cámara solo al sitio de la app y solo para medir; no apuntar la cámara a otras personas ni documentos; la app no guarda imágenes, únicamente la señal derivada (clasificación Confidencial-Sensible como el resto de señales de salud). Si la app se instala como PWA, aplican las mismas reglas de bloqueo de pantalla y perfil de navegador.
+
 ## 3. Pantalla limpia (A.11.2.9)
 
 Cerrar la sesión de administrador al terminar; no dejar datos opcionales visibles; no tomar fotos o capturas con datos identificables.

@@ -8,11 +8,11 @@ const caps = useCapabilities()
 const users = useUsersStore()
 
 const accesos = [
-  { to: '/usuarios', titulo: '1. Participantes', texto: 'Elige o crea un identificador seudónimo ("Usuario N"), sin contraseña.' },
-  { to: '/monitor', titulo: '2. Monitor', texto: 'Hasta 5 canales simultáneos: puerto serie, simulador o reproducción de CSV.' },
-  { to: '/sesiones', titulo: '3. Sesiones', texto: 'Historial, revisión de la señal, actividad y exportación CSV seudonimizada.' },
-  { to: '/comparar', titulo: 'Comparar', texto: 'Señal experimental frente a una referencia, con sincronización y métricas.' },
-  { to: '/aprende', titulo: 'Aprende', texto: 'Frecuencia cardíaca, causas de variación, el sensor AD8232 e ingeniería de señales.' },
+  { to: '/usuarios', titulo: '1. Usuarios', texto: 'Crea, edita o elimina seudónimos "Usuario N" (sin contraseña) y elige el usuario activo.' },
+  { to: '/monitor', titulo: '2. Monitor', texto: 'Conecta la fuente, inicia y detén el monitoreo y guárdalo con nombre, nota y actividad.' },
+  { to: '/monitoreos', titulo: '3. Monitoreos', texto: 'Filtra, revisa, edita, elimina y exporta (CSV, JSON, informe PDF) tus monitoreos guardados.' },
+  { to: '/comparar', titulo: '4. Comparar', texto: 'Compara dos monitoreos, o uno con una referencia, con sincronización y métricas.' },
+  { to: '/aprende', titulo: '5. Aprende', texto: 'Teoría del corazón y del sensor, y una lectura guiada de tus propios monitoreos.' },
 ]
 </script>
 

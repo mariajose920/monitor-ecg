@@ -49,6 +49,9 @@ async function borrarNube() {
       <li>Registro de auditoría técnico (sin valores de ECG, BPM, edad ni peso).</li>
     </ul>
 
+    <h2>Uso de la cámara del celular</h2>
+    <p>Si eliges la fuente "Cámara del celular", la app usa la cámara trasera y el flash solo para medir tu pulso (fotopletismografía). Se calcula el promedio de color de una zona central pequeña y de ahí solo una señal numérica: <strong>las imágenes nunca se guardan ni se envían</strong>. La cámara y el flash se apagan al terminar, al cambiar de pestaña o al bloquear la pantalla, y puedes revocar el permiso en los ajustes del navegador. Se registran en la auditoría solo los eventos de inicio, fin o rechazo (sin valores de salud). ISO/IEC 27001:2013 A.18.1.4.</p>
+
     <h2>Base legal</h2>
     <p>Consentimiento expreso, informado, libre y revocable del participante, exigido para datos sensibles de salud (Ley 19.628 sobre protección de la vida privada y Ley 21.719 de protección de datos personales de Chile; Ley 20.584 como referencia de confidencialidad de datos de salud; RGPD art. 9 como buena práctica).</p>
     <p class="muted small">Control de referencia: ISO/IEC 27001:2013 A.18.1.1 (legislación aplicable) y A.18.1.4 (protección y privacidad de la información de carácter personal). Política de seguridad: <RouterLink to="/seguridad">/seguridad</RouterLink>.</p>

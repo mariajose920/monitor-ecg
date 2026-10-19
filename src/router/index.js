@@ -4,11 +4,14 @@ import { requireAdmin, requireUser, setupOnlyOnce } from './guards.js'
 // Todas las vistas con lazy loading (SEC-04 para las de administración).
 const routes = [
   { path: '/', name: 'inicio', component: () => import('@/views/HomeView.vue'), meta: { title: 'Inicio' } },
-  { path: '/usuarios', name: 'usuarios', component: () => import('@/views/UserSelectView.vue'), meta: { title: 'Participantes' } },
-  { path: '/monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue'), meta: { title: 'Monitor', requiresUser: true, allowAdmin: true } },
+  { path: '/usuarios', name: 'usuarios', component: () => import('@/views/UserSelectView.vue'), meta: { title: 'Usuarios' } },
+  { path: '/monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue'), meta: { title: 'Monitor' } },
   { path: '/comparar', name: 'comparar', component: () => import('@/views/CompareView.vue'), meta: { title: 'Comparar' } },
-  { path: '/sesiones', name: 'sesiones', component: () => import('@/views/SessionsView.vue'), meta: { title: 'Sesiones', requiresUser: true, allowAdmin: true } },
-  { path: '/sesiones/:id', name: 'sesion-detalle', component: () => import('@/views/SessionDetailView.vue'), meta: { title: 'Detalle de sesión', requiresUser: true, allowAdmin: true } },
+  { path: '/monitoreos', name: 'monitoreos', component: () => import('@/views/SessionsView.vue'), meta: { title: 'Monitoreos', requiresUser: true, allowAdmin: true } },
+  { path: '/monitoreos/:id', name: 'monitoreo-detalle', component: () => import('@/views/SessionDetailView.vue'), meta: { title: 'Detalle del monitoreo', requiresUser: true, allowAdmin: true } },
+  // Compatibilidad con enlaces anteriores
+  { path: '/sesiones', redirect: '/monitoreos' },
+  { path: '/sesiones/:id', redirect: (to) => `/monitoreos/${to.params.id}` },
   { path: '/aprende/:tema?', name: 'aprende', component: () => import('@/views/LearnView.vue'), meta: { title: 'Aprende' } },
   { path: '/privacidad', name: 'privacidad', component: () => import('@/views/PrivacyView.vue'), meta: { title: 'Aviso de privacidad' } },
   { path: '/seguridad', name: 'seguridad', component: () => import('@/views/SecurityView.vue'), meta: { title: 'Política de seguridad' } },

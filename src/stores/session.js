@@ -25,6 +25,8 @@ export const useSessionStore = defineStore('session', () => {
   const estado = ref('inactiva')
   const actual = ref(null)
   const ultima = ref(null)
+  /** Monitoreo ya detenido que espera "Guardar monitoreo" o "Descartar" (vista previa). */
+  const pendiente = ref(null)
   const inicioMs = ref(0)
   const activa = computed(() => estado.value === 'activa')
   const stats = new Map() // canalId → acumuladores (no reactivo)
@@ -40,6 +42,7 @@ export const useSessionStore = defineStore('session', () => {
   /** RF08: inicia una sesión con todos los canales conectados que tengan usuario. */
   async function iniciar(canales) {
     if (activa.value) throw new Error('Ya hay una sesión activa')
+    if (pendiente.value) throw new Error('Tienes un monitoreo sin guardar: guárdalo o descártalo antes de iniciar otro.')
     const elegibles = canales.filter((ch) => ch.usuarioId && getRuntime(ch.id) && ['streaming', 'leads-off', 'signal-lost'].includes(ch.estado))
     if (!elegibles.length) throw new Error('Conecta al menos un canal y asígnale un usuario antes de iniciar.')
     const settings = useSettingsStore()
@@ -67,6 +70,10 @@ export const useSessionStore = defineStore('session', () => {
       }),
       parametrosAplicados: clone(settings.parametros),
       notas: '',
+      // Nace como borrador: pasa a "guardado" solo con "Guardar monitoreo" (nombre, nota y actividad).
+      guardado: false,
+      nombre: null,
+      actividadPrincipal: null,
     }
     actual.value = meta
     inicioMs.value = Date.now()
@@ -167,10 +174,15 @@ export const useSessionStore = defineStore('session', () => {
     await saveSession(clone(meta))
     await audit('SESSION_ENDED', 'system', { sesion: shortId(meta.id), motivo })
     ultima.value = { id: meta.id, motivoFin: motivo }
+    pendiente.value = { id: meta.id, motivoFin: motivo }
     actual.value = null
     estado.value = 'inactiva'
-    if (motivo !== 'usuario') notify(`La sesión terminó automáticamente (${motivo === 'senal-perdida' ? 'señal perdida' : 'desconexión'}). Los datos capturados se guardaron.`, { tipo: 'aviso', duracionMs: 8000 })
+    if (motivo !== 'usuario') notify(`El monitoreo terminó automáticamente (${motivo === 'senal-perdida' ? 'señal perdida' : 'desconexión'}). Los datos quedaron como borrador: guárdalo o descártalo.`, { tipo: 'aviso', duracionMs: 8000 })
   }
 
-  return { estado, actual, ultima, inicioMs, activa, participa, iniciar, addEvent, registrarActividad, acumular, channelEnded, detener }
+  function limpiarPendiente() {
+    pendiente.value = null
+  }
+
+  return { estado, actual, ultima, pendiente, limpiarPendiente, inicioMs, activa, participa, iniciar, addEvent, registrarActividad, acumular, channelEnded, detener }
 })

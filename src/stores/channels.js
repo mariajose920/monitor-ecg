@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { createSource } from '@/services/sources/sourceFactory.js'
 import { createRuntime, getRuntime, destroyRuntime, allRuntimes } from '@/services/acquisition/channelRegistry.js'
 import { bpmMostrable } from '@/services/parsing/ecgCsvParser.js'
+import { prefiereCamara } from '@/data/dispositivo.js'
+import { SOURCE_KINDS } from '@/services/sources/sourceFactory.js'
 import { MAX_CHANNELS } from '@/data/defaultSettings.js'
 import { ACTIVIDAD_IDS } from '@/data/activities.js'
 import { audit } from '@/services/audit/auditService.js'
@@ -25,11 +27,15 @@ export const ESTADOS_CANAL = Object.freeze({
   error: { texto: 'Error', icono: '✕', clase: 'danger' },
 })
 
+/** Diagnóstico cuando el ADC del dispositivo supera el rango del perfil elegido (p. ej. ESP32 de 12 bits con perfil de 10 bits). */
+export const MENSAJE_PERFIL = 'El perfil del dispositivo no coincide: elige ESP32'
+
 const MOTIVOS = {
   usuario: 'detenida por el usuario',
   desconexion: 'sensor desconectado',
   'senal-perdida': 'pérdida de comunicación',
   'fin-datos': 'fin de los datos',
+  'segundo-plano': 'la app pasó a segundo plano (cámara y flash apagados)',
 }
 
 /**
@@ -52,11 +58,13 @@ export const useChannelsStore = defineStore('channels', () => {
     // SEC-60: máximo forzado en el store
     if (channels.value.length >= MAX_CHANNELS) throw new Error(`Máximo ${MAX_CHANNELS} canales`)
     seq++
+    // En el celular (o sin Web Serial) la fuente por defecto es la cámara del teléfono.
+    const camara = prefiereCamara() && SOURCE_KINDS.find((k) => k.id === 'camera')?.soportado()
     channels.value.push({
       id: seq,
       nombre: `Canal ${seq}`,
-      fuente: 'simulator',
-      perfilId: 'arduino-uno-ad8232',
+      fuente: camara ? 'camera' : 'simulator',
+      perfilId: camara ? 'camara-movil' : 'arduino-uno-ad8232',
       usuarioId: null,
       actividad: 'reposo',
       estado: 'idle',
@@ -68,6 +76,7 @@ export const useChannelsStore = defineStore('channels', () => {
       muestrasSeg: 0,
       descartadas: 0,
       avisoDatos: false,
+      avisoPerfil: false,
       motivoFin: null,
       error: null,
       sim: { bpm: 72, ruido: 0.02, leadsOff: false, pausado: false },
@@ -114,8 +123,12 @@ export const useChannelsStore = defineStore('channels', () => {
   function configurar(id, campo, valor) {
     const ch = byId(id)
     if (!ch || getRuntime(id)) return
-    if (campo === 'fuente' && ['simulator', 'serial', 'replay'].includes(valor)) ch.fuente = valor
-    if (campo === 'perfilId' && ['arduino-uno-ad8232', 'esp32-ad8232'].includes(valor)) ch.perfilId = valor
+    if (campo === 'fuente' && ['simulator', 'serial', 'replay', 'camera'].includes(valor)) {
+      ch.fuente = valor
+      if (valor === 'camera') ch.perfilId = 'camara-movil'
+      else if (ch.perfilId === 'camara-movil') ch.perfilId = 'arduino-uno-ad8232'
+    }
+    if (campo === 'perfilId' && ['arduino-uno-ad8232', 'esp32-ad8232'].includes(valor) && ch.fuente !== 'camera') ch.perfilId = valor
     ch.error = null
   }
 
@@ -132,6 +145,7 @@ export const useChannelsStore = defineStore('channels', () => {
     ch.error = null
     ch.motivoFin = null
     ch.avisoDatos = false
+    ch.avisoPerfil = false
     let source
     try {
       if (ch.fuente === 'replay' && !replayData.get(id)) throw new Error('Carga primero un CSV para reproducir.')
@@ -160,6 +174,7 @@ export const useChannelsStore = defineStore('channels', () => {
       }
     } catch (e) {
       ch.error = e.message
+      if (ch.fuente === 'camera') await source.disconnect('error').catch(() => {})
       rt.ended = true
       destroyRuntime(id)
       ch.estado = 'idle'
@@ -170,6 +185,9 @@ export const useChannelsStore = defineStore('channels', () => {
     rt._prevAt = performance.now()
     if (ch.fuente === 'serial') {
       audit('SERIAL_CONNECTED', 'system', { canal: ch.nombre, perfil: ch.perfilId, usbVendorId: source.info?.usbVendorId ?? null })
+    }
+    if (ch.fuente === 'camera') {
+      audit('CAMERA_STARTED', 'system', { canal: ch.nombre, flash: !!source.torchOn })
     }
     ensureTick()
   }
@@ -184,9 +202,21 @@ export const useChannelsStore = defineStore('channels', () => {
   function onSourceEvent(id, ev) {
     const ch = byId(id)
     if (!ch) return
-    if (ev.type === 'device-reset') {
+    if (ev.type === 'torch-unavailable') {
+      audit('TORCH_UNAVAILABLE', 'system', { canal: ch.nombre })
+      notify('Este dispositivo no permite encender el flash desde el navegador. Usa luz ambiental fuerte (ver la guía).', { tipo: 'aviso', duracionMs: 9000 })
+    } else if (ev.type === 'camera-denied') {
+      audit('CAMERA_DENIED', 'system', { canal: ch.nombre, motivo: ev.motivo })
+    } else if (ev.type === 'device-reset') {
       useSessionStore().addEvent(id, 'reinicio-dispositivo')
       audit('DEVICE_RESET', 'system', { canal: ch.nombre })
+    } else if (ev.type === 'profile-mismatch') {
+      ch.avisoPerfil = true
+      if (ev.primeraVez) {
+        notify(MENSAJE_PERFIL, { tipo: 'error', duracionMs: 9000 })
+        useSessionStore().addEvent(id, 'perfil-incorrecto')
+        audit('SERIAL_INVALID_DATA', 'system', { canal: ch.nombre, motivo: 'perfil', porcentaje: Math.round(ev.ratio * 100) })
+      }
     } else if (ev.type === 'invalid-data') {
       ch.avisoDatos = true
       notify(`${ch.nombre}: datos del sensor no válidos. ¿Puerto o baudios correctos?`, { tipo: 'aviso' })
@@ -200,7 +230,7 @@ export const useChannelsStore = defineStore('channels', () => {
     const ch = byId(id)
     if (!rt || rt.ended) return
     rt.ended = true
-    const motivo = ['usuario', 'fin-datos', 'senal-perdida'].includes(reason) ? reason : 'desconexion'
+    const motivo = ['usuario', 'fin-datos', 'senal-perdida', 'segundo-plano'].includes(reason) ? reason : 'desconexion'
     try {
       await useSessionStore().channelEnded(id, motivo)
     } catch {
@@ -209,11 +239,12 @@ export const useChannelsStore = defineStore('channels', () => {
     if (rt.source.kind === 'serial') {
       audit(motivo === 'usuario' ? 'SERIAL_DISCONNECTED' : 'SERIAL_LOST', 'system', { canal: ch?.nombre, motivo })
     }
+    if (rt.source.kind === 'camera') audit('CAMERA_STOPPED', 'system', { canal: ch?.nombre, motivo })
     rt.source.removeAllListeners()
     destroyRuntime(id)
     if (ch) {
       ch.estado = motivo === 'usuario' ? 'idle' : 'finished'
-      ch.motivoFin = motivo === 'usuario' ? null : MOTIVOS[motivo]
+      ch.motivoFin = motivo === 'usuario' ? null : ch.avisoPerfil ? MENSAJE_PERFIL : MOTIVOS[motivo]
       ch.bpmCalculado = null
       ch.bpmDispositivo = null
       ch.leadsOff = false

@@ -16,6 +16,15 @@ export const MAX_ROWS = 300000
 // eslint-disable-next-line security/detect-unsafe-regex
 const RE_DOS = /^(\d{1,10}(?:\.\d{1,3})?),(-?\d{1,7}(?:\.\d{1,6})?)$/
 
+// Formatos exportados por esta misma app (volver a importar un monitoreo o un historial).
+const CAB_EXPORTADO = /^user_id,session_id,t_ms,ecg_raw,leads_off,bpm,activity(?:,age_range,weight_kg)?$/
+const CAB_SERIE = 'user_id,session_id,t_s,bpm'
+// Anclada y acotada: sin riesgo de ReDoS.
+// eslint-disable-next-line security/detect-unsafe-regex
+const RE_EXPORTADO = /^"[^"\r\n]{1,40}","([0-9a-f]{8})",(\d{1,10}),(\d{1,4}),([01]),(\d{1,3}(?:\.\d{1,2})?),"[^"\r\n]{0,40}"(?:,[^,\r\n]{0,12},[^,\r\n]{0,12})?$/
+// eslint-disable-next-line security/detect-unsafe-regex
+const RE_SERIE = /^"[^"\r\n]{1,40}","([0-9a-f]{8})",(\d{1,6}(?:\.\d{1,3})?),(\d{1,3}(?:\.\d{1,2})?)$/
+
 export function validateCsvFile(file) {
   if (!file) return 'No se seleccionó ningún archivo'
   if (!/\.csv$/i.test(file.name)) return 'Solo se aceptan archivos .csv'
@@ -41,6 +50,7 @@ export function parseSignalCsv(text, { maxRaw = 4095 } = {}) {
   let formato = null
   let invalidas = 0
   let lastT = -Infinity
+  let sesionImportada = null
   for (const raw of lines) {
     const line = raw.trim()
     if (!line) continue
@@ -57,6 +67,37 @@ export function parseSignalCsv(text, { maxRaw = 4095 } = {}) {
       continue
     }
     if (t.length >= MAX_ROWS) break
+    if (CAB_EXPORTADO.test(line)) {
+      formato = 'exportado'
+      continue
+    }
+    if (line === CAB_SERIE) {
+      formato = 'serie-bpm'
+      continue
+    }
+    if (formato === 'exportado' || formato === 'serie-bpm') {
+      const serie = formato === 'serie-bpm'
+      const m = (serie ? RE_SERIE : RE_EXPORTADO).exec(line)
+      if (!m) {
+        invalidas++
+        continue
+      }
+      // Un archivo puede traer varios monitoreos: se usa solo el primero.
+      sesionImportada = sesionImportada ?? m[1]
+      if (m[1] !== sesionImportada) continue
+      const tt = serie ? Number(m[2]) * 1000 : Number(m[2])
+      const vv = serie ? Number(m[3]) : Number(m[3])
+      if (!Number.isFinite(tt) || !Number.isFinite(vv) || tt < lastT || (!serie && vv > maxRaw)) {
+        invalidas++
+        continue
+      }
+      lastT = tt
+      t.push(tt)
+      v.push(vv)
+      lo.push(serie ? 0 : Number(m[4]))
+      bpm.push(serie ? vv : Number(m[5]))
+      continue
+    }
     const r4 = parseLine(line, { maxRaw })
     if (r4.ok && formato !== 'tiempo-valor') {
       formato = 'firmware'
@@ -89,7 +130,7 @@ export function parseSignalCsv(text, { maxRaw = 4095 } = {}) {
     }
     invalidas++
   }
-  if (t.length < 50) throw new Error('El CSV no contiene suficientes filas válidas (mínimo 50)')
+  if (t.length < (formato === 'serie-bpm' ? 5 : 50)) throw new Error('El CSV no contiene suficientes filas válidas (mínimo 50)')
   const tA = Float64Array.from(t)
   return {
     formato: formato ?? 'desconocido',

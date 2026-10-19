@@ -7,7 +7,10 @@ import RangeIndicator from './RangeIndicator.vue'
 import ActivitySelector from './ActivitySelector.vue'
 import LeadsOffAlert from './LeadsOffAlert.vue'
 import SimulatorControls from './SimulatorControls.vue'
-import { useChannelsStore } from '@/stores/channels.js'
+import QuickUserDialog from '@/components/users/QuickUserDialog.vue'
+import { prefiereCamara } from '@/data/dispositivo.js'
+import CameraWizard from '@/components/camera/CameraWizard.vue'
+import { useChannelsStore, MENSAJE_PERFIL } from '@/stores/channels.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useSettingsStore } from '@/stores/settings.js'
 import { useSessionStore } from '@/stores/session.js'
@@ -28,6 +31,11 @@ const users = useUsersStore()
 const settings = useSettingsStore()
 const session = useSessionStore()
 const cargandoCsv = ref(false)
+const guiaCamara = ref(false)
+const nuevoUsuario = ref(false)
+const movil = prefiereCamara()
+/** En el celular con cámara se ocultan fuente y perfil: el sensor externo va en un apartado secundario. */
+const modoCamaraMovil = computed(() => movil && props.canal.fuente === 'camera')
 
 const idp = `canal-${props.canal.id}`
 const activo = computed(() => ['connecting', 'streaming', 'leads-off', 'signal-lost'].includes(props.canal.estado))
@@ -44,13 +52,28 @@ const descripcionGrafico = computed(() => {
   return partes.join(', ')
 })
 const fuentes = SOURCE_KINDS.map((f) => ({ ...f, ok: f.soportado() }))
-const perfiles = Object.values(DEVICE_PROFILES).filter((p) => p.id !== 'simulador')
+const perfiles = Object.values(DEVICE_PROFILES).filter((p) => p.id !== 'simulador' && p.id !== 'camara-movil')
 
 const usuariosDisponibles = computed(() =>
   users.users.filter((u) => u.id === props.canal.usuarioId || !channels.channels.some((c) => c.usuarioId === u.id)),
 )
 
+function usuarioCreado(u) {
+  nuevoUsuario.value = false
+  try {
+    channels.setUsuario(props.canal.id, u.id)
+    users.selectUser(u.id)
+  } catch (err) {
+    notify(err.message, { tipo: 'error' })
+  }
+}
+
 function cambiarUsuario(e) {
+  if (e.target.value === '__nuevo__') {
+    e.target.value = props.canal.usuarioId || ''
+    nuevoUsuario.value = true
+    return
+  }
   try {
     channels.setUsuario(props.canal.id, e.target.value || null)
   } catch (err) {
@@ -103,16 +126,20 @@ async function cargarEjemplo() {
 
     <p v-if="canal.motivoFin" class="alert warn">Medición finalizada: {{ canal.motivoFin }}. Los datos capturados se guardaron.</p>
     <p v-if="canal.error" class="alert danger" role="alert">{{ canal.error }}</p>
-    <p v-if="canal.avisoDatos" class="alert warn">Datos del sensor no válidos (más del 5 %). ¿Puerto o baudios correctos?</p>
+    <p v-if="canal.avisoPerfil" class="alert danger" role="alert" data-testid="aviso-perfil">
+      <strong>{{ MENSAJE_PERFIL }}.</strong> Los valores recibidos superan el rango del ADC del perfil actual.
+      Desconecta, cambia el perfil a «ESP32 (USB)» (12 bits) y vuelve a conectar.
+    </p>
+    <p v-if="canal.avisoDatos && !canal.avisoPerfil" class="alert warn">Datos del sensor no válidos (más del 5 %). ¿Puerto o baudios correctos?</p>
 
     <div v-if="!activo" class="config grid cols-2">
-      <div class="field">
+      <div v-if="!modoCamaraMovil" class="field">
         <label :for="`${idp}-fuente`">Fuente</label>
         <select :id="`${idp}-fuente`" :value="canal.fuente" @change="channels.configurar(canal.id, 'fuente', $event.target.value)">
           <option v-for="f in fuentes" :key="f.id" :value="f.id" :disabled="!f.ok">{{ f.nombre }}{{ f.ok ? '' : ' (no soportado)' }}</option>
         </select>
       </div>
-      <div v-if="canal.fuente !== 'simulator'" class="field">
+      <div v-if="canal.fuente !== 'simulator' && canal.fuente !== 'camera'" class="field">
         <label :for="`${idp}-perfil`">Perfil de dispositivo</label>
         <select :id="`${idp}-perfil`" :value="canal.perfilId" @change="channels.configurar(canal.id, 'perfilId', $event.target.value)">
           <option v-for="p in perfiles" :key="p.id" :value="p.id">{{ p.nombre }} ({{ p.adcBits }} bits)</option>
@@ -123,9 +150,10 @@ async function cargarEjemplo() {
         <select :id="`${idp}-usuario`" :value="canal.usuarioId || ''" :disabled="enSesion" @change="cambiarUsuario">
           <option value="">— Sin asignar —</option>
           <option v-for="u in usuariosDisponibles" :key="u.id" :value="u.id">{{ u.etiqueta }}</option>
+          <option value="__nuevo__">+ Nuevo usuario</option>
         </select>
         <p v-if="!users.users.length" class="hint">
-          No hay participantes. <RouterLink to="/usuarios">Crea uno</RouterLink>.
+          No hay usuarios: elige «+ Nuevo usuario».
         </p>
       </div>
       <div v-if="canal.fuente === 'replay'" class="field">
@@ -138,8 +166,18 @@ async function cargarEjemplo() {
       </div>
     </div>
 
+    <details v-if="!activo && modoCamaraMovil" class="externo">
+      <summary>Usar sensor externo (solo PC)</summary>
+      <p class="muted small">Puerto serie (USB/HC-05) y reproducción de CSV requieren Chrome o Edge de escritorio.</p>
+      <label :for="`${idp}-fuente-ext`">Fuente</label>
+      <select :id="`${idp}-fuente-ext`" :value="canal.fuente" @change="channels.configurar(canal.id, 'fuente', $event.target.value)">
+        <option v-for="f in fuentes" :key="f.id" :value="f.id" :disabled="!f.ok">{{ f.nombre }}{{ f.ok ? '' : ' (no soportado)' }}</option>
+      </select>
+    </details>
+
     <div class="row botones">
-      <button v-if="!activo" class="btn primary" @click="emit('conectar', canal)">
+      <button v-if="!activo && canal.fuente === 'camera'" class="btn primary" data-testid="camara-guia" @click="guiaCamara = true">Medir con la cámara</button>
+      <button v-else-if="!activo" class="btn primary" @click="emit('conectar', canal)">
         {{ canal.fuente === 'serial' ? 'Conectar puerto serie' : 'Iniciar fuente' }}
       </button>
       <button v-else class="btn danger" @click="channels.disconnect(canal.id)">Desconectar</button>
@@ -158,6 +196,8 @@ async function cargarEjemplo() {
       </div>
     </template>
 
+    <QuickUserDialog v-if="nuevoUsuario" @creado="usuarioCreado" @cerrar="nuevoUsuario = false" />
+    <CameraWizard v-if="guiaCamara" :canal="canal" @cerrar="guiaCamara = false" />
     <SimulatorControls v-if="canal.fuente === 'simulator'" :canal="canal" :conectado="activo" />
   </article>
 </template>

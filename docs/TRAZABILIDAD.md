@@ -57,3 +57,20 @@ Rutas relativas a `monitor-ecg-vue/` salvo `supabase/` y `docs/`. Pruebas: **U**
 | SUG-06 | `views/PrivacyView.vue`, `deleteAllMyCloudData()`, `borrar_mis_datos()` | E `inicio.spec.js` | A.18.1.1, A.18.1.4 |
 | SUG-09 | `views/MonitorView.vue` (acuse obligatorio + evento `ELECTRICAL_SAFETY_ACK`) | M (Web Serial requiere hardware) | A.12.4.1 |
 | SUG-10/11 | `.github/workflows/ci.yml`, `playwright.config.js`, `e2e/*.spec.js` | CI | A.14.2.8, A.14.2.9 |
+| MOVIL-01 (PWA instalable) | `public/manifest.webmanifest`, `public/sw.js`, `composables/usePwaInstall.js`, `components/pwa/PwaPrompt.vue`, `vercel.json` (CSP sin cambios, `camera=(self)`) | E `pwa.spec.js` | A.14.2.5, A.13.1.1 |
+| MOVIL-02 (fuente cámara PPG) | `services/sources/CameraSource.js`, `utils/dsp/ppgCamera.js`, `components/camera/CameraWizard.vue`, `data/deviceProfiles.js` | U `ppgCamera.spec.js`; E `camara.spec.js`; M (dedo real) | A.18.1.4, A.14.2.5 |
+| MOVIL-03 (auditoría de cámara) | `auditLog.js` (`CAMERA_STARTED`, `CAMERA_STOPPED`, `CAMERA_DENIED`, `TORCH_UNAVAILABLE`), `supabase/schema.sql`, `supabase/migracion_eventos_camara.sql` | U `schema.spec.js` | A.12.4.1, A.12.4.2 |
+
+## 5. Rediseño visual (oct-2026)
+
+| Requisito de la usuaria | Implementación | Pruebas | Controles |
+|---|---|---|---|
+| Mantenedor de usuarios (CRUD) | `views/UserSelectView.vue`, `services/users/userList.js`, `stores/users.js` (`updateAlias`, `deleteUserData`) | U `monitoreoCatalog.spec.js`, E `monitoreos.spec.js` | A.9.2.1, A.18.1.4 |
+| Guardar / descartar monitoreo | `components/monitoreos/SaveMonitoringDialog.vue`, `stores/session.js`, `services/monitoreos/monitoreoService.js` | U `monitoreoService.spec.js`, E `monitoreos.spec.js` | A.12.4.1, A.8.2.1 |
+| Gestión de monitoreos (filtros, editar, eliminar, exportar) | `views/SessionsView.vue`, `SessionDetailView.vue`, `services/monitoreos/catalog.js`, `composables/useExportMonitoreos.js` | U `monitoreoCatalog.spec.js`, `informes.spec.js` | A.9.4.1, A.12.4.1, A.18.1.4 |
+| Comparar / Aprende con monitoreos guardados | `components/compare/MonitoreoPicker.vue`, `views/CompareView.vue`, `components/learn/MyMonitorings.vue`, `services/monitoreos/analysis.js` | U `informes.spec.js`, E `monitoreos.spec.js` | — |
+| Informes PDF/CSV seudonimizados e historial | `services/report/pdfWriter.js`, `informes.js`, `historial.js` | U `informes.spec.js`, `historial.spec.js` | A.8.2.2, A.18.1.4 |
+| Reimportar CSV exportados | `services/export/csvImporter.js` | U `importarExportado.spec.js` | A.14.2.5 |
+| Aviso de perfil incorrecto | `services/parsing/ecgCsvParser.js`, `stores/channels.js` | U `ecgCsvParser.spec.js` | A.14.2.5 |
+| Nuevos eventos de auditoría | `auditLog.js`, `supabase/schema.sql` | U `schema.spec.js` | A.12.4.1 |
+| Navegación y 375 px | `components/layout/AppHeader.vue`, `assets/styles/base.css` | E `monitoreos.spec.js`, `pwa.spec.js` | — |

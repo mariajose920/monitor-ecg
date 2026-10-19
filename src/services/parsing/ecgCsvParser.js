@@ -25,6 +25,8 @@ export const T_MS_MAX = 4294967295
 export const BPM_MAX = 300
 export const INVALID_WINDOW_LINES = 1250
 export const INVALID_RATIO_LIMIT = 0.05
+export const RANGE_WINDOW_LINES = 250
+export const RANGE_RATIO_LIMIT = 0.2
 
 /**
  * Valida y convierte una línea (sin salto de línea).
@@ -87,7 +89,10 @@ export class EcgStreamParser {
     this.base = null // t_ms del dispositivo correspondiente a outOffset
     this.outOffset = 0
     this.lastOut = null
-    this.stats = { valid: 0, invalid: 0, overflow: 0, headers: 0, resets: 0, skipped: 0 }
+    this.stats = { valid: 0, invalid: 0, overflow: 0, headers: 0, resets: 0, skipped: 0, outOfRange: 0 }
+    this._rangeTotal = 0
+    this._rangeWin = 0
+    this._mismatchNotified = false
     this._winTotal = 0
     this._winInvalid = 0
     this._invalidNotified = false
@@ -131,9 +136,12 @@ export class EcgStreamParser {
     }
     const r = parseLine(line, { maxRaw: this.maxRaw })
     if (!r.ok) {
+      // Línea bien formada pero con ecg_raw fuera del rango del ADC del perfil → perfil incorrecto probable.
+      this._rangeLine(r.reason === 'ecg_raw' || (r.reason === 'formato' && this._rawFueraDeRango(line)))
       this._countLine(false)
       return n
     }
+    this._rangeLine(false)
     // Monotonía de t_ms: si retrocede, la placa se reinició (DTR del UNO).
     let tOut
     if (this.base === null) {
@@ -157,6 +165,32 @@ export class EcgStreamParser {
     this.stats.valid++
     this._countLine(true)
     return n + 1
+  }
+
+  /** ecg_raw con 5 o más dígitos o > maxRaw en una línea con 4 campos (el regex de formato lo rechaza). */
+  _rawFueraDeRango(line) {
+    const c = line.split(',')
+    return c.length === 4 && /^\d{1,10}$/.test(c[1]) && Number(c[1]) > this.maxRaw
+  }
+
+  /**
+   * Diagnóstico de perfil incorrecto: en cada ventana de 250 líneas, si más del 20 % fueron rechazadas
+   * SOLO por el rango de ecg_raw se emite 'profile-mismatch' (p. ej. un ESP32 de 12 bits con perfil de 10 bits).
+   */
+  _rangeLine(fuera) {
+    if (fuera) {
+      this.stats.outOfRange++
+      this._rangeWin++
+    }
+    this._rangeTotal++
+    if (this._rangeTotal >= RANGE_WINDOW_LINES) {
+      if (this._rangeWin / this._rangeTotal > RANGE_RATIO_LIMIT) {
+        this.onEvent({ type: 'profile-mismatch', ratio: this._rangeWin / this._rangeTotal, maxRaw: this.maxRaw, primeraVez: !this._mismatchNotified })
+        this._mismatchNotified = true
+      }
+      this._rangeTotal = 0
+      this._rangeWin = 0
+    }
   }
 
   _grow() {

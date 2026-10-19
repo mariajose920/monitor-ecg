@@ -4,7 +4,7 @@ import { useUsersStore } from '@/stores/users.js'
 /** Lista blanca de destinos tras el login de admin (evita open redirect, SEC-02). */
 export const ADMIN_REDIRECT_WHITELIST = Object.freeze(['admin', 'admin-auditoria'])
 /** Lista blanca de destinos tras elegir usuario. */
-export const USER_REDIRECT_WHITELIST = Object.freeze(['monitor', 'sesiones', 'comparar'])
+export const USER_REDIRECT_WHITELIST = Object.freeze(['monitor', 'monitoreos', 'comparar'])
 
 export function safeRedirect(value, whitelist, fallback) {
   return typeof value === 'string' && whitelist.includes(value) ? value : fallback

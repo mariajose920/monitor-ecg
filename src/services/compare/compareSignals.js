@@ -108,3 +108,19 @@ export function computeMetrics(ref, exp, lag, fs) {
     desfaseMs: (lag * 1000) / fs,
   }
 }
+
+/**
+ * Recorta una señal al tramo continuo más largo sin leads-off (máx. maxSeconds).
+ * @param {{values:ArrayLike<number>, t?:ArrayLike<number>|null, leadsOff?:ArrayLike<number>|null, fs?:number}} d
+ * @throws si el tramo dura menos de minSeconds
+ */
+export function trimValidSegment(d, { maxSeconds = 30, minSeconds = 3, defaultFs = 250 } = {}) {
+  const fs = d.fs || defaultFs
+  const seg = longestValidSegment(d.values, d.leadsOff, Math.round(maxSeconds * fs))
+  if (seg.end - seg.start < minSeconds * fs) throw new Error(`La señal no tiene al menos ${minSeconds} s continuos sin electrodos desconectados`)
+  return {
+    ...d,
+    values: d.values.subarray(seg.start, seg.end),
+    t: d.t ? d.t.subarray(seg.start, seg.end) : null,
+  }
+}

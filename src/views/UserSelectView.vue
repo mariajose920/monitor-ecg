@@ -1,85 +1,152 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConsentDialog from '@/components/users/ConsentDialog.vue'
 import OptionalDataForm from '@/components/users/OptionalDataForm.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
+import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import { useUsersStore, consentimientoVigente, ALIAS_RE } from '@/stores/users.js'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useSessionStore } from '@/stores/session.js'
+import { useAuthStore } from '@/stores/auth.js'
+import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { safeRedirect, USER_REDIRECT_WHITELIST } from '@/router/guards.js'
+import { filtrarUsuarios, ordenarUsuarios, CAMPOS_ORDEN_USUARIO } from '@/services/users/userList.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { formatFecha } from '@/utils/time.js'
 
-/** RF01–RF03: elegir/crear identificador sin contraseña y datos opcionales con consentimiento. */
+/**
+ * Mantenedor de usuarios (CRUD): crear, ver, editar y eliminar seudónimos "Usuario N".
+ * No mezcla monitoreo: solo enlaza a las otras secciones. Editar y eliminar exigen ser el usuario
+ * activo ("Elegir" = identificarse, sin contraseña) o tener sesión de administrador.
+ */
 const users = useUsersStore()
 const channels = useChannelsStore()
 const session = useSessionStore()
+const auth = useAuthStore()
+const monitoreos = useMonitoreosStore()
 const route = useRoute()
 const router = useRouter()
 
-const alias = ref('')
+const texto = ref('')
+const campo = ref('numero')
+const dir = ref('asc')
+const modoDialogo = ref(null) // 'crear' | 'editar'
+const objetivoId = ref(null)
+const verId = ref(null)
+const aliasForm = ref('')
 const errorAlias = ref('')
 const verConsentimiento = ref(false)
-const confirmarBorrado = ref(false)
 const confirmarRetiro = ref(false)
+const confirmarBorrado = ref(false)
 const ocupado = ref(false)
+const historialDe = ref(null)
 
-const activo = computed(() => users.activeUser)
-const consiente = computed(() => consentimientoVigente(activo.value))
+onMounted(() => monitoreos.refrescar())
 
-async function crear() {
+const filas = computed(() => ordenarUsuarios(filtrarUsuarios(users.users, { texto: texto.value }), { campo: campo.value, dir: dir.value }, monitoreos.conteos))
+const objetivo = computed(() => users.byId(objetivoId.value))
+const detalle = computed(() => users.byId(verId.value))
+const aviso = computed(() => `${filas.value.length} de ${users.users.length} usuario(s)`)
+
+const puedeGestionar = (u) => !!u && (u.id === users.activeUserId || auth.isAdmin)
+const enUso = (u) => !!u && (channels.channels.some((c) => c.usuarioId === u.id && c.estado !== 'idle' && c.estado !== 'finished') || session.actual?.participantes.some((p) => p.usuarioId === u.id))
+const conteo = (u) => monitoreos.conteos[u.id] ?? 0
+
+function abrirCrear() {
+  aliasForm.value = ''
   errorAlias.value = ''
-  const a = alias.value.trim()
+  modoDialogo.value = 'crear'
+}
+
+function abrirEditar(u) {
+  objetivoId.value = u.id
+  aliasForm.value = u.alias ?? ''
+  errorAlias.value = ''
+  modoDialogo.value = 'editar'
+}
+
+function cerrarDialogo() {
+  modoDialogo.value = null
+  verConsentimiento.value = false
+}
+
+async function enviarAlias() {
+  errorAlias.value = ''
+  const a = aliasForm.value.trim()
   if (a && !ALIAS_RE.test(a)) {
     errorAlias.value = 'Solo letras sin tilde, números, espacio, _ y - (máx. 20).'
     return
   }
+  ocupado.value = true
   try {
-    const u = await users.createUser(a)
-    users.selectUser(u.id)
-    alias.value = ''
-    notify(`Creado ${u.etiqueta}.`, { tipo: 'ok' })
+    if (modoDialogo.value === 'crear') {
+      const u = await users.createUser(a)
+      users.selectUser(u.id)
+      notify(`Creado ${u.etiqueta} y elegido como usuario activo.`, { tipo: 'ok' })
+      cerrarDialogo()
+    } else {
+      await users.updateAlias(objetivoId.value, a, auth.isAdmin && objetivoId.value !== users.activeUserId ? 'admin' : null)
+      notify('Alias actualizado.', { tipo: 'ok' })
+      cerrarDialogo()
+    }
   } catch (e) {
     errorAlias.value = e.message
+  } finally {
+    ocupado.value = false
   }
 }
 
-function elegir(id) {
-  users.selectUser(id)
+function elegir(u) {
+  users.selectUser(u.id)
   const destino = safeRedirect(route.query.redirect, USER_REDIRECT_WHITELIST, null)
   if (destino) router.push({ name: destino })
+  else notify(`${u.etiqueta} es ahora el usuario activo.`, { tipo: 'ok', duracionMs: 2500 })
 }
+
+function ordenarPor(id) {
+  if (campo.value === id) dir.value = dir.value === 'asc' ? 'desc' : 'asc'
+  else {
+    campo.value = id
+    dir.value = 'asc'
+  }
+}
+
+const ariaSort = (id) => (campo.value === id ? (dir.value === 'asc' ? 'ascending' : 'descending') : 'none')
 
 async function aceptarConsentimiento() {
   verConsentimiento.value = false
-  await users.giveConsent(activo.value.id)
+  await users.giveConsent(objetivo.value.id)
   notify('Consentimiento registrado.', { tipo: 'ok' })
 }
 
 function rechazarConsentimiento() {
   verConsentimiento.value = false
-  notify('Sin consentimiento: puedes medir igualmente, sin datos opcionales.', { tipo: 'info' })
+  notify('Sin consentimiento no se guardan datos opcionales; puedes usar la app igualmente.', { tipo: 'info' })
 }
 
 async function retirar() {
   confirmarRetiro.value = false
-  await users.withdrawConsent(activo.value.id)
-  notify('Consentimiento retirado: tus datos opcionales se borraron.', { tipo: 'ok' })
+  await users.withdrawConsent(objetivo.value.id)
+  notify('Consentimiento retirado: los datos opcionales se borraron.', { tipo: 'ok' })
 }
 
-const enUso = computed(() => !!activo.value && (channels.channels.some((c) => c.usuarioId === activo.value.id && c.estado !== 'idle' && c.estado !== 'finished') || session.actual?.participantes.some((p) => p.usuarioId === activo.value.id)))
-
-/** SEC-30: "Eliminar mis datos". */
-async function eliminarMisDatos() {
+/** SEC-30: reutiliza "Eliminar mis datos" (cascada de monitoreos locales y de la nube). */
+async function eliminar() {
+  const u = objetivo.value
   ocupado.value = true
   try {
-    const id = activo.value.id
-    for (const c of channels.channels.filter((x) => x.usuarioId === id)) channels.setUsuario(c.id, null)
-    await users.deleteUserData(id)
+    for (const c of channels.channels.filter((x) => x.usuarioId === u.id)) channels.setUsuario(c.id, null)
+    const esOtro = u.id !== users.activeUserId
+    if (esOtro) auth.assertAdmin()
+    await users.deleteUserData(u.id, esOtro ? 'admin' : null)
+    await monitoreos.refrescar()
     confirmarBorrado.value = false
-    notify('Tus datos (perfil, opcionales, mediciones y consentimiento) se eliminaron.', { tipo: 'ok' })
+    if (verId.value === u.id) verId.value = null
+    objetivoId.value = null
+    notify(`${u.etiqueta} y sus monitoreos se eliminaron.`, { tipo: 'ok' })
   } catch (e) {
     notify(e.message, { tipo: 'error' })
   } finally {
@@ -91,99 +158,179 @@ async function eliminarMisDatos() {
 <template>
   <section>
     <div class="page-header">
-      <h1>Participantes</h1>
+      <h1>Usuarios</h1>
+      <button class="btn primary" data-testid="nuevo-usuario" @click="abrirCrear">Nuevo usuario</button>
     </div>
     <p class="muted">
-      Identificación sin contraseña: el sistema asigna un seudónimo <strong>"Usuario N"</strong>.
-      La correspondencia seudónimo ↔ persona, si se necesita, se gestiona <strong>fuera de la app</strong> (custodia del docente).
+      Identificación sin contraseña con seudónimo <strong>"Usuario N"</strong>. La correspondencia seudónimo ↔ persona, si se necesita,
+      se gestiona <strong>fuera de la app</strong>. Para medir ve a <RouterLink to="/monitor">Monitor</RouterLink>.
     </p>
 
-    <div class="grid cols-2">
-      <section class="card">
-        <h2>Nuevo participante</h2>
-        <form @submit.prevent="crear">
-          <div class="field">
-            <label for="alias">Alias opcional</label>
-            <input id="alias" v-model="alias" type="text" maxlength="20" autocomplete="off" placeholder="p. ej. Grupo A-2">
-            <p class="hint"><strong>No uses tu nombre real, RUT, correo ni otros datos identificables.</strong></p>
-            <p v-if="errorAlias" class="error-text" role="alert">{{ errorAlias }}</p>
-          </div>
-          <button class="btn primary" type="submit">Crear identificador</button>
-        </form>
-      </section>
-
-      <section class="card">
-        <h2>Elegir participante</h2>
-        <EmptyState v-if="!users.users.length" titulo="Aún no hay participantes" texto="Crea el primero con el formulario." />
-        <ul v-else class="lista-usuarios">
-          <li v-for="u in users.users" :key="u.id">
-            <button :class="['btn', u.id === users.activeUserId ? 'primary' : '']" :aria-pressed="u.id === users.activeUserId" @click="elegir(u.id)">
-              {{ u.etiqueta }}<span v-if="u.alias" class="muted"> · {{ u.alias }}</span>
-            </button>
-          </li>
-        </ul>
-        <button v-if="users.activeUserId" class="btn ghost small" @click="users.clearActive()">Cerrar sesión de participante</button>
-      </section>
-    </div>
-
-    <section v-if="activo" class="card activo">
-      <h2>{{ activo.etiqueta }} <span class="muted small">creado {{ formatFecha(activo.creadoEn) }}</span></h2>
-      <div class="row">
-        <RouterLink to="/monitor" class="btn primary">Ir al monitor</RouterLink>
-        <RouterLink to="/sesiones" class="btn">Mis sesiones</RouterLink>
+    <div class="toolbar">
+      <div class="field">
+        <label for="u-buscar">Buscar por seudónimo o alias</label>
+        <input id="u-buscar" v-model="texto" type="search" autocomplete="off" placeholder="p. ej. Usuario 2">
       </div>
+      <div class="field">
+        <label for="u-orden">Ordenar por</label>
+        <select id="u-orden" v-model="campo">
+          <option v-for="c in CAMPOS_ORDEN_USUARIO" :key="c.id" :value="c.id">{{ c.nombre }}</option>
+        </select>
+      </div>
+      <button class="btn" :aria-label="dir === 'asc' ? 'Orden ascendente, cambiar a descendente' : 'Orden descendente, cambiar a ascendente'" @click="dir = dir === 'asc' ? 'desc' : 'asc'">
+        {{ dir === 'asc' ? '↑ Ascendente' : '↓ Descendente' }}
+      </button>
+    </div>
+    <p class="sr-only" aria-live="polite" role="status">{{ aviso }}</p>
 
-      <h3 class="sub">Datos opcionales (RF03)</h3>
-      <template v-if="!consiente">
-        <p>Para registrar edad, peso o actividad física necesitas aceptar el consentimiento informado.</p>
-        <button class="btn" @click="verConsentimiento = true">Agregar datos opcionales…</button>
-      </template>
-      <template v-else>
-        <p class="ok-text small">✓ Consentimiento v{{ activo.consentimiento.consentVersion }} otorgado el {{ formatFecha(activo.consentimiento.acceptedAt) }}</p>
-        <OptionalDataForm :usuario="activo" />
-        <button class="btn ghost" @click="confirmarRetiro = true">Retirar consentimiento</button>
-      </template>
+    <EmptyState v-if="!users.users.length" titulo="Aún no hay usuarios" texto="Crea el primero para poder medir y guardar monitoreos.">
+      <button class="btn primary" @click="abrirCrear">Nuevo usuario</button>
+    </EmptyState>
+    <EmptyState v-else-if="!filas.length" titulo="Sin resultados" texto="Ningún usuario coincide con la búsqueda.">
+      <button class="btn" @click="texto = ''">Limpiar búsqueda</button>
+    </EmptyState>
 
-      <h3 class="sub">Tus derechos</h3>
-      <p class="muted small">Puedes eliminar en cualquier momento tu perfil, datos opcionales, mediciones y consentimiento.</p>
-      <button class="btn danger" :disabled="enUso" @click="confirmarBorrado = true">Eliminar mis datos</button>
-      <p v-if="enUso" class="muted small">Desconecta el canal o detén la sesión donde participas antes de borrar.</p>
+    <div v-else class="table-wrap card">
+      <table data-testid="tabla-usuarios">
+        <caption class="sr-only">Usuarios registrados. {{ aviso }}</caption>
+        <thead>
+          <tr>
+            <th scope="col" :aria-sort="ariaSort('numero')"><button class="th-btn" @click="ordenarPor('numero')">Usuario</button></th>
+            <th scope="col" :aria-sort="ariaSort('alias')"><button class="th-btn" @click="ordenarPor('alias')">Alias</button></th>
+            <th scope="col" :aria-sort="ariaSort('creado')"><button class="th-btn" @click="ordenarPor('creado')">Creado</button></th>
+            <th scope="col" :aria-sort="ariaSort('monitoreos')"><button class="th-btn" @click="ordenarPor('monitoreos')">Monitoreos</button></th>
+            <th scope="col">Consentimiento</th>
+            <th scope="col">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="u in filas" :key="u.id" :class="{ activo: u.id === users.activeUserId }">
+            <th scope="row">
+              {{ u.etiqueta }}
+              <span v-if="u.id === users.activeUserId" class="chip info">Activo</span>
+            </th>
+            <td>{{ u.alias ?? '—' }}</td>
+            <td>{{ formatFecha(u.creadoEn) }}</td>
+            <td class="mono" :data-testid="`conteo-${u.numero}`">{{ conteo(u) }}</td>
+            <td>{{ consentimientoVigente(u) ? `Sí (v${u.consentimiento.consentVersion})` : 'No' }}</td>
+            <td class="acciones">
+              <button class="btn small" :aria-pressed="u.id === users.activeUserId" :aria-label="`Elegir ${u.etiqueta}`" @click="elegir(u)">Elegir</button>
+              <button class="btn small" :aria-label="`Ver detalle de ${u.etiqueta}`" @click="verId = u.id">Ver</button>
+              <button class="btn small" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este usuario primero'" :aria-label="`Editar ${u.etiqueta}`" @click="abrirEditar(u)">Editar</button>
+              <button class="btn small danger" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este usuario primero'" :aria-label="`Eliminar ${u.etiqueta}`" @click="objetivoId = u.id; confirmarBorrado = true">Eliminar</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small">Editar y eliminar requieren que el usuario sea el activo (usa «Elegir») o una sesión de administrador.</p>
+
+    <section v-if="detalle" class="card detalle" aria-labelledby="detalle-titulo" data-testid="detalle-usuario">
+      <div class="page-header">
+        <h2 id="detalle-titulo">{{ detalle.etiqueta }}</h2>
+        <button class="btn small ghost" @click="verId = null">Cerrar detalle</button>
+      </div>
+      <dl class="datos">
+        <dt>Alias</dt><dd>{{ detalle.alias ?? '—' }}</dd>
+        <dt>Creado</dt><dd>{{ formatFecha(detalle.creadoEn) }}</dd>
+        <dt>Actualizado</dt><dd>{{ formatFecha(detalle.actualizadoEn) }}</dd>
+        <dt>Monitoreos guardados</dt><dd>{{ conteo(detalle) }}</dd>
+        <dt>Consentimiento</dt>
+        <dd>{{ consentimientoVigente(detalle) ? `Vigente (v${detalle.consentimiento.consentVersion}, ${formatFecha(detalle.consentimiento.acceptedAt)})` : 'No otorgado' }}</dd>
+      </dl>
+      <p class="small muted">Los datos opcionales (edad, peso, actividad habitual) solo se muestran y editan al editar el usuario activo.</p>
+      <div class="row">
+        <RouterLink to="/monitor" class="btn" @click="users.selectUser(detalle.id)">Medir con este usuario</RouterLink>
+        <RouterLink to="/monitoreos" class="btn" @click="users.selectUser(detalle.id)">Ver sus monitoreos</RouterLink>
+        <button class="btn" :disabled="!puedeGestionar(detalle)" data-testid="historial-usuario" @click="historialDe = detalle.id">Descargar historial</button>
+      </div>
     </section>
 
-    <ConsentDialog v-if="verConsentimiento && activo" :etiqueta="activo.etiqueta" @acepto="aceptarConsentimiento" @no-acepto="rechazarConsentimiento" />
+    <HistorialDialog v-if="historialDe" :usuario-id="historialDe" @cerrar="historialDe = null" />
+
+    <!-- Crear / editar -->
+    <BaseDialog v-if="modoDialogo" :titulo="modoDialogo === 'crear' ? 'Nuevo usuario' : `Editar ${objetivo?.etiqueta}`" ancho="600px" @cerrar="cerrarDialogo">
+      <form id="form-usuario" novalidate @submit.prevent="enviarAlias">
+        <div class="field">
+          <label for="alias">Alias (opcional)</label>
+          <input id="alias" v-model="aliasForm" type="text" maxlength="20" autocomplete="off" placeholder="p. ej. Grupo A-2" aria-describedby="alias-ayuda">
+          <p id="alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT, correo ni otros datos identificables.</strong> El seudónimo «Usuario N» lo asigna el sistema.</p>
+          <p v-if="errorAlias" class="error-text" role="alert">{{ errorAlias }}</p>
+        </div>
+      </form>
+      <template v-if="modoDialogo === 'editar' && objetivo">
+        <h3>Datos opcionales</h3>
+        <template v-if="!consentimientoVigente(objetivo)">
+          <p>Para registrar edad, peso o actividad física habitual necesitas aceptar el consentimiento informado.</p>
+          <button class="btn" @click="verConsentimiento = true">Agregar datos opcionales…</button>
+        </template>
+        <template v-else>
+          <p class="ok-text small">✓ Consentimiento v{{ objetivo.consentimiento.consentVersion }} otorgado el {{ formatFecha(objetivo.consentimiento.acceptedAt) }}</p>
+          <OptionalDataForm :usuario="objetivo" />
+          <button class="btn ghost" @click="confirmarRetiro = true">Retirar consentimiento</button>
+        </template>
+      </template>
+      <template #acciones>
+        <button class="btn" @click="cerrarDialogo">{{ modoDialogo === 'crear' ? 'Cancelar' : 'Cerrar' }}</button>
+        <button type="submit" form="form-usuario" class="btn primary" :disabled="ocupado">{{ modoDialogo === 'crear' ? 'Crear usuario' : 'Guardar alias' }}</button>
+      </template>
+    </BaseDialog>
+
+    <ConsentDialog v-if="verConsentimiento && objetivo" :etiqueta="objetivo.etiqueta" @acepto="aceptarConsentimiento" @no-acepto="rechazarConsentimiento" />
 
     <BaseDialog v-if="confirmarRetiro" titulo="Retirar consentimiento" @cerrar="confirmarRetiro = false">
-      <p>Se borrarán de inmediato tus datos opcionales (edad, peso, actividad física). Tus mediciones se conservan.</p>
+      <p>Se borrarán de inmediato los datos opcionales (edad, peso, actividad física). Los monitoreos se conservan.</p>
       <template #acciones>
         <button class="btn" @click="confirmarRetiro = false">Cancelar</button>
         <button class="btn danger" @click="retirar">Retirar y borrar</button>
       </template>
     </BaseDialog>
 
-    <BaseDialog v-if="confirmarBorrado && activo" titulo="Eliminar mis datos" @cerrar="confirmarBorrado = false">
-      <p>Se eliminarán <strong>definitivamente</strong> el identificador {{ activo.etiqueta }}, sus datos opcionales, su consentimiento y todas sus mediciones.</p>
+    <!-- Eliminar: flujo "Eliminar mis datos" (SEC-30) -->
+    <BaseDialog v-if="confirmarBorrado && objetivo" titulo="Eliminar usuario y sus datos" @cerrar="confirmarBorrado = false">
+      <DataClassBadge level="sensitive" />
+      <p>
+        Se eliminarán <strong>definitivamente</strong> {{ objetivo.etiqueta }}, sus datos opcionales, su consentimiento y
+        <strong>{{ conteo(objetivo) }}</strong> monitoreo(s), en este navegador y en la nube si está activada. No se puede deshacer.
+      </p>
+      <p v-if="enUso(objetivo)" class="alert warn" role="alert">Este usuario está en un canal conectado o en un monitoreo activo. Detén el monitoreo y desconecta el canal antes de eliminar.</p>
       <template #acciones>
         <button class="btn" @click="confirmarBorrado = false">Cancelar</button>
-        <button class="btn danger" :disabled="ocupado" @click="eliminarMisDatos">Eliminar definitivamente</button>
+        <button class="btn danger" data-testid="confirmar-eliminar-usuario" :disabled="ocupado || enUso(objetivo)" @click="eliminar">Eliminar definitivamente</button>
       </template>
     </BaseDialog>
   </section>
 </template>
 
 <style scoped>
-.lista-usuarios {
-  list-style: none;
-  padding: 0;
+.acciones {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
 }
 
-.activo {
+tr.activo th,
+tr.activo td {
+  background: var(--bg-elev-2);
+}
+
+.detalle {
   margin-top: var(--gap);
 }
 
-.sub {
-  margin-top: 20px;
+.datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+}
+
+.datos dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.datos dd {
+  margin: 0;
 }
 </style>

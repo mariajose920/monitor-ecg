@@ -3,7 +3,11 @@ import BaseDialog from './BaseDialog.vue'
 import DataClassBadge from './DataClassBadge.vue'
 
 /** SEC-45: advertencia antes de descargar datos de salud. */
-defineProps({ detalle: { type: String, default: '' }, ocupado: { type: Boolean, default: false } })
+defineProps({
+  detalle: { type: String, default: '' },
+  ocupado: { type: Boolean, default: false },
+  boton: { type: String, default: 'Entiendo, descargar CSV' },
+})
 const emit = defineEmits(['confirmar', 'cancelar'])
 </script>
 
@@ -18,7 +22,7 @@ const emit = defineEmits(['confirmar', 'cancelar'])
     <slot />
     <template #acciones>
       <button class="btn" @click="emit('cancelar')">Cancelar</button>
-      <button class="btn primary" :disabled="ocupado" @click="emit('confirmar')">Entiendo, descargar CSV</button>
+      <button class="btn primary" :disabled="ocupado" @click="emit('confirmar')">{{ boton }}</button>
     </template>
   </BaseDialog>
 </template>

@@ -134,6 +134,18 @@ export const useUsersStore = defineStore('users', () => {
     await persist()
   }
 
+  /** Edita el alias (el seudónimo "Usuario N" no cambia). El detalle de auditoría no incluye el alias. */
+  async function updateAlias(id, alias, actor = null) {
+    const u = byId(id)
+    if (!u) throw new Error('Usuario no encontrado')
+    const a = String(alias || '').trim()
+    if (a && !ALIAS_RE.test(a)) throw new Error('Alias inválido: solo letras sin tilde, números, espacio, _ y - (máx. 20).')
+    u.alias = a || null
+    u.actualizadoEn = new Date().toISOString()
+    await persist()
+    await audit('USER_UPDATED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'alias' })
+  }
+
   /** SEC-30: "Eliminar mis datos" (perfil, opcionales, mediciones y consentimiento). */
   async function deleteUserData(id, actor = null) {
     const u = byId(id)
@@ -163,6 +175,6 @@ export const useUsersStore = defineStore('users', () => {
 
   return {
     users, loaded, activeUserId, activeUser, load, ensureLoaded, byId, labelOf, createUser, selectUser,
-    clearActive, giveConsent, withdrawConsent, updateProfile, deleteUserData, reset,
+    clearActive, giveConsent, withdrawConsent, updateProfile, updateAlias, deleteUserData, reset,
   }
 })

@@ -1,5 +1,15 @@
 <script setup>
 import { ref, computed, shallowRef, markRaw, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import MonitoreoPicker from '@/components/compare/MonitoreoPicker.vue'
+import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
+import DataClassBadge from '@/components/common/DataClassBadge.vue'
+import { useMonitoreosStore } from '@/stores/monitoreos.js'
+import { nombreMonitoreo, participantesVisibles } from '@/services/monitoreos/catalog.js'
+import { informeComparacionPdf, informeComparacionCsv } from '@/services/report/informes.js'
+import { renderizarGraficoJpeg } from '@/services/report/reportChart.js'
+import { downloadBytes, downloadText, exportFilename } from '@/services/export/csvExporter.js'
+import { audit } from '@/services/audit/auditService.js'
 import SignalChart from '@/components/common/SignalChart.vue'
 import SyncControls from '@/components/compare/SyncControls.vue'
 import CompareMetrics from '@/components/compare/CompareMetrics.vue'
@@ -9,17 +19,18 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useChannelsStore } from '@/stores/channels.js'
 import { generateReferenceEcg, PqrstGenerator, mvToAdc } from '@/data/referenceEcg.js'
 import { readSignalFile, parseSignalCsv } from '@/services/export/csvImporter.js'
-import { listSessions, getChannelSignal } from '@/services/storage/sessionRepository.js'
+import { getChannelSignal } from '@/services/storage/sessionRepository.js'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
-import { prepareSignal, computeLag, computeMetrics, longestValidSegment } from '@/services/compare/compareSignals.js'
+import { prepareSignal, computeLag, computeMetrics, trimValidSegment } from '@/services/compare/compareSignals.js'
 import { notify } from '@/services/notifications/notifier.js'
-import { formatFecha } from '@/utils/time.js'
 
 /** RF11–RF14: comparación de la señal experimental con una referencia. */
 const settings = useSettingsStore()
 const users = useUsersStore()
 const auth = useAuthStore()
 const channels = useChannelsStore()
+const monitoreos = useMonitoreosStore()
+const route = useRoute()
 const FS = 250
 const MAX_S = 30
 
@@ -31,9 +42,12 @@ const refCsv = shallowRef(null) // { values, t, fs, nombre, comentarios }
 // ---- Experimental
 const expTipo = ref('simulada')
 const expCsv = shallowRef(null)
-const sesiones = ref([])
 const sesionSel = ref('')
 const participanteSel = ref('')
+const refSesion = ref('')
+const refCanal = ref('')
+const sesiones = computed(() => monitoreos.utilizables)
+const exportandoInforme = ref(null)
 const canalSel = ref('')
 
 // ---- Sincronización (RF14)
@@ -49,17 +63,32 @@ const calculando = ref(false)
 
 onMounted(async () => {
   try {
-    sesiones.value = await listSessions({ usuarioId: auth.isAdmin && !users.activeUserId ? null : users.activeUserId || '__ninguno__' })
+    await monitoreos.refrescar()
   } catch {
-    sesiones.value = []
+    notify('No se pudieron leer los monitoreos guardados.', { tipo: 'error' })
+  }
+  // Enlaces desde Monitoreos: ?a=<id>&b=<id> (A = referencia, B = experimental)
+  const qa = String(route.query.a ?? '')
+  const qb = String(route.query.b ?? '')
+  const unico = (id) => {
+    const s = sesiones.value.find((x) => x.id === id)
+    return s ? { id, canal: participantesVisibles(s, monitoreos.ctx)[0]?.canalIndex ?? '' } : null
+  }
+  const A = unico(qa)
+  const B = unico(qb)
+  if (A) {
+    refTipo.value = 'monitoreo'
+    refSesion.value = A.id
+    refCanal.value = A.canal
+  }
+  if (B) {
+    expTipo.value = 'sesion'
+    sesionSel.value = B.id
+    participanteSel.value = B.canal
   }
 })
 
-const participantes = computed(() => {
-  const s = sesiones.value.find((x) => x.id === sesionSel.value)
-  if (!s) return []
-  return auth.isAdmin && !users.activeUserId ? s.participantes : s.participantes.filter((p) => p.usuarioId === users.activeUserId)
-})
+const ctxAcceso = computed(() => ({ usuarioId: monitoreos.ctx.usuarioId, esAdmin: monitoreos.ctx.esAdmin }))
 const canalesVivos = computed(() => channels.channels.filter((c) => ['streaming', 'leads-off', 'signal-lost'].includes(c.estado)))
 
 async function cargarCsv(e, destino) {
@@ -67,7 +96,7 @@ async function cargarCsv(e, destino) {
   if (!file) return
   try {
     const d = await readSignalFile(file)
-    const obj = markRaw({ values: d.v, t: d.t, leadsOff: d.leadsOff, fs: d.fs, nombre: file.name.slice(0, 60), comentarios: d.comentarios, filas: d.filas, invalidas: d.invalidas })
+    const obj = markRaw({ values: d.v, t: d.t, leadsOff: d.leadsOff, fs: d.fs, nombre: file.name.slice(0, 60), csv: true, comentarios: d.comentarios, filas: d.filas, invalidas: d.invalidas })
     if (destino === 'ref') refCsv.value = obj
     else expCsv.value = obj
     notify(`CSV válido: ${d.filas} filas (${d.invalidas} descartadas), fs ≈ ${d.fs ? d.fs.toFixed(0) : '?'} Hz.`, { tipo: 'ok' })
@@ -110,21 +139,24 @@ async function obtenerExperimental() {
     rt.ring.toLinear(t, v, lo)
     return recortar({ values: v, t, leadsOff: lo, fs: rt.profile.fs, nombre: `Canal ${canalSel.value} (congelado)` })
   }
-  const s = sesiones.value.find((x) => x.id === sesionSel.value)
-  if (!s || participanteSel.value === '') throw new Error('Elige una sesión y un participante')
-  const sig = await getChannelSignal(s.id, Number(participanteSel.value))
-  return recortar({ values: sig.raw, t: sig.t, leadsOff: sig.lo, fs: FS, nombre: `Sesión ${formatFecha(s.inicio)}` })
+  return cargarMonitoreo(sesionSel.value, participanteSel.value)
+}
+
+/** Señal de un monitoreo guardado (tramo continuo ≤ 30 s sin leads-off). */
+async function cargarMonitoreo(sesionId, canal) {
+  const s = sesiones.value.find((x) => x.id === sesionId)
+  if (!s || canal === '') throw new Error('Elige un monitoreo guardado y un usuario/canal')
+  const p = participantesVisibles(s, ctxAcceso.value).find((x) => x.canalIndex === Number(canal))
+  if (!p) throw new Error('No tienes acceso a ese canal del monitoreo')
+  const sig = await getChannelSignal(s.id, Number(canal))
+  return recortar({
+    values: sig.raw, t: sig.t, leadsOff: sig.lo, fs: p.fs || FS,
+    nombre: nombreMonitoreo(s), usuario: users.byId(p.usuarioId)?.etiqueta ?? 'Usuario eliminado', monitoreo: true,
+  })
 }
 
 function recortar(d) {
-  const maxN = Math.round(MAX_S * (d.fs || FS))
-  const seg = longestValidSegment(d.values, d.leadsOff, maxN)
-  if (seg.end - seg.start < 3 * (d.fs || FS)) throw new Error('La señal experimental no tiene al menos 3 s continuos sin leads-off')
-  return {
-    ...d,
-    values: d.values.subarray(seg.start, seg.end),
-    t: d.t ? d.t.subarray(seg.start, seg.end) : null,
-  }
+  return trimValidSegment(d, { maxSeconds: MAX_S, minSeconds: 3, defaultFs: FS })
 }
 
 async function obtenerReferencia(duracionS) {
@@ -133,6 +165,7 @@ async function obtenerReferencia(duracionS) {
     return { values: r.valores, fs: FS, nombre: `Sintética interna ${refBpm.value} BPM (didáctica)` }
   }
   if (refTipo.value === 'ejemplo') return cargarEjemploRef()
+  if (refTipo.value === 'monitoreo') return cargarMonitoreo(refSesion.value, refCanal.value)
   if (!refCsv.value) throw new Error('Carga un CSV de referencia')
   return refCsv.value
 }
@@ -148,7 +181,16 @@ async function comparar() {
     const pr = prepareSignal({ values: ref.values, t: ref.t ?? null, fs: ref.fs, fsOut: FS, normalizacion: norm })
     const pe = prepareSignal({ values: exp.values, t: exp.t ?? null, fs: exp.fs, fsOut: FS, normalizacion: norm })
     const n = Math.min(pr.length, pe.length)
-    preparado.value = markRaw({ ref: pr.subarray(0, n), exp: pe.subarray(0, n), nombres: [ref.nombre, exp.nombre] })
+    const seguro = (d) => (d.csv ? 'CSV cargado' : d.nombre)
+    preparado.value = markRaw({
+      ref: pr.subarray(0, n),
+      exp: pe.subarray(0, n),
+      nombres: [ref.nombre, exp.nombre],
+      fuentes: [
+        { rol: 'A (referencia)', nombre: seguro(ref), usuario: ref.usuario ?? null },
+        { rol: 'B (experimental)', nombre: seguro(exp), usuario: exp.usuario ?? null },
+      ],
+    })
     if (metodo.value !== 'manual') autoAlinear(false)
     else recalcular()
   } catch (e) {
@@ -193,6 +235,43 @@ function recalcular() {
 watch(metodo, () => preparado.value && recalcular())
 watch(manualMs, () => metodo.value === 'manual' && preparado.value && recalcular())
 
+/** Informe PDF/CSV de la comparación (seudonimizado). */
+async function descargarInforme() {
+  const formato = exportandoInforme.value
+  exportandoInforme.value = null
+  try {
+    const p = preparado.value
+    const r = resultado.value
+    if (!p || !r) throw new Error('Primero realiza una comparación.')
+    const generadoEn = new Date()
+    const parametros = { metodo: metodo.value, normalizacion: settings.sincronizacion.normalizacion, fsHz: FS, maxLagMs: maxLagMs.value }
+    const base = { fuentes: p.fuentes, metricas: r.metricas, parametros, generadoEn }
+    const etiqueta = users.activeUser?.etiqueta ?? 'admin'
+    if (formato === 'pdf') {
+      let grafico = null
+      try {
+        const [x, a, b] = r.data
+        grafico = renderizarGraficoJpeg({
+          series: [
+            { x, y: a, color: '#1f6fd1', etiqueta: 'Señal A (referencia)' },
+            { x, y: b, color: '#0b7a4c', etiqueta: 'Señal B (experimental)' },
+          ],
+          etiquetaY: 'z-score',
+        })
+      } catch {
+        grafico = null
+      }
+      downloadBytes(informeComparacionPdf({ ...base, grafico }), exportFilename(etiqueta, generadoEn, { prefijo: 'comparacion', ext: 'pdf' }))
+    } else {
+      const [x, a, b] = r.data
+      downloadText(informeComparacionCsv({ ...base, datos: { x, a, b } }), exportFilename(etiqueta, generadoEn, { prefijo: 'comparacion', ext: 'csv' }))
+    }
+    await audit('EXPORT_REPORT', monitoreos.actor(), { tipo: formato === 'pdf' ? 'comparacion-pdf' : 'comparacion-csv', pseudonymized: true })
+  } catch (e) {
+    notify(e.message, { tipo: 'error' })
+  }
+}
+
 const series = computed(() => [
   { label: `Referencia: ${preparado.value?.nombres[0] ?? ''}`, color: '--signal-ref' },
   { label: `Experimental: ${preparado.value?.nombres[1] ?? ''}`, color: '--signal' },
@@ -202,7 +281,7 @@ const series = computed(() => [
 <template>
   <section>
     <div class="page-header">
-      <h1>Comparar con señal de referencia</h1>
+      <h1>Comparar señales</h1>
     </div>
     <p class="muted">
       Pipeline: filtro (paso alto 0,5 Hz + notch 50 Hz) → remuestreo a 250 Hz → normalización
@@ -212,43 +291,29 @@ const series = computed(() => [
 
     <div class="grid cols-2">
       <fieldset class="card">
-        <legend>Señal de referencia (RF11)</legend>
+        <legend>Señal A: referencia (RF11)</legend>
         <label class="check"><input v-model="refTipo" type="radio" value="sintetica"> Sintética interna PQRST (didáctica)</label>
         <div v-if="refTipo === 'sintetica'" class="field">
           <label for="ref-bpm">BPM de la referencia</label>
           <input id="ref-bpm" v-model.number="refBpm" type="number" min="40" max="180">
         </div>
         <label class="check"><input v-model="refTipo" type="radio" value="ejemplo"> CSV de ejemplo incluido (public/referencias)</label>
+        <label class="check"><input v-model="refTipo" type="radio" value="monitoreo"> Monitoreo guardado</label>
+        <MonitoreoPicker v-if="refTipo === 'monitoreo'" id-base="ref" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
         <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet convertido)</label>
         <div v-if="refTipo === 'csv'" class="field">
           <input id="ref-csv" type="file" accept=".csv,text/csv" aria-label="CSV de referencia" @change="cargarCsv($event, 'ref')">
-          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o <span class="mono">t_ms,ecg_raw,leads_off,bpm</span>. Máx. 5 MB. Las líneas "#" son metadatos de origen.</p>
+          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o <span class="mono">t_ms,ecg_raw,leads_off,bpm</span>, o un CSV exportado por esta app (monitoreo o historial). Máx. 5 MB. Las líneas "#" son metadatos de origen.</p>
           <p v-if="refCsv" class="small">Cargado: {{ refCsv.nombre }} · {{ refCsv.filas }} filas<template v-if="refCsv.comentarios?.length"> · {{ refCsv.comentarios[0] }}</template></p>
         </div>
         <p class="alert info small">La referencia sintética es didáctica, no un registro clínico validado. Para una validación real, carga un registro certificado y cita su origen.</p>
       </fieldset>
 
       <fieldset class="card">
-        <legend>Señal experimental</legend>
+        <legend>Señal B: experimental</legend>
         <label class="check"><input v-model="expTipo" type="radio" value="simulada"> Sensor simulado (con ruido y desfase conocido)</label>
-        <label class="check"><input v-model="expTipo" type="radio" value="sesion"> Sesión guardada</label>
-        <div v-if="expTipo === 'sesion'" class="grid cols-2">
-          <div class="field">
-            <label for="exp-ses">Sesión</label>
-            <select id="exp-ses" v-model="sesionSel">
-              <option value="">—</option>
-              <option v-for="s in sesiones" :key="s.id" :value="s.id">{{ formatFecha(s.inicio) }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="exp-part">Participante</label>
-            <select id="exp-part" v-model="participanteSel">
-              <option value="">—</option>
-              <option v-for="p in participantes" :key="p.canalIndex" :value="p.canalIndex">{{ users.byId(p.usuarioId)?.etiqueta ?? '—' }} · {{ p.canalNombre }}</option>
-            </select>
-          </div>
-          <p v-if="!sesiones.length" class="hint">No hay sesiones accesibles (elige un participante o inicia sesión de admin).</p>
-        </div>
+        <label class="check"><input v-model="expTipo" type="radio" value="sesion"> Monitoreo guardado</label>
+        <MonitoreoPicker v-if="expTipo === 'sesion'" id-base="exp" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="sesionSel" v-model:canal="participanteSel" />
         <label class="check"><input v-model="expTipo" type="radio" value="vivo"> Congelar un canal en vivo</label>
         <div v-if="expTipo === 'vivo'" class="field">
           <select id="exp-canal" v-model="canalSel" aria-label="Canal en vivo">
@@ -284,7 +349,22 @@ const series = computed(() => [
         <h2>Señales superpuestas (RF13)</h2>
         <SignalChart :data="resultado.data" :series="series" :height="300" y-label="z-score" />
       </div>
+      <div class="card">
+        <h2>Informe de la comparación</h2>
+        <p class="muted small">Seudonimizado: solo Usuario N, métricas y parámetros. <DataClassBadge level="sensitive" /></p>
+        <div class="row">
+          <button class="btn" data-testid="informe-comparacion-pdf" @click="exportandoInforme = 'pdf'">Descargar PDF</button>
+          <button class="btn" data-testid="informe-comparacion-csv" @click="exportandoInforme = 'csv'">Descargar CSV</button>
+        </div>
+      </div>
     </template>
+  <ExportWarningDialog
+      v-if="exportandoInforme"
+      :boton="exportandoInforme === 'pdf' ? 'Entiendo, descargar PDF' : 'Entiendo, descargar CSV'"
+      detalle="El informe contiene métricas y parámetros de la comparación, sin alias ni datos opcionales."
+      @confirmar="descargarInforme"
+      @cancelar="exportandoInforme = null"
+    />
   </section>
 </template>
 

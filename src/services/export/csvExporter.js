@@ -78,14 +78,22 @@ export function buildCsv(rows, { includeOptional = false, date = new Date() } = 
 }
 
 /** Nombre de archivo sin datos personales (SEC-47): ecg_Usuario3_2026-10-05T1530Z.csv */
-export function exportFilename(etiqueta, date = new Date()) {
+export function exportFilename(etiqueta, date = new Date(), { prefijo = 'ecg', ext = 'csv' } = {}) {
   const limpio = String(etiqueta).replace(/[^A-Za-z0-9_-]/g, '')
-  return `ecg_${limpio || 'export'}_${stampUtc(date)}.csv`
+  return `${prefijo}_${limpio || 'export'}_${stampUtc(date)}.${ext}`
 }
 
 /** Descarga un texto como archivo (Blob + URL de objeto revocada tras la descarga). */
 export function downloadText(text, filename, type = 'text/csv;charset=utf-8') {
-  const blob = new Blob([text], { type })
+  downloadBlob(new Blob([text], { type }), filename)
+}
+
+/** Descarga bytes (p. ej. un PDF). */
+export function downloadBytes(bytes, filename, type = 'application/pdf') {
+  downloadBlob(new Blob([bytes], { type }), filename)
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

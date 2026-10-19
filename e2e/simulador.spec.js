@@ -2,8 +2,9 @@ import { test, expect } from '@playwright/test'
 
 test('el simulador muestra BPM en vivo con alternativa textual del gráfico', async ({ page }) => {
   await page.goto('/usuarios')
-  await page.getByRole('button', { name: 'Crear identificador' }).click()
-  await expect(page.getByRole('button', { name: /Usuario 1/ })).toBeVisible()
+  await page.getByTestId('nuevo-usuario').click()
+  await page.getByRole('button', { name: 'Crear usuario' }).click()
+  await expect(page.getByTestId('usuario-activo')).toContainText('Usuario 1')
 
   await page.goto('/monitor')
   await page.getByLabel('Fuente', { exact: true }).first().selectOption('simulator')

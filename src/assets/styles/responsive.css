@@ -1,0 +1,44 @@
+/* Ajustes responsivos globales (375 px / tablet / PC) y soporte móvil/PWA. */
+html { -webkit-tap-highlight-color: transparent; }
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.container { min-width: 0; }
+.grid > *, .row > * { min-width: 0; }
+img, svg, canvas, video, select, input, textarea { max-width: 100%; }
+pre, code { overflow-wrap: anywhere; }
+.chart-box, .u-wrap { max-width: 100%; }
+.chart-box { overflow: hidden; }
+
+/* Video de la cámara para PPG: existe en el DOM pero no se ve (los fotogramas no se muestran). */
+.camera-hidden-video {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Objetivos táctiles >= 44 px en pantallas táctiles */
+@media (pointer: coarse) {
+  .btn.small { min-height: var(--touch); }
+  .tabs a, .tabs button { min-height: var(--touch); }
+  input[type='checkbox'] { width: 24px; height: 24px; }
+}
+
+/* Tablas que se vuelven tarjetas en móvil: <table class="cards"> con td[data-label] */
+@media (max-width: 599px) {
+  table.cards, table.cards tbody, table.cards tr, table.cards td, table.cards th { display: block; width: 100%; }
+  table.cards thead { position: absolute; left: -9999px; }
+  table.cards tr { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; padding: 6px 10px; background: var(--bg-elev); }
+  table.cards td, table.cards th { border-bottom: 0; padding: 4px 0; }
+  table.cards td[data-label]::before { content: attr(data-label) ': '; font-weight: 700; color: var(--text-muted); }
+}
+
+/* Espacio para que la barra de instalación no tape el contenido final */
+#app > footer { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+@media (max-width: 599px) {
+  h1 { font-size: 1.3rem; }
+  .page-header .btn { flex: 1 1 auto; }
+  .dialog { max-height: 100dvh; }
+}

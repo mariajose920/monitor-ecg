@@ -24,6 +24,17 @@ export const DEVICE_PROFILES = Object.freeze({
     yRange: [0, 4095],
     protocolo: 't_ms,ecg_raw,leads_off,bpm',
   }),
+  // PPG por cámara + flash (no es ECG): señal normalizada a 10 bits virtuales, 30 Hz.
+  'camara-movil': Object.freeze({
+    id: 'camara-movil',
+    nombre: 'Cámara del celular (PPG)',
+    adcBits: 10,
+    vref: 1,
+    fs: 30,
+    baudRate: 0,
+    yRange: [0, 1023],
+    protocolo: 'interno-ppg',
+  }),
   simulador: Object.freeze({
     id: 'simulador',
     nombre: 'Simulador (equivalente a UNO, 10 bits)',
