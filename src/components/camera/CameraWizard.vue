@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useChannelsStore } from '@/stores/channels.js'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
 import { CALIDAD_PPG } from '@/utils/dsp/ppgCamera.js'
@@ -31,11 +31,36 @@ const clase = computed(() => ({ buena: 'ok', calibrando: 'info', debil: 'warn' }
 const anuncio = computed(() => `${calidad.value.texto}. ${calidad.value.consejo}`)
 
 const flashFallo = ref(false)
-async function encenderFlash() {
+const preview = ref(null)
+
+/** Muestra la cámara en el cuadro pequeño (solo en tu pantalla; no se guarda ni se envía). */
+function conectarVista() {
   const rt = getRuntime(props.canal.id)
-  flashFallo.value = !(rt && (await rt.source.encenderFlash?.()))
-  if (rt) calidad.value = rt.source.quality
+  const el = preview.value
+  if (!el || !rt?.source.previewStream) return
+  if (el.srcObject !== rt.source.previewStream) el.srcObject = rt.source.previewStream
+  el.play?.().catch(() => {})
 }
+watch([preview, paso], conectarVista, { flush: 'post' })
+
+async function alternarFlash() {
+  const rt = getRuntime(props.canal.id)
+  if (!rt) return
+  if (rt.source.torchOn) {
+    await rt.source.apagarFlash?.()
+    flashFallo.value = false
+  } else {
+    flashFallo.value = !(await rt.source.encenderFlash?.())
+  }
+  calidad.value = rt.source.quality
+}
+
+const motivoFlash = computed(() => {
+  const r = calidad.value.torchReason
+  if (r === 'permiso') return 'El navegador no dio permiso para controlar el flash. Revisa los permisos del sitio (cámara) y vuelve a tocar el botón.'
+  if (r === 'no-soportado') return 'Este celular o navegador no deja encender el flash desde la web.'
+  return 'El flash no respondió.'
+})
 
 function enfocarTitulo() {
   nextTick(() => titulo.value?.focus())
@@ -140,7 +165,7 @@ onBeforeUnmount(() => timer && clearInterval(timer))
         <div v-if="paso === 1">
           <p>Para medir tu pulso se usa la cámara trasera y el flash. El navegador te pedirá permiso.</p>
           <ul class="small">
-            <li>Solo se calcula el promedio de color de una zona pequeña; <strong>las imágenes nunca se guardan ni se envían</strong>.</li>
+            <li>Se muestra la cámara en un cuadro pequeño solo en tu pantalla. Solo se calcula el promedio de color de una zona pequeña; <strong>las imágenes nunca se guardan ni se envían</strong>.</li>
             <li>La cámara y el flash se apagan al terminar, al cambiar de pestaña o al bloquear la pantalla.</li>
             <li>Si tu dispositivo no permite encender el flash (p. ej. iPhone con Safari), usa una luz ambiental fuerte.</li>
           </ul>
@@ -158,11 +183,22 @@ onBeforeUnmount(() => timer && clearInterval(timer))
             <li>Quédate quieto {{ DURACION }} s, con el brazo apoyado y sin hablar.</li>
           </ol>
           <p class="paso-dedo"><strong>Coloca la yema del dedo cubriendo la cámara y el flash.</strong></p>
-          <p class="muted small">Flash: <strong>{{ flashActivo ? 'encendido' : 'apagado' }}</strong></p>
+          <div class="preview" data-testid="camara-preview">
+            <video ref="preview" muted playsinline autoplay aria-label="Vista previa de la cámara" />
+            <svg class="huella" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <circle cx="50" cy="50" r="46" stroke-dasharray="4 6" />
+              <path d="M30 70c-4-8-4-16 0-24 5-10 14-16 24-15 12 1 20 10 20 22" />
+              <path d="M38 76c-3-6-3-13 0-19 4-8 11-12 18-11 9 1 15 8 15 16" />
+              <path d="M46 80c-2-5-2-10 0-15 2-5 6-7 10-7 5 0 9 4 9 9" />
+              <path d="M54 82c-1-4-1-8 1-11" />
+            </svg>
+          </div>
+          <p class="muted small preview-nota">Así se ve tu cámara. Apoya la yema sobre el lente y el flash: tapa la huella dibujada.</p>
+          <p class="muted small">Flash: <strong data-testid="camara-flash-estado">{{ flashActivo ? 'encendido' : 'apagado' }}</strong></p>
+          <button class="btn" type="button" data-testid="camara-encender-flash" @click="alternarFlash">{{ flashActivo ? 'Apagar flash' : 'Encender flash' }}</button>
           <div v-if="!flashActivo" class="alert warn small" role="status" data-testid="camara-flash-aviso">
-            <p>No se pudo encender el flash automáticamente. Toca el botón; si tampoco funciona, enciende la linterna de tu celular manualmente o usa una luz ambiental fuerte.</p>
-            <button class="btn small" type="button" data-testid="camara-encender-flash" @click="encenderFlash">Encender flash</button>
-            <p v-if="flashFallo" class="error-text">Este navegador no permite controlar el flash.</p>
+            <p>El flash está apagado. Toca <strong>Encender flash</strong>. <span v-if="flashFallo || calidad.torchReason">{{ motivoFlash }}</span></p>
+            <p v-if="flashFallo || calidad.torchReason">Alternativa: enciende la linterna del celular desde el panel rápido y apoya el dedo sobre la cámara y la luz; si la cámara se queda sin imagen, apunta a una luz fuerte (lámpara) y tapa el lente con el dedo.</p>
           </div>
           <div :class="['calidad', 'chip', clase]" data-testid="camara-calidad">{{ calidad.texto }}</div>
           <p class="small" aria-live="polite" role="status">{{ anuncio }}</p>
@@ -235,6 +271,39 @@ onBeforeUnmount(() => timer && clearInterval(timer))
 
 .pasos {
   padding-left: 20px;
+}
+
+.preview {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  margin: 8px auto;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid var(--accent);
+}
+
+.preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.huella {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 78%;
+  height: 78%;
+  color: #fff;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.preview-nota {
+  text-align: center;
 }
 
 .calidad {

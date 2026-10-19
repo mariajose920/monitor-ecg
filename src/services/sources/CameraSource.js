@@ -6,7 +6,8 @@ import { PpgProcessor, PpgPeakDetector, PPG_FS } from '@/utils/dsp/ppgCamera.js'
  * con el mismo formato interno que las demas fuentes: { t, v, leadsOff, bpmDevice, n }.
  *
  * PRIVACIDAD (A.18.1.4): los fotogramas se dibujan en un canvas diminuto SOLO para promediar
- * los canales R, G, B de una region central; no se almacenan, no se envian y no se muestran.
+ * los canales R, G, B de una region central; no se almacenan ni se envian. La vista previa
+ * (cuadro pequeno del asistente) se reproduce solo en la pantalla del propio usuario.
  * Al desconectar (o al ocultarse la pestana) se detienen las pistas y se apaga el flash.
  *
  * Eventos extra ('event'): { type: 'torch-unavailable' } | { type: 'camera-denied', motivo }.
@@ -30,6 +31,7 @@ export class CameraSource extends DataSource {
     this.vfc = null
     this.torchOn = false
     this.torchSupported = false
+    this.torchReason = ''
     this.t0 = 0
     this.gridI = 0
     this.prev = null
@@ -54,7 +56,12 @@ export class CameraSource extends DataSource {
 
   /** Calidad en vivo para el asistente (consulta, no reactivo). */
   get quality() {
-    return { ...this.proc.quality(), torch: this.torchOn, torchSupported: this.torchSupported }
+    return { ...this.proc.quality(), torch: this.torchOn, torchSupported: this.torchSupported, torchReason: this.torchReason }
+  }
+
+  /** Flujo de la camara para la vista previa del asistente (solo se muestra en pantalla). */
+  get previewStream() {
+    return this.stream
   }
 
   async connect() {
@@ -83,7 +90,8 @@ export class CameraSource extends DataSource {
     }
     this.track = this.stream.getVideoTracks()[0]
     this.track.addEventListener('ended', () => this.disconnect('desconexion'))
-    await this._tryTorch()
+    await this._elegirCamaraConFlash()
+    this.track.addEventListener('ended', () => this.disconnect('desconexion'))
 
     // <video> fuera de pantalla (clase CSS, sin estilos en linea): no se muestra al usuario.
     const v = document.createElement('video')
@@ -102,42 +110,94 @@ export class CameraSource extends DataSource {
       this.setStatus('error')
       throw new Error('No se pudo iniciar la cámara.', { cause: e })
     }
+    // Con el video ya corriendo el flash se acepta mejor: reintenta unas veces.
+    await this._tryTorch(true)
+    for (let i = 0; i < 3 && !this.torchOn && this.torchSupported; i++) {
+      await new Promise((r) => setTimeout(r, 400))
+      await this._tryTorch(true)
+    }
+    if (!this.torchOn) this.emit('event', { type: 'torch-unavailable' })
     this.canvas = makeCanvas(16, 16)
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true })
     document.addEventListener('visibilitychange', this._onVis)
     window.addEventListener('pagehide', this._onHide)
   }
 
-  async _tryTorch() {
+  /**
+   * Muchos celulares tienen varios lentes traseros (gran angular, macro...) y solo uno tiene flash.
+   * Si el lente elegido no declara "torch", prueba los demas lentes traseros y se queda con el primero que si.
+   */
+  async _elegirCamaraConFlash() {
+    if (this._tieneTorch(this.track)) return
     try {
-      const caps = this.track.getCapabilities?.() ?? {}
-      this.torchSupported = !!caps.torch
-      if (this.torchSupported) {
-        await this.track.applyConstraints({ advanced: [{ torch: true }] })
-        this.torchOn = true
-        return
+      const actual = this.track.getSettings?.().deviceId
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.deviceId && d.deviceId !== actual)
+      for (const d of devs.slice(0, 5)) {
+        let s2 = null
+        try {
+          s2 = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { deviceId: { exact: d.deviceId }, width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 30, max: 30 } },
+          })
+          const t2 = s2.getVideoTracks()[0]
+          if (this._tieneTorch(t2)) {
+            this.stream.getTracks().forEach((t) => t.stop())
+            this.stream = s2
+            this.track = t2
+            return
+          }
+          s2.getTracks().forEach((t) => t.stop())
+        } catch {
+          s2?.getTracks().forEach((t) => t.stop())
+        }
       }
     } catch {
-      this.torchOn = false
+      /* sin enumerateDevices: se usa el lente por defecto */
     }
-    this.torchOn = false
-    this.emit('event', { type: 'torch-unavailable' })
+  }
+
+  _tieneTorch(track) {
+    try {
+      return !!track?.getCapabilities?.().torch
+    } catch {
+      return false
+    }
+  }
+
+  async _tryTorch(silencioso = false) {
+    try {
+      this.torchSupported = this._tieneTorch(this.track)
+      if (!this.torchSupported) {
+        this.torchReason = 'no-soportado'
+        this.torchOn = false
+        return
+      }
+      await this.track.applyConstraints({ advanced: [{ torch: true }] })
+      this.torchOn = true
+      this.torchReason = ''
+      return
+    } catch (e) {
+      this.torchOn = false
+      this.torchReason = e?.name === 'NotAllowedError' || e?.name === 'SecurityError' ? 'permiso' : 'rechazado'
+    }
+    if (!silencioso && !this.torchSupported) this.emit('event', { type: 'torch-unavailable' })
   }
 
   /** Reintento manual del flash (botón "Encender flash"). @returns {Promise<boolean>} */
   async encenderFlash() {
+    if (!this.track) return false
+    await this._tryTorch(true)
+    return this.torchOn
+  }
+
+  /** Apaga el flash sin cerrar la camara (boton "Apagar flash"). */
+  async apagarFlash() {
     try {
-      if (!this.track) return false
-      const caps = this.track.getCapabilities?.() ?? {}
-      this.torchSupported = !!caps.torch
-      if (!this.torchSupported) return false
-      await this.track.applyConstraints({ advanced: [{ torch: true }] })
-      this.torchOn = true
-      return true
+      if (this.track && this.torchOn) await this.track.applyConstraints({ advanced: [{ torch: false }] })
     } catch {
-      this.torchOn = false
-      return false
+      /* ignorar */
     }
+    this.torchOn = false
   }
 
   async start() {

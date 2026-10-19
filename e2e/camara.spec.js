@@ -25,6 +25,16 @@ test('el asistente pide consentimiento, abre la cámara y muestra la calidad en 
   // La imagen falsa no es un dedo: debe pedir ajustar el dedo (leads_off equivalente)
   await expect(page.getByTestId('camara-calidad')).toHaveText(/Ajusta el dedo/)
 
+  // Vista previa de la cámara con la guía de huella y botón de flash siempre visible
+  const prev = page.getByTestId('camara-preview')
+  await expect(prev).toBeVisible()
+  await expect(prev.locator('video')).toBeVisible()
+  await expect(prev.locator('svg.huella')).toBeVisible()
+  await expect(page.getByTestId('camara-encender-flash')).toBeVisible()
+  await expect(page.getByTestId('camara-flash-estado')).toHaveText(/apagado|encendido/)
+  const vid = await prev.locator('video').evaluate((v) => ({ conSenal: !!v.srcObject }))
+  expect(vid.conSenal).toBe(true)
+
   // Cancelar apaga la cámara
   await page.getByRole('button', { name: 'Cancelar' }).click()
   await expect(page.getByTestId('camara-guia')).toBeVisible()
