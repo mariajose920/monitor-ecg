@@ -7,6 +7,7 @@ import RangeIndicator from './RangeIndicator.vue'
 import ActivitySelector from './ActivitySelector.vue'
 import LeadsOffAlert from './LeadsOffAlert.vue'
 import SimulatorControls from './SimulatorControls.vue'
+import ChannelActions from './ChannelActions.vue'
 import QuickUserDialog from '@/components/users/QuickUserDialog.vue'
 import { prefiereCamara } from '@/data/dispositivo.js'
 import CameraWizard from '@/components/camera/CameraWizard.vue'
@@ -180,7 +181,11 @@ async function cargarEjemplo() {
       <button v-else-if="!activo" class="btn primary" @click="emit('conectar', canal)">
         {{ canal.fuente === 'serial' ? 'Conectar puerto serie' : 'Iniciar fuente' }}
       </button>
-      <button v-else class="btn danger" @click="channels.disconnect(canal.id)">Desconectar</button>
+      <template v-else>
+        <button v-if="session.pendiente" class="btn primary" type="button" data-testid="canal-guardar" @click="session.pedirGuardar()">💾 Guardar monitoreo</button>
+        <ChannelActions :canal="canal" />
+        <button class="btn danger" @click="channels.disconnect(canal.id)">Desconectar</button>
+      </template>
     </div>
 
     <template v-if="activo">

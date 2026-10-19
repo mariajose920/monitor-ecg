@@ -27,6 +27,11 @@ export const useSessionStore = defineStore('session', () => {
   const ultima = ref(null)
   /** Monitoreo ya detenido que espera "Guardar monitoreo" o "Descartar" (vista previa). */
   const pendiente = ref(null)
+  const solicitudGuardar = ref(0)
+  /** Pide abrir el diálogo "Guardar monitoreo" del borrador pendiente (desde el menú del canal). */
+  function pedirGuardar() {
+    solicitudGuardar.value++
+  }
   const inicioMs = ref(0)
   const activa = computed(() => estado.value === 'activa')
   const stats = new Map() // canalId → acumuladores (no reactivo)
@@ -184,5 +189,5 @@ export const useSessionStore = defineStore('session', () => {
     pendiente.value = null
   }
 
-  return { estado, actual, ultima, pendiente, limpiarPendiente, inicioMs, activa, participa, iniciar, addEvent, registrarActividad, acumular, channelEnded, detener }
+  return { estado, actual, ultima, pendiente, solicitudGuardar, pedirGuardar, limpiarPendiente, inicioMs, activa, participa, iniciar, addEvent, registrarActividad, acumular, channelEnded, detener }
 })

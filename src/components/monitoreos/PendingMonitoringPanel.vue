@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted, shallowRef, markRaw, computed } from 'vue'
+import { ref, onMounted, shallowRef, markRaw, computed, watch } from 'vue'
 import SignalChart from '@/components/common/SignalChart.vue'
 import SaveMonitoringDialog from './SaveMonitoringDialog.vue'
 import { getSession } from '@/services/storage/sessionRepository.js'
 import { cargarYAnalizar, datosGrafico } from '@/services/monitoreos/senal.js'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { useUsersStore } from '@/stores/users.js'
+import { useSessionStore } from '@/stores/session.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { formatDuracion } from '@/utils/time.js'
 
@@ -14,6 +15,7 @@ const props = defineProps({ id: { type: String, required: true } })
 const emit = defineEmits(['resuelto'])
 const monitoreos = useMonitoreosStore()
 const users = useUsersStore()
+const session = useSessionStore()
 const sesion = ref(null)
 const grafico = shallowRef(null)
 const abierto = ref(false)
@@ -34,6 +36,8 @@ onMounted(async () => {
   }
   abierto.value = true
 })
+
+watch(() => session.solicitudGuardar, () => (abierto.value = true))
 
 defineExpose({ abrir: () => (abierto.value = true) })
 
