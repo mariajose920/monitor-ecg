@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useSessionStore } from '@/stores/session.js'
-import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { useExportMonitoreos } from '@/composables/useExportMonitoreos.js'
 import { getSession } from '@/services/storage/sessionRepository.js'
 import { notify } from '@/services/notifications/notifier.js'
@@ -15,7 +14,6 @@ const props = defineProps({ canal: { type: Object, required: true } })
 
 const channels = useChannelsStore()
 const session = useSessionStore()
-const monitoreos = useMonitoreosStore()
 const exportar = useExportMonitoreos()
 
 const abierto = ref(false)
@@ -23,8 +21,10 @@ const ocupado = ref(false)
 const raiz = ref(null)
 const boton = ref(null)
 
-const enSesion = computed(() => session.participa(props.canal.id))
 const hayPendiente = computed(() => !!session.pendiente)
+/** "Iniciar monitoreo" solo si aún no hay una grabación ni un borrador y el canal tiene usuario. */
+const puedeIniciar = computed(() => !session.activa && !hayPendiente.value && !!props.canal.usuarioId)
+const hayAcciones = computed(() => puedeIniciar.value || session.activa || hayPendiente.value)
 
 function cerrar(devolverFoco = false) {
   abierto.value = false
@@ -74,31 +74,20 @@ async function ejecutar(fn, { ok = null } = {}) {
 
 const iniciar = () => ejecutar(() => session.iniciar(channels.channels), { ok: 'Monitoreo iniciado: grabando.' })
 const marcar = () => ejecutar(async () => session.addEvent(null, 'marca'), { ok: 'Marca registrada en el monitoreo.' })
-const detener = () => ejecutar(() => session.detener()) // al detener se abre solo "Guardar monitoreo"
 const guardar = () => {
   cerrar()
   session.pedirGuardar()
 }
-const descartar = () =>
-  ejecutar(async () => {
-    if (!window.confirm('¿Descartar el monitoreo sin guardar? Se borrarán sus datos.')) return
-    await monitoreos.descartar(session.pendiente.id)
-  }, { ok: 'Monitoreo descartado.' })
 const descargar = () =>
   ejecutar(async () => {
     const s = await getSession(session.pendiente.id)
     if (!s) throw new Error('No se encontró el monitoreo.')
     await exportar.csv([s])
   }, { ok: 'Descarga lista (CSV).' })
-const finalizar = () =>
-  ejecutar(async () => {
-    if (session.activa && enSesion.value) await session.detener()
-    await channels.disconnect(props.canal.id)
-  })
 </script>
 
 <template>
-  <div ref="raiz" class="acciones">
+  <div v-if="hayAcciones" ref="raiz" class="acciones">
     <button
       ref="boton"
       class="btn"
@@ -112,19 +101,16 @@ const finalizar = () =>
       <span aria-hidden="true">⋯</span> Acciones
     </button>
     <ul v-if="abierto" class="menu" role="menu" aria-label="Acciones del monitoreo">
-      <li v-if="!session.activa && !hayPendiente" role="none">
+      <li v-if="puedeIniciar" role="none">
         <button role="menuitem" type="button" data-testid="accion-iniciar" @click="iniciar">▶ Iniciar monitoreo</button>
       </li>
       <template v-if="session.activa">
         <li role="none"><button role="menuitem" type="button" @click="marcar">⚑ Marcar evento</button></li>
-        <li role="none"><button role="menuitem" type="button" data-testid="accion-detener" @click="detener">■ Detener y guardar</button></li>
       </template>
       <template v-if="hayPendiente">
         <li role="none"><button role="menuitem" type="button" data-testid="accion-guardar" @click="guardar">💾 Guardar monitoreo</button></li>
         <li role="none"><button role="menuitem" type="button" data-testid="accion-descargar" @click="descargar">⬇ Descargar CSV</button></li>
-        <li role="none"><button role="menuitem" type="button" class="peligro" @click="descartar">🗑 Descartar</button></li>
       </template>
-      <li role="none"><button role="menuitem" type="button" data-testid="accion-finalizar" @click="finalizar">⏻ Finalizar y desconectar</button></li>
     </ul>
   </div>
 </template>

@@ -38,6 +38,21 @@ const movil = prefiereCamara()
 /** En el celular con cámara se ocultan fuente y perfil: el sensor externo va en un apartado secundario. */
 const modoCamaraMovil = computed(() => movil && props.canal.fuente === 'camera')
 
+const finalizando = ref(false)
+
+/** Finalizar: detiene la grabación (si la hay; entonces se pregunta guardar, descartar o decidir después) y apaga la fuente. */
+async function finalizar() {
+  finalizando.value = true
+  try {
+    if (session.activa && enSesion.value) await session.detener()
+    await channels.disconnect(props.canal.id)
+  } catch (e) {
+    notify(e.message || 'No se pudo finalizar.', { tipo: 'error' })
+  } finally {
+    finalizando.value = false
+  }
+}
+
 const idp = `canal-${props.canal.id}`
 const activo = computed(() => ['connecting', 'streaming', 'leads-off', 'signal-lost'].includes(props.canal.estado))
 const enSesion = computed(() => session.participa(props.canal.id))
@@ -184,7 +199,7 @@ async function cargarEjemplo() {
       <template v-else>
         <button v-if="session.pendiente" class="btn primary" type="button" data-testid="canal-guardar" @click="session.pedirGuardar()">💾 Guardar monitoreo</button>
         <ChannelActions :canal="canal" />
-        <button class="btn danger" @click="channels.disconnect(canal.id)">Desconectar</button>
+        <button class="btn danger" type="button" :disabled="finalizando" data-testid="canal-finalizar" @click="finalizar">Finalizar</button>
       </template>
     </div>
 
