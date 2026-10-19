@@ -14,9 +14,10 @@ async function grabar(page, nombre, { guardar = true, segundos = 7 } = {}) {
   await page.goto('/monitor')
   await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
   await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
-  await page.getByTestId('iniciar-monitoreo').click()
+  // La grabación empieza sola al haber fuente y usuario
+  await expect(page.getByLabel('Control del monitoreo').getByText('● Grabando')).toBeVisible({ timeout: 15_000 })
   await page.waitForTimeout(segundos * 1000)
-  await page.getByTestId('detener-monitoreo').click()
+  await page.getByTestId('canal-finalizar').click()
   const dlg = page.getByRole('dialog', { name: 'Guardar monitoreo' })
   await expect(dlg).toBeVisible()
   if (!guardar) return dlg

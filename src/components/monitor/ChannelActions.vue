@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useChannelsStore } from '@/stores/channels.js'
 import { useSessionStore } from '@/stores/session.js'
 import { useExportMonitoreos } from '@/composables/useExportMonitoreos.js'
 import { getSession } from '@/services/storage/sessionRepository.js'
@@ -10,9 +9,8 @@ import { notify } from '@/services/notifications/notifier.js'
  * Menú de acciones del monitoreo dentro del canal: iniciar, marcar, detener y guardar,
  * guardar, descargar, descartar y finalizar. Los datos siguen seudonimizados (SEC-43).
  */
-const props = defineProps({ canal: { type: Object, required: true } })
+defineProps({ canal: { type: Object, required: true } })
 
-const channels = useChannelsStore()
 const session = useSessionStore()
 const exportar = useExportMonitoreos()
 
@@ -22,9 +20,7 @@ const raiz = ref(null)
 const boton = ref(null)
 
 const hayPendiente = computed(() => !!session.pendiente)
-/** "Iniciar monitoreo" solo si aún no hay una grabación ni un borrador y el canal tiene usuario. */
-const puedeIniciar = computed(() => !session.activa && !hayPendiente.value && !!props.canal.usuarioId)
-const hayAcciones = computed(() => puedeIniciar.value || session.activa || hayPendiente.value)
+const hayAcciones = computed(() => session.activa || hayPendiente.value)
 
 function cerrar(devolverFoco = false) {
   abierto.value = false
@@ -72,7 +68,6 @@ async function ejecutar(fn, { ok = null } = {}) {
   }
 }
 
-const iniciar = () => ejecutar(() => session.iniciar(channels.channels), { ok: 'Monitoreo iniciado: grabando.' })
 const marcar = () => ejecutar(async () => session.addEvent(null, 'marca'), { ok: 'Marca registrada en el monitoreo.' })
 const guardar = () => {
   cerrar()
@@ -101,9 +96,6 @@ const descargar = () =>
       <span aria-hidden="true">⋯</span> Acciones
     </button>
     <ul v-if="abierto" class="menu" role="menu" aria-label="Acciones del monitoreo">
-      <li v-if="puedeIniciar" role="none">
-        <button role="menuitem" type="button" data-testid="accion-iniciar" @click="iniciar">▶ Iniciar monitoreo</button>
-      </li>
       <template v-if="session.activa">
         <li role="none"><button role="menuitem" type="button" @click="marcar">⚑ Marcar evento</button></li>
       </template>
