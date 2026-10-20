@@ -1,4 +1,4 @@
-# Monitor ECG web con sensor AD8232: desarrollo en Vue 3 y gestión de la seguridad de la información según ISO/IEC 27001:2013
+# Monitor cardíaco web (ECG y PPG): desarrollo en Vue 3 y gestión de la seguridad de la información según ISO/IEC 27001:2013
 
 **Informe técnico-académico**
 
@@ -10,7 +10,7 @@
 
 **Profesor:** [completar]
 
-**Fecha:** octubre de 2026
+**Fecha:** octubre de 2026 (actualizado el 20 de octubre)
 
 **Aplicación publicada:** https://monitor-ecg1.vercel.app/
 
@@ -22,23 +22,23 @@
 
 ## Resumen
 
-El presente informe documenta el análisis, el diseño, la implementación, la verificación y la gestión de la seguridad de la información de un monitor de electrocardiograma (ECG) web, desarrollado como proyecto de la asignatura Programación Web de la Universidad de Santiago de Chile. El sistema original consistía en una página HTML con JavaScript que graficaba, mediante la Web Serial API, la señal de un sensor AD8232 conectado a un Arduino; era monocanal, no contaba con usuarios ni persistencia y presentaba diecisiete problemas técnicos documentados. A partir de él se construyó una aplicación de página única (SPA) en Vue 3 que cubre los 27 requerimientos funcionales (RF01–RF27) y los 9 no funcionales (RNF01–RNF09) del encargo: hasta cinco canales simultáneos, simulador, comparación con una señal de referencia, administración de rangos, alertas, contenido educativo y almacenamiento local cifrado, con sincronización opcional con Supabase y despliegue en Vercel.
+El presente informe documenta el análisis, el diseño, la implementación, la verificación y la gestión de la seguridad de la información de un monitor de electrocardiograma (ECG) web, desarrollado como proyecto de la asignatura Programación Web de la Universidad de Santiago de Chile. El sistema original consistía en una página HTML con JavaScript que graficaba, mediante la Web Serial API, la señal de un sensor AD8232 conectado a un Arduino; era monocanal, no contaba con usuarios ni persistencia y presentaba diecisiete problemas técnicos documentados. A partir de él se construyó una aplicación de página única (SPA) en Vue 3 que cubre los 27 requerimientos funcionales (RF01–RF27) y los 9 no funcionales (RNF01–RNF09) del encargo: hasta cinco canales simultáneos, simulador, comparación con una señal de referencia, administración de rangos, alertas, contenido educativo y almacenamiento local cifrado, con sincronización opcional con Supabase y despliegue en Vercel. Con posterioridad se añadieron la medición por fotopletismografía (PPG) con la cámara del celular y con un sensor MAX30100 conectado a un ESP32 (el sensor real del prototipo es óptico, no un ECG), una aplicación web progresiva (PWA), cuentas de usuario con correo y contraseña, un mantenedor de pacientes por cuenta, monitoreos guardables con informes en PDF e historial, y visibilidad privada o pública anónima con retención definida.
 
-La seguridad se abordó con un Sistema de Gestión de Seguridad de la Información (SGSI) alineado con la norma ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): contexto, alcance, política, roles, apreciación de 20 riesgos, Declaración de Aplicabilidad de los 114 controles del Anexo A (71 aplicables, 27 aplicables parcialmente y 16 excluidos), controles técnicos con evidencia en el código, procedimiento de incidentes, plan de continuidad, auditoría interna y registro de no conformidades. La verificación automatizada arrojó 0 problemas de lint, 103 de 103 pruebas unitarias aprobadas, 9 de 9 pruebas de extremo a extremo (Playwright), compilación exitosa y 0 vulnerabilidades en las dependencias de producción. La aplicación está publicada en https://monitor-ecg1.vercel.app/ y el código en https://github.com/mariajose920/monitor-ecg.
+La seguridad se abordó con un Sistema de Gestión de Seguridad de la Información (SGSI) alineado con la norma ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): contexto, alcance, política, roles, apreciación de 26 riesgos, Declaración de Aplicabilidad de los 114 controles del Anexo A (71 aplicables, 27 aplicables parcialmente y 16 excluidos), controles técnicos con evidencia en el código, procedimiento de incidentes, plan de continuidad, auditoría interna y registro de no conformidades. La verificación automatizada arrojó 0 problemas de lint, 212 de 212 pruebas unitarias aprobadas (18 archivos), 33 de 33 pruebas de extremo a extremo (Playwright), compilación exitosa y 0 vulnerabilidades en las dependencias de producción. La aplicación está publicada en https://monitor-ecg1.vercel.app/ y el código en https://github.com/mariajose920/monitor-ecg.
 
 El informe declara con transparencia lo que no se ha podido demostrar: la prueba con hardware real, la conexión inalámbrica BLE con ESP32, la activación del CAPTCHA, las mediciones de rendimiento, la presentación y la firma docente del plan de tratamiento de riesgos. El sistema es de uso educativo y no constituye un dispositivo médico.
 
-**Palabras clave:** electrocardiograma, AD8232, Web Serial API, Vue 3, Supabase, ISO/IEC 27001:2013, seguridad de la información, protección de datos personales.
+**Palabras clave:** electrocardiograma, fotopletismografía, MAX30100, AD8232, Web Serial API, Vue 3, Supabase, ISO/IEC 27001:2013, seguridad de la información, protección de datos personales.
 
 ## Abstract
 
 This report documents the analysis, design, implementation, verification and information security management of a web-based electrocardiogram (ECG) monitor developed for the Web Programming course at Universidad de Santiago de Chile. The original system was a plain HTML/JavaScript page that plotted, through the Web Serial API, the signal of an AD8232 sensor attached to an Arduino; it was single-channel, had no users or persistence, and exhibited seventeen documented technical defects. It was rebuilt as a Vue 3 single-page application that covers the 27 functional (RF01–RF27) and 9 non-functional (RNF01–RNF09) requirements: up to five simultaneous channels, a simulator, comparison against a reference signal, administrative range settings, alerts, educational content, encrypted local storage, optional Supabase synchronization and deployment on Vercel.
 
-Security was addressed through an Information Security Management System (ISMS) aligned with ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): context, scope, policy, roles, a 20-item risk assessment, a Statement of Applicability covering the 114 Annex A controls (71 applicable, 27 partially applicable, 16 excluded), technical controls backed by code evidence, an incident procedure, a continuity plan, internal audit and a nonconformity register. Automated verification produced 0 lint problems, 103/103 unit tests passed, 9/9 end-to-end tests passed (Playwright), a successful build and 0 production-dependency vulnerabilities. The application is deployed at https://monitor-ecg1.vercel.app/.
+Security was addressed through an Information Security Management System (ISMS) aligned with ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): context, scope, policy, roles, a 26-item risk assessment, a Statement of Applicability covering the 114 Annex A controls (71 applicable, 27 partially applicable, 16 excluded), technical controls backed by code evidence, an incident procedure, a continuity plan, internal audit and a nonconformity register. Automated verification produced 0 lint problems, 212/212 unit tests passed, 33/33 end-to-end tests passed (Playwright), a successful build and 0 production-dependency vulnerabilities. The application is deployed at https://monitor-ecg1.vercel.app/.
 
-The report states openly what has not been demonstrated: testing with real hardware, ESP32 BLE connectivity, CAPTCHA activation, performance measurements, the presentation and the instructor's signature on the risk treatment plan. The system is for educational use and is not a medical device.
+The report states openly what has not been demonstrated: testing with the real MAX30100/ESP32 sensor and the phone camera on people, ESP32 BLE connectivity, CAPTCHA activation, performance measurements, the presentation and the instructor's signature on the risk treatment plan. The system is for educational use and is not a medical device.
 
-**Keywords:** electrocardiogram, AD8232, Web Serial API, Vue 3, Supabase, ISO/IEC 27001:2013, information security, personal data protection.
+**Keywords:** electrocardiogram, photoplethysmography, MAX30100, AD8232, Web Serial API, Vue 3, Supabase, ISO/IEC 27001:2013, information security, personal data protection.
 
 <!-- INDICE-INICIO -->
 ## Índice
@@ -132,7 +132,7 @@ Una aplicación de página única (SPA) carga un documento HTML inicial y actual
 
 ### 3.6 Supabase y Vercel
 
-Supabase es una plataforma que ofrece una base de datos PostgreSQL gestionada, un servicio de autenticación (incluido el inicio de sesión anónimo) y una API generada. Su modelo de seguridad se apoya en las políticas de seguridad a nivel de fila (*Row Level Security*, RLS) de PostgreSQL: el servidor decide qué filas puede leer o modificar cada identidad, de modo que la clave «publicable» incluida en el cliente no concede por sí sola acceso irrestricto. Vercel es una plataforma de alojamiento para aplicaciones web que sirve activos estáticos mediante una red de distribución de contenidos (CDN), permite definir cabeceras HTTP de seguridad y ejecuta compilaciones desde un repositorio.
+Supabase es una plataforma que ofrece una base de datos PostgreSQL gestionada, un servicio de autenticación (correo y contraseña; el inicio de sesión anónimo se eliminó del proyecto) y una API generada. Su modelo de seguridad se apoya en las políticas de seguridad a nivel de fila (*Row Level Security*, RLS) de PostgreSQL: el servidor decide qué filas puede leer o modificar cada identidad, de modo que la clave «publicable» incluida en el cliente no concede por sí sola acceso irrestricto. Vercel es una plataforma de alojamiento para aplicaciones web que sirve activos estáticos mediante una red de distribución de contenidos (CDN), permite definir cabeceras HTTP de seguridad y ejecuta compilaciones desde un repositorio.
 
 ### 3.7 ISO/IEC 27001:2013
 
@@ -230,7 +230,7 @@ Se identificaron y documentaron diecisiete problemas, que se resumen a continuac
 
 ### 5.1 Fuente y erratas
 
-Los requerimientos provienen del documento «Requerimientos funcionales» del encargo (27 RF y 9 RNF), que no se modificó. Tres puntos se interpretaron de forma distinta a su redacción literal, y su justificación consta en la matriz de trazabilidad: RF04 y RNF08 (se entiende «Arduino UNO/Nano o ESP32» con módulo AD8232); RF23 (se entiende «sensor AD8232 de biopotencial» en lugar de «sensor infrarrojo»); y el esquema de circuito (se usa el esquema AD8232 en lugar del de lactato).
+Los requerimientos provienen del documento «Requerimientos funcionales» del encargo (27 RF y 9 RNF), que no se modificó. Tres puntos se interpretaron de forma distinta a su redacción literal, y su justificación consta en la matriz de trazabilidad: RF04 y RNF08 (se entiende «ESP32 con sensor óptico PPG MAX30100», la cámara del celular y, opcionalmente, el AD8232 con Arduino UNO/Nano o ESP32); RF23 (el texto original, «sensor infrarrojo», es correcto para el MAX30100; la interpretación anterior en favor del AD8232 solo describe el ECG, y PPG no es ECG); y el esquema de circuito (el de lactato de la raíz es ajeno al proyecto; falta un esquema ESP32 + MAX30100). La redacción corregida propuesta consta en `docs/ERRATAS_REQUERIMIENTOS.md`.
 
 ### 5.2 Requerimientos funcionales
 
@@ -241,7 +241,7 @@ El estado corresponde a la verificación independiente sobre el código, con las
 | RF | Requerimiento | Estado | Componentes principales | Pruebas |
 |---|---|---|---|---|
 | RF01 | Identificación de usuario | Cumple | `stores/users.js`, `UserSelectView.vue`, `router/guards.js` | E2E admin |
-| RF02 | Inicio de sesión sin contraseña | Cumple | `stores/users.js`, `cloudSync.js` (sesión anónima) | U abuseControls |
+| RF02 | Inicio de sesión sin contraseña | Cumple | `stores/users.js`; en la nube, cuentas con Supabase Auth (`authService.js`) | U abuseControls |
 | RF03 | Información opcional con consentimiento | Cumple | `ConsentDialog.vue`, `OptionalDataForm.vue`, `PrivacyView.vue` | E2E inicio |
 | RF04 | Recepción de datos | Cumple | `SerialSource.js`, `SimulatorSource.js`, `ReplaySource.js`, `ecgCsvParser.js` | U parser |
 | RF05 | Señal en tiempo real | Cumple | `EcgChart.vue`, `renderScheduler.js`, `RingBuffer.js` | U ringBuffer, E2E simulador |
@@ -367,7 +367,7 @@ erDiagram
   incidentes { uuid reportante text tipo text severidad text estado }
 ```
 
-*Descripción del diagrama (figura 6.3).* Las sesiones pertenecen a una identidad anónima de Supabase (`propietario = auth.uid()`) y contienen bloques de muestras. La auditoría y los incidentes también se asocian a la identidad que los generó. La tabla `administradores` enumera las cuentas con privilegios; la función `es_admin()` la consulta para autorizar la escritura en `parametros` y la lectura global. El diagrama es esquemático: el detalle de columnas, restricciones `CHECK` y políticas se encuentra en `supabase/schema.sql`.
+*Descripción del diagrama (figura 6.3).* Las sesiones pertenecen a una cuenta de Supabase (en la primera entrega, a una identidad anónima) (`propietario = auth.uid()`) y contienen bloques de muestras. La auditoría y los incidentes también se asocian a la identidad que los generó. La tabla `administradores` enumera las cuentas con privilegios; la función `es_admin()` la consulta para autorizar la escritura en `parametros` y la lectura global. El diagrama es esquemático: el detalle de columnas, restricciones `CHECK` y políticas se encuentra en `supabase/schema.sql`.
 
 ### 6.6 Modelo de seguridad por capas
 
@@ -421,9 +421,32 @@ El proyecto de Supabase está alojado en la región us-east-1 (Estados Unidos). 
 
 Además, el esquema contiene: restricciones `CHECK` de tamaño y consistencia (JSON de sesión de hasta 64 KB, `seq` de hasta 5400, BPM consistente); la función `cuota()` y disparadores de cuota por usuario (50 sesiones por día, 300 bloques por minuto, 200 eventos de auditoría por hora, 10 incidentes por día); una lista blanca de tipos de evento de auditoría; un disparador que fija `ts = now()` y `usuario = auth.uid()` en la auditoría; la función `borrar_mis_datos()` para el ejercicio del derecho de supresión; `hora_servidor()` para contrastar el reloj; y `purgar_sesiones()`, programable con `pg_cron`. El script es idempotente. Conforme a la verificación realizada sobre la base, los avisos de seguridad y rendimiento del asesor de Supabase fueron corregidos. El inicio de sesión anónimo estaba desactivado (error 422) y debe activarlo la usuaria en el panel; hasta entonces la aplicación opera en modo local.
 
+### 7.5b Cuentas, pacientes y visibilidad (actualización)
+
+El esquema fue ampliado (`supabase/migracion_cuentas_pacientes.sql` y `schema.sql`; en total 7 tablas y 26 políticas según los scripts, no revalidadas contra la base real tras la ampliación). Cada cuenta (Supabase Auth, correo y contraseña de al menos 10 caracteres, con confirmación) es dueña de sus pacientes y monitoreos mediante RLS; el administrador no tiene política sobre `pacientes`. Un monitoreo es `privado` por defecto o `publico`; lo público solo se expone por las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` (`security definer`, `search_path` fijo, solo columnas permitidas, «Paciente anónimo», máximo 100 filas, sin acceso para `anon`), que sustituyen a la vista `monitoreos_publicos`, señalada por el asesor de Supabase como `security_definer_view`. Los cambios están en `supabase/migracion_endurecimiento.sql`, **escrita y probada solo como texto en las pruebas unitarias; aún no aplicada en la base real**.
+
+**Retención.** Las sesiones locales se purgan según el plazo del administrador (30 días por defecto, máximo 180). Los monitoreos en la nube se conservan 365 días desde su inicio salvo borrado previo del titular, mediante la tarea diaria `purga-ecg` (pg_cron, `purgar_sesiones(365)`), también pendiente de aplicar. Las cuentas sin acceso en 24 meses se avisan y se eliminan por un procedimiento manual (sin automatizar).
+
 ### 7.6 Despliegue
 
 La aplicación se publica en https://monitor-ecg1.vercel.app/ desde el repositorio https://github.com/mariajose920/monitor-ecg. El archivo `vercel.json` define la reescritura de la SPA y las cabeceras: CSP con `default-src 'self'`, `connect-src` limitada al origen y al proyecto de Supabase, `object-src 'none'` y `frame-ancestors 'none'`; `Strict-Transport-Security` de dos años con precarga; `X-Content-Type-Options: nosniff`; `X-Frame-Options: DENY`; `Referrer-Policy: no-referrer`; `Permissions-Policy` con `serial=(self)` y sin USB, Bluetooth, cámara, micrófono ni geolocalización; y COOP/CORP del mismo origen. La compilación no genera mapas de código fuente ni conserva llamadas a `console`. Las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` contienen solo la clave publicable. La integración continua (`.github/workflows/ci.yml`) ejecuta lint, pruebas unitarias, compilación, `npm audit --audit-level=high` sobre producción, pruebas E2E con Playwright y un escaneo de secretos con gitleaks; Dependabot revisa semanalmente npm y GitHub Actions.
+
+### 7.7 Evolución posterior a la primera entrega
+
+**Tabla 7.x.** Funcionalidades añadidas y su estado de verificación
+
+| Funcionalidad | Descripción | Verificación |
+|---|---|---|
+| Cámara PPG | Asistente con consentimiento; extrae promedios R/G/B de una zona central (los fotogramas no se guardan ni envían); apaga cámara y flash al desconectar, ocultar la pestaña o perder la pista; eventos `CAMERA_*` en la auditoría | Pruebas unitarias (`ppgCamera.spec.js`) y E2E con cámara simulada (`camara.spec.js`); no se midió con personas reales ni se validó la precisión del BPM |
+| Sensor MAX30100 con ESP32 | Firmware `sensor_ppg_max30100_esp32` que emite `t_ms,ecg_raw,leads_off,bpm` a 115 200 baudios por USB | Compila el formato en el analizador; **no se ha demostrado en esta revisión con el hardware ni con Web Serial real** |
+| PWA | Service worker escrito a mano (app shell sin conexión, `/assets` en caché); manifiesto e iconos | E2E `pwa.spec.js`; no cubre la nube ni reintentos de sincronización |
+| Mantenedor de pacientes | Pacientes propios de cada cuenta con perfil y consentimiento, cuota de 200 | Pruebas unitarias y E2E `cuentas.spec.js`; RLS no probada con dos cuentas reales |
+| Monitoreos guardables, informes e historial | Guardar, nombrar, descartar o decidir después; informe en PDF; historial por paciente | Pruebas unitarias (`informes.spec.js`, `historial.spec.js`) y E2E `monitoreos.spec.js` |
+| Cuentas | Alta, acceso y baja con auditoría; `eliminar_mi_cuenta()` | Pruebas unitarias; SMTP propio, MFA y protección de contraseñas filtradas pendientes (manual) |
+| Visibilidad pública y comunidad | Casilla de consentimiento; lectura por RPC solo de contenido anónimo, solo para cuentas autenticadas; pestaña Comunidad | `visibilidad.spec.js`; funciones por aplicar en la base real |
+| Hallazgos ISO del 20 de octubre | R22–R26, NC-05 a NC-07, retención de 365 días, `PENDIENTES_MANUALES.md` | Documentación revisada; sin auditoría independiente |
+
+El sensor real del prototipo es óptico (PPG), no un ECG: ver `docs/ERRATAS_REQUERIMIENTOS.md`.
 
 ## 8 Sistema de gestión de seguridad de la información
 
@@ -458,7 +481,7 @@ La matriz RACI, la segregación de tareas (quien desarrolla un cambio no lo apru
 
 **Metodología (6.1.2).** Cada riesgo se valora por probabilidad (P) e impacto (I) en una escala de 1 a 3; el nivel es P × I (1–2 Bajo, 3–4 Medio, 6–9 Alto). Se aceptan los riesgos Bajos; los Medios y Altos se tratan, y el riesgo residual lo acepta el dueño del riesgo. La apreciación se repite en cada hito y ante cambios significativos, como la incorporación de Supabase.
 
-**Tabla 8.2.** Registro de riesgos (R01–R20)
+**Tabla 8.2.** Registro de riesgos (R01–R26)
 
 | N.º | Amenaza | I | P | Nivel | Tratamiento principal (controles del Anexo A) |
 |---|---|---|---|---|---|
@@ -477,13 +500,19 @@ La matriz RACI, la segregación de tareas (quien desarrolla un cambio no lo apru
 | R13 | Indisponibilidad durante una sesión | 2 | 1 | 2 Bajo | Aceptar: detección de desconexión, simulador, local-first (A.17.1.2) |
 | R14 | Descarga eléctrica al participante | 3 | 2 | 6 Alto | Aviso obligatorio, batería o Bluetooth (A.11.2.1, A.11.2.2) |
 | R15 | Fuga entre participantes en la nube | 3 | 2 | 6 Alto | RLS en todas las tablas (A.9.4.1, A.14.2.8, A.18.2.3) |
-| R16 | Abuso de la autenticación anónima | 2 | 2 | 4 Medio | `CHECK`, cuotas, CAPTCHA opcional, purga (A.13.1.2, A.12.1.3, A.9.2.1) |
+| R16 | Abuso del registro de cuentas | 2 | 2 | 4 Medio | Confirmación de correo, límites de Auth, `CHECK`, cuotas, CAPTCHA opcional, purga (A.13.1.2, A.12.1.3, A.9.2.1) |
 | R17 | Compromiso de la cuenta administradora de Supabase o de `service_role` | 3 | 1 | 3 Medio | Contraseña robusta, MFA, tabla `administradores` (A.9.2.3, A.9.2.4, A.9.4.2, A.10.1.2) |
 | R18 | Transferencia internacional de datos de salud | 3 | 2 | 6 Alto | Consentimiento informado, seudonimización, DPA, opción local (A.15.1.1, A.15.1.2, A.18.1.4) |
 | R19 | Incidente no notificado o no gestionado | 2 | 2 | 4 Medio | Formulario, tabla `incidentes`, procedimiento (A.16.1.1–A.16.1.6) |
 | R20 | Marcas de tiempo inconsistentes | 1 | 2 | 2 Bajo | UTC y comparación con `hora_servidor()` (A.12.4.4) |
+| R21 | Uso indebido de la cámara del celular | 3 | 2 | 6 Alto | Solo promedios RGB, consentimiento, apagado automático, auditoría (A.18.1.4, A.14.2.5) |
+| R22 | Publicación de datos de salud | 3 | 2 | 6 Alto | Privado por defecto, consentimiento, anonimato, retiro (A.8.2.3, A.13.2.1, A.18.1.4) |
+| R23 | Compromiso de cuentas y credenciales | 3 | 2 | 6 Alto | Contraseña ≥ 10, confirmación de correo, RLS; SMTP propio, filtradas y MFA pendientes (A.9.2.1, A.9.2.4, A.9.4.3) |
+| R24 | Exposición por la vista/función pública | 3 | 2 | 6 Alto | Vista sustituida por funciones RPC (migración pendiente de aplicar) (A.9.4.1, A.14.2.5) |
+| R25 | Datos conservados más de lo necesario | 2 | 2 | 4 Medio | Purga a 365 días (pg_cron, por aplicar); cuentas inactivas manual (A.18.1.3, A.8.3.2) |
+| R26 | Señal PPG tomada como diagnóstico | 2 | 2 | 4 Medio | Aviso de no dispositivo médico, rótulo de la fuente, erratas (A.18.1.1) |
 
-**Tratamiento (6.1.3, 8.3).** El plan de tratamiento (SGSI-RSK-02) asigna a cada riesgo una opción (mitigar, evitar o aceptar), las acciones, los controles, el responsable y el estado. Según ese plan, el riesgo residual queda en nivel Bajo para la mayoría de los riesgos y Medio para R01, R03, R05, R06, R14 y R18. Los riesgos residuales aceptados explícitamente son: (1) quien controla el navegador y las herramientas de desarrollo puede eludir los controles del cliente, inherente a una SPA y mitigado con RLS y con reglas de uso del laboratorio; (2) la integración continua con `npm audit` no estaba operativa al elaborar el plan (hoy el flujo está definido en el repositorio; la protección de rama sigue pendiente); y (3) la región del proveedor fuera de Chile, mitigada con datos seudonimizados, consentimiento informado y la opción de operar solo en local. **La aprobación del plan por el docente (6.1.3 f) está pendiente de firma.**
+**Tratamiento (6.1.3, 8.3).** El plan de tratamiento (SGSI-RSK-02) asigna a cada riesgo una opción (mitigar, evitar o aceptar), las acciones, los controles, el responsable y el estado. Según ese plan, el riesgo residual queda en nivel Bajo para la mayoría de los riesgos y Medio para R01, R03, R05, R06, R14, R18, R22 y R23. Los riesgos residuales aceptados explícitamente son: (1) quien controla el navegador y las herramientas de desarrollo puede eludir los controles del cliente, inherente a una SPA y mitigado con RLS y con reglas de uso del laboratorio; (2) la integración continua y Dependabot existen en el repositorio, pero falta la protección de la rama `main`; y (3) la región del proveedor (us-east-1) fuera de Chile, mitigada con datos seudonimizados, consentimiento informado y la opción de operar solo en local. **La aprobación del plan por el docente (6.1.3 f) está pendiente de firma.**
 
 **Objetivos de seguridad (6.2).** Seis objetivos medibles (OBJ-1 a OBJ-6): integridad de la auditoría verificada al 100 %; cero incidentes graves abiertos al cierre de cada hito; no más de 10 inicios de sesión fallidos de administrador en 30 días; revisión de accesos con menos de 90 días; política vigente aceptada; cero errores de integridad de datos cifrados en 30 días. La aplicación los evalúa automáticamente en Administración → SGSI.
 
@@ -521,7 +550,7 @@ Los 16 controles excluidos corresponden a: A.7.1.1, A.7.1.2 y A.7.2.3 (recursos 
 |---|---|---|
 | A.9.1.1, A.9.2.3, A.9.4.1 | Dos roles; guard de rutas con lista blanca de redirecciones; `assertAdmin()` en acciones privilegiadas; RLS | `stores/auth.js`, `router/guards.js`, `supabase/schema.sql` |
 | A.9.2.4, A.9.4.3 | PIN sin valor por defecto, mínimo 8 caracteres, rechazo de triviales y secuencias; PBKDF2-SHA-256 con 600 000 iteraciones y sal de 16 bytes | `services/security/pinHash.js` |
-| A.9.4.2 | Comparación en tiempo constante; bloqueo tras 5 fallos (5 a 60 min, persistente); expiración tras 10 min de inactividad o 60 min absolutos; CAPTCHA opcional y límite de altas anónimas | `lockout.js`, `captcha.js`, `rateLimiter.js` |
+| A.9.4.2 | Comparación en tiempo constante; bloqueo tras 5 fallos (5 a 60 min, persistente); expiración tras 10 min de inactividad o 60 min absolutos; CAPTCHA opcional y límite de intentos de registro | `lockout.js`, `captcha.js`, `rateLimiter.js` |
 | A.10.1.1, A.10.1.2 | AES-GCM de 256 bits, IV aleatorio de 12 bytes, clave no extraíble, *crypto-shredding* al borrar | `services/storage/secureStorage.js`, `wipe.js` |
 | A.12.4.1–A.12.4.4 | Auditoría encadenada con SHA-256, JSON canónico y ancla de rotación; verificación y exportación; sin datos de salud ni credenciales en el registro; en la nube, `ts` y `usuario` fijados por el servidor, lista blanca y cuotas | `services/audit/auditLog.js`, `schema.sql` |
 | A.14.1.3, A.14.2.5, A.12.2.1 | Parser serial estricto (línea de hasta 64 caracteres, rangos por campo, tiempo monótono); sin `v-html`, `eval` ni `new Function`; ESLint con `eslint-plugin-security` | `ecgCsvParser.js`, `eslint.config.js` |
@@ -574,7 +603,7 @@ Se dispone de una plantilla de acta con las entradas 9.3 a) a f) (acciones previ
 | NC-03 | Revisión de código | La aplicación no permitía notificar incidentes, revisar accesos ni registrar la aceptación de la política | Implementación de `/seguridad`, del panel SGSI y de la tabla `incidentes` | Corregida, pendiente de verificación de eficacia |
 | NC-04 | Revisión de código | `/privacidad` indicaba que no había servidor remoto, aunque existe sincronización con Supabase | Texto actualizado | Corregida, pendiente de verificación de eficacia |
 
-La verificación de eficacia de las cuatro no conformidades corresponde a la auditoría AI-01 (aún no ejecutada). Las oportunidades de mejora (10.2) son: MC-01, integración continua con `npm audit` y Dependabot (flujo definido en el repositorio; falta activar la protección de rama); MC-02, PWA sin conexión (pendiente); MC-03, CAPTCHA en la autenticación anónima (implementado en el código, no activado); y MC-04, prueba automatizada de las políticas RLS (pendiente).
+El 20 de octubre se registraron además NC-05 (documentación desactualizada), NC-06 (purga de la nube no programada) y NC-07 (vista con `security_definer`), estas dos últimas abiertas hasta aplicar la migración `supabase/migracion_endurecimiento.sql`. La verificación de eficacia de las no conformidades corresponde a la auditoría AI-01 (aún no ejecutada). Las oportunidades de mejora (10.2) son: MC-01, integración continua con `npm audit` y Dependabot (flujo definido en el repositorio; falta activar la protección de rama); MC-02, PWA sin conexión (implementada para el app shell; no cubre la nube); MC-03, protección del registro de cuentas (la autenticación anónima se eliminó; CAPTCHA opcional no activado); y MC-04, prueba automatizada de las políticas RLS (pendiente).
 
 ## 9 Pruebas y verificación
 
@@ -585,12 +614,12 @@ La verificación de eficacia de las cuatro no conformidades corresponde a la aud
 | Verificación | Resultado |
 |---|---|
 | `npm run lint` (ESLint con `eslint-plugin-vue` y `eslint-plugin-security`) | 0 problemas |
-| `npm test` (Vitest, 9 archivos) | 103 de 103 pruebas aprobadas |
-| `npm run test:e2e` (Playwright, Chromium) | 9 de 9 pruebas aprobadas |
+| `npm test` (Vitest, 18 archivos) | 212 de 212 pruebas aprobadas (20 de octubre) |
+| `npm run test:e2e` (Playwright, Chromium, 10 archivos) | 33 de 33 pruebas aprobadas (20 de octubre) |
 | `npm run build` | Compilación exitosa |
-| `npm audit --omit=dev` (producción) | 0 vulnerabilidades |
+| `npm audit --omit=dev` (producción) | 0 vulnerabilidades (20 de octubre) |
 | `npm audit` (desarrollo) | 1 crítica (`tinypool` vía `vitest` 3) y 1 moderada, registradas; no llegan al bundle |
-| Base de datos de Supabase | 6 tablas con RLS activa y 16 políticas; avisos de seguridad y rendimiento del asesor corregidos |
+| Base de datos de Supabase | En la primera entrega: 6 tablas con RLS y 16 políticas, avisos del asesor corregidos. Después: el asesor señaló `security_definer_view`; la corrección está escrita y pendiente de aplicar; no se revalidó contra la base real |
 | `schema.sql` en PostgreSQL embebido (PGlite) | Ejecutado dos veces (idempotente); cuota de 50 sesiones bloquea la 51.ª; lista blanca y supresión verificadas |
 
 ### 9.2 Pruebas unitarias
@@ -616,7 +645,7 @@ La verificación independiente (5 de octubre de 2026) revisó el código sin apo
 
 ### 9.5 Lo que no se ha verificado
 
-No se probó la aplicación con un puerto serie físico, con el módulo AD8232 real ni con un HC-05; no se ejecutaron las pruebas de dispositivos móviles reales; no se adjuntó informe Lighthouse o axe; no se midieron FPS ni uso de CPU con cinco canales; no se realizó una prueba funcional de RLS con dos sesiones anónimas distintas, porque el inicio de sesión anónimo del proyecto estaba desactivado al momento del informe (error 422) y debe activarlo la usuaria; y las cuatro no conformidades no han pasado por una auditoría de eficacia. Estas brechas se retoman en el capítulo 11.
+No se probó la aplicación con un puerto serie físico, con el módulo AD8232 real, con un HC-05 ni, en esta revisión, con el MAX30100 y el ESP32 reales ni con la cámara sobre personas; no se ejecutaron las pruebas de dispositivos móviles reales; no se adjuntó informe Lighthouse o axe; no se midieron FPS ni uso de CPU con cinco canales; no se realizó una prueba funcional de RLS con dos cuentas reales (pendiente en `PENDIENTES_MANUALES.md`); no se aplicó ni verificó en la base real la migración de endurecimiento ni la tarea `purga-ecg`; y las no conformidades NC-01 a NC-07 no han pasado por una auditoría de eficacia. Estas brechas se retoman en el capítulo 11.
 
 ## 10 Cambios realizados
 
@@ -634,6 +663,8 @@ No se probó la aplicación con un puerto serie físico, con el módulo AD8232 r
 | 15 de octubre de 2026 | Implementación de las sugerencias SUG-01 a SUG-28: CAPTCHA opcional y límites de tasa, `CHECK`, cuotas, lista blanca y disparadores en Supabase (con corrección de dos errores de sintaxis del script), privacidad y borrado en la nube, acuse eléctrico auditado, accesibilidad, CI, Dependabot, Playwright, trazabilidad, esquema AD8232 | 103 pruebas unitarias y 9 E2E; lint 0 |
 | Octubre de 2026 (fecha no registrada en las fuentes) | Publicación en Vercel y en GitHub; configuración del proyecto de Supabase (región us-east-1), 6 tablas con RLS y 16 políticas, corrección de los avisos del asesor | Aplicación en línea; sesión anónima aún desactivada |
 | 16 de octubre de 2026 | Elaboración del presente informe | Entregable `INFORME_FORMAL` |
+| Octubre de 2026 (posterior) | Cámara PPG, sensor MAX30100 con ESP32, PWA, cuentas con Supabase Auth (se eliminó el inicio de sesión anónimo), mantenedor de pacientes, monitoreos guardables, informes PDF e historial, visibilidad pública | 212 pruebas unitarias y 33 E2E (20 de octubre) |
+| 20 de octubre de 2026 | Endurecimiento: funciones RPC en lugar de la vista pública, retención de 365 días con `purga-ecg`, riesgos R22–R26, NC-05 a NC-07, erratas RF04/RF23, `PENDIENTES_MANUALES.md` | Migración escrita, pendiente de aplicar; documentación actualizada |
 
 ## 11 Limitaciones y trabajo futuro
 
@@ -641,24 +672,24 @@ Se enumeran, sin atenuar, los pendientes que impiden afirmar un cumplimiento com
 
 1. **Hardware real.** `SerialSource` sigue la API documentada, pero no se probó con un puerto físico; el comportamiento con Arduino, AD8232 y HC-05 reales (incluida la estabilización del BPM y el acuse eléctrico) queda por demostrar. El simulador reemplaza al sensor en las pruebas.
 2. **Conexión BLE con ESP32.** `BleSource` es solo un esqueleto; falta definir el servicio GATT y el formato. Mientras tanto, el ESP32 se soporta únicamente por USB, y la Permissions-Policy mantiene Bluetooth deshabilitado (RNF08 parcial).
-3. **CAPTCHA.** Está implementado en el código (Turnstile o hCaptcha mediante variables públicas), pero no está activado ni en el proveedor ni en la CSP; hasta entonces el riesgo R16 se trata con cuotas y límites de tasa.
+3. **CAPTCHA.** Está implementado en el código (Turnstile o hCaptcha mediante variables públicas), pero no está activado ni en el proveedor ni en la CSP; hasta entonces el riesgo R16 (registro de cuentas) se trata con confirmación de correo, límites de tasa de Auth y cuotas.
 4. **Firma docente.** El plan de tratamiento de riesgos, la política criptográfica y la aceptación de los riesgos residuales requieren la aprobación firmada del docente; también falta registrar la fecha de aceptación del DPA de los proveedores.
 5. **Presentación.** El material de presentación (SUG-27) no está elaborado.
 6. **Rendimiento.** No se han medido FPS ni uso de CPU con cinco canales (SUG-21); los objetivos de la sección 6.4 son de diseño, no resultados.
 7. **Accesibilidad y responsividad.** Faltan la auditoría con Lighthouse o axe y las pruebas en dispositivos móviles reales.
-8. **Región us-east-1.** El proyecto de Supabase está en Estados Unidos, lo que constituye una transferencia internacional de datos de salud seudonimizados (Ley 19.628 y Ley 21.719); no se evaluó una región más cercana ni se ha registrado el DPA.
-9. **Inicio de sesión anónimo y administrador en Supabase.** El inicio de sesión anónimo estaba desactivado (error 422) y debe activarlo la usuaria; asimismo, falta crear la cuenta administradora y registrarla en `administradores`, y activar MFA y, opcionalmente, `pg_cron` para la purga. Mientras no se haga, la nube no está operativa para los participantes y la prueba de RLS con dos sesiones queda pendiente.
+8. **Región us-east-1** (aplica también a las cuentas y a los monitoreos públicos). El proyecto de Supabase está en Estados Unidos, lo que constituye una transferencia internacional de datos de salud seudonimizados (Ley 19.628 y Ley 21.719); no se evaluó una región más cercana ni se ha registrado el DPA.
+9. **Cuentas, administrador y migraciones en Supabase.** El inicio de sesión anónimo se eliminó. Falta aplicar `migracion_endurecimiento.sql` (funciones públicas y `purga-ecg`), configurar SMTP propio, MFA de la cuenta administradora y la protección de contraseñas filtradas, y ejecutar la prueba de RLS con dos cuentas (ver `docs/PENDIENTES_MANUALES.md`).
 10. **Referencia validada (RF11).** La señal de referencia es sintética; incorporar un registro validado (por ejemplo, de PhysioNet) con su licencia.
-11. **Procesos del SGSI.** Ejecutar la auditoría interna AI-01 y la revisión por la dirección RD-01, verificar la eficacia de NC-01 a NC-04, activar la protección de la rama `main` y probar la restauración desde la nube.
-12. **Otros.** PWA sin conexión (SEC-62), Web Worker para la correlación cruzada, persistencia de la referencia entre vistas y migración a una versión superior de `vitest`. Como trabajo futuro se proponen el canal de lactato mediante la abstracción de fuentes, más de cinco canales y el cálculo de la variabilidad de la frecuencia cardíaca.
+11. **Procesos del SGSI.** Ejecutar la auditoría interna AI-01 y la revisión por la dirección RD-01 con actas firmadas, verificar la eficacia de NC-01 a NC-07, hacer un simulacro de incidente, activar la protección de la rama `main` y probar la restauración desde la nube.
+12. **Otros.** Ampliar la PWA para cubrir la nube con cola de reintentos (SEC-62 cubre solo el app shell), ficha educativa de PPG, esquema ESP32 + MAX30100, Web Worker para la correlación cruzada, persistencia de la referencia entre vistas y migración a una versión superior de `vitest`. Como trabajo futuro se proponen el canal de lactato mediante la abstracción de fuentes, más de cinco canales y el cálculo de la variabilidad de la frecuencia cardíaca.
 
 ## 12 Conclusiones
 
 Se cumplió el objetivo principal de transformar un prototipo monocanal en una plataforma web completa que implementa los 27 requerimientos funcionales y los 9 no funcionales, con dos calificaciones parciales en RF y tres en RNF que se declaran y se explican. La nueva arquitectura corrige los diecisiete defectos del sistema original y resuelve, mediante perfiles de dispositivo, simulador y detección de capacidades, las inconsistencias entre el hardware y la documentación.
 
-La aplicación se verificó con 103 pruebas unitarias, 9 pruebas de extremo a extremo, lint sin problemas, compilación exitosa y ninguna vulnerabilidad en las dependencias de producción, y se publicó en Vercel con una política de cabeceras restrictiva y una base de datos con RLS activa en todas sus tablas.
+La aplicación se verificó con 212 pruebas unitarias, 33 pruebas de extremo a extremo, lint sin problemas, compilación exitosa y ninguna vulnerabilidad en las dependencias de producción, y se publicó en Vercel con una política de cabeceras restrictiva y una base de datos con RLS activa en todas sus tablas.
 
-El SGSI aporta, de forma coherente con ISO/IEC 27001:2013, la documentación de las cláusulas 4 a 10, una apreciación de 20 riesgos, una Declaración de Aplicabilidad de 114 controles (71 aplicables, 27 parciales y 16 excluidos) trazada a evidencias del código, y procedimientos de incidentes y continuidad. Su principal debilidad es que los procesos de evaluación y mejora (auditoría interna, revisión por la dirección y verificación de las no conformidades) están planificados pero no ejecutados, y que la aprobación docente está pendiente. Asimismo, por tratarse de una aplicación de cliente, los controles locales disuaden pero no impiden el acceso a quien controla el navegador; la autorización efectiva sobre los datos en la nube recae en RLS, cuya prueba funcional con dos sesiones aún debe realizarse al activar el inicio de sesión anónimo.
+El SGSI aporta, de forma coherente con ISO/IEC 27001:2013, la documentación de las cláusulas 4 a 10, una apreciación de 26 riesgos, una Declaración de Aplicabilidad de 114 controles (71 aplicables, 27 parciales y 16 excluidos) trazada a evidencias del código, y procedimientos de incidentes y continuidad. Su principal debilidad es que los procesos de evaluación y mejora (auditoría interna, revisión por la dirección y verificación de las no conformidades) están planificados pero no ejecutados, y que la aprobación docente está pendiente. Asimismo, por tratarse de una aplicación de cliente, los controles locales disuaden pero no impiden el acceso a quien controla el navegador; la autorización efectiva sobre los datos en la nube recae en RLS, cuya prueba funcional con dos cuentas reales aún debe realizarse.
 
 Como aprendizaje, el trabajo evidenció que la seguridad de un sistema que maneja datos de salud no se agota en el cifrado o en las cabeceras: exige base legal, minimización, gestión de proveedores y transferencia internacional, gobierno y mejora continua. Se recomienda a futuro priorizar la prueba con hardware real, la activación y verificación de la nube, la medición de rendimiento y la ejecución de la primera auditoría interna.
 
@@ -748,7 +779,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.8.2.2 | Etiquetado de la información | Sí | El usuario debe ver qué es sensible | Implementado | `src/components/common/DataClassBadge.vue`; cabecera CSV (`src/services/export/csvExporter.js:12`) |
 | A.8.2.3 | Manipulado de la información | Sí | Reglas por nivel (exportar, compartir, borrar) | Implementado | Diálogo de exportación, seudonimización, `sgsi/uso_aceptable_y_clasificacion.md` §4 |
 | A.8.3.1 | Gestión de soportes extraíbles | Parcial | CSV en USB | Documentado | Regla: USB cifrado o borrado tras uso (§4 de uso aceptable) |
-| A.8.3.2 | Eliminación de soportes | Sí | Derecho de supresión y fin del curso | Implementado | *Crypto-shredding* (`src/services/storage/secureStorage.js:91`, `src/services/storage/wipe.js:14`) |
+| A.8.3.2 | Eliminación de soportes | Sí | Derecho de supresión y fin del curso | Implementado | *Crypto-shredding* (`src/services/storage/secureStorage.js:91`, `src/services/storage/wipe.js:14`); nube: purga a 365 días (pg_cron, pendiente de aplicar) |
 | A.8.3.3 | Soportes físicos en tránsito | Parcial | Portátiles/USB fuera del laboratorio | Documentado | Prohibido trasladar CSV sin cifrar (uso aceptable §4) |
 
 ### A.9 Control de acceso
@@ -757,7 +788,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 |---|---|---|---|---|---|
 | A.9.1.1 | Política de control de acceso | Sí | RNF06: limitar funciones administrativas | Implementado | `sgsi/control_acceso.md`; RBAC (`src/stores/auth.js`); RLS (`supabase/schema.sql`) |
 | A.9.1.2 | Acceso a las redes y a los servicios de red | Parcial | Solo el proyecto Supabase y el propio origen | Implementado | CSP `connect-src` (`vercel.json:11`); solo clave publicable (`src/services/cloud/supabaseClient.js:15`) |
-| A.9.2.1 | Registro y baja de usuario | Sí | RF01: IDs seudónimos; sesiones anónimas en la nube | Implementado | `src/stores/users.js:72`; baja en `UserAdminTable.vue`; `signInAnonymously` (`src/services/cloud/cloudSync.js:53`); CAPTCHA opcional y límite de altas anónimas (`src/services/cloud/captcha.js`, `src/utils/rateLimiter.js`) — SUG-04 |
+| A.9.2.1 | Registro y baja de usuario | Sí | Cuentas de usuario con correo y contraseña; pacientes propios | Implementado | Supabase Auth (`src/services/accounts/authService.js`); alta, acceso y baja auditados (`ACCOUNT_*`); `eliminar_mi_cuenta()`; CAPTCHA opcional (`captcha.js`); la autenticación anónima se eliminó — SUG-04 |
 | A.9.2.2 | Provisión de acceso de usuario | Sí | Rol admin solo por alta explícita | Implementado | `insert into public.administradores` (`supabase/schema.sql`, final); setup único de PIN (`src/router/guards.js`) |
 | A.9.2.3 | Gestión de privilegios de acceso | Sí | Acciones privilegiadas restringidas | Implementado | `assertAdmin()` (`src/stores/auth.js:40`); `es_admin()` en RLS |
 | A.9.2.4 | Gestión de la información secreta de autenticación de los usuarios | Sí | PIN y contraseña de la nube | Implementado | Sin PIN por defecto, PBKDF2 (`src/services/security/pinHash.js:7`); MFA del panel Supabase (`SEC-50`) |
@@ -765,7 +796,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.9.2.6 | Retirada o reasignación de los derechos de acceso | Sí | Cambio de administrador o baja de participante | Implementado | Cambio de PIN; `delete from administradores`; "Eliminar mis datos" (`src/stores/users.js:138`) |
 | A.9.3.1 | Uso de la información secreta de autenticación | Sí | El admin no comparte el PIN | Documentado | `sgsi/control_acceso.md` §4; política de uso aceptable |
 | A.9.4.1 | Restricción del acceso a la información | Sí | El participante solo ve lo suyo | Implementado | `listSessions` por usuario (`src/services/storage/sessionRepository.js:35`); RLS `propietario = auth.uid()` |
-| A.9.4.2 | Procedimientos seguros de inicio de sesión | Sí | Admin local y nube | Implementado | Bloqueo (`src/services/security/lockout.js:20`), expiración (`lockout.js:8`), Supabase Auth (`cloudSync.js:184`); altas anónimas limitadas y CAPTCHA opcional en `signInAnonymously` (`cloudSync.js`) — SUG-04 |
+| A.9.4.2 | Procedimientos seguros de inicio de sesión | Sí | Admin local, cuentas y nube | Implementado | Bloqueo (`src/services/security/lockout.js:20`), expiración (`lockout.js:8`), Supabase Auth con confirmación de correo (`authService.js`); límite de intentos en cliente y de tasa en Supabase; CAPTCHA opcional; MFA y protección de contraseñas filtradas pendientes (manual) — SUG-04 |
 | A.9.4.3 | Sistema de gestión de contraseñas | Sí | Calidad del PIN | Implementado | `validateNewPin` (`src/services/security/pinHash.js:15`) |
 | A.9.4.4 | Uso de utilidades con privilegios del sistema | No | La SPA no usa ni ofrece utilidades privilegiadas; la clave `service_role` no se usa | N/A | — |
 | A.9.4.5 | Control de acceso al código fuente de los programas | Sí | Repositorio | Documentado | GitHub con acceso mínimo y `main` protegida (`SEC-58`) |
@@ -875,7 +906,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.17.1.1 | Planificación de la continuidad de la seguridad de la información | Sí | Sesiones de medición en clase | Documentado | `sgsi/plan_continuidad.md` |
 | A.17.1.2 | Implementar la continuidad de la seguridad de la información | Parcial | Fallos de sensor, red o nube | Implementado | Local-first, detección de desconexión (`SEC-59`), simulador como respaldo |
 | A.17.1.3 | Verificación, revisión y evaluación de la continuidad de la seguridad de la información | Parcial | Probar el plan | Documentado | Simulacro por hito (plan de continuidad §5) |
-| A.17.2.1 | Disponibilidad de los recursos de tratamiento de la información | Parcial | CDN de Vercel y copia en Supabase | Parcial | PWA offline pendiente (`SEC-62`) |
+| A.17.2.1 | Disponibilidad de los recursos de tratamiento de la información | Parcial | CDN de Vercel, service worker (app shell) y copia en Supabase | Parcial | PWA con app shell sin conexión (`public/sw.js`, `SEC-62`); la nube no está disponible sin red y no hay conmutación por error del proveedor |
 
 ### A.18 Cumplimiento
 
@@ -883,12 +914,12 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 |---|---|---|---|---|---|
 | A.18.1.1 | Identificación de la legislación aplicable y de los requisitos contractuales | Sí | Datos de salud | Documentado | Ley 19.628, Ley 21.719, Ley 20.584; términos de proveedores; `/privacidad` |
 | A.18.1.2 | Derechos de Propiedad Intelectual (DPI) | Sí | Librerías y la propia norma | Implementado | Licencias MIT (Vue, uPlot); la norma UNE con licencia no se copia al repositorio |
-| A.18.1.3 | Protección de los registros de la organización | Sí | Consentimientos, auditoría, incidentes | Implementado | Cifrado + cadena de hashes; retención 180 días |
+| A.18.1.3 | Protección de los registros de la organización | Sí | Consentimientos, auditoría, incidentes | Implementado | Cifrado + cadena de hashes; auditoría 180 días; monitoreos locales 30 días (por defecto) y en la nube 365 días desde el inicio |
 | A.18.1.4 | Protección y privacidad de la información de carácter personal | Sí | **Control central**: datos de salud | Implementado | Seudónimos, consentimiento, minimización, cifrado, supresión, RLS (`src/views/PrivacyView.vue`); base legal, transferencia internacional, tabla de derechos y "Eliminar mis datos en la nube" (`borrar_mis_datos()`) — SUG-06 |
 | A.18.1.5 | Regulación de los controles criptográficos | Sí | Uso de criptografía estándar | Implementado | Web Crypto (algoritmos estándar, sin restricciones de exportación aplicables) |
 | A.18.2.1 | Revisión independiente de la seguridad de la información | Parcial | Evaluación académica | Documentado | Auditoría por otro grupo y docente (`sgsi/auditoria_interna_y_revision.md`) |
 | A.18.2.2 | Cumplimiento de las políticas y normas de seguridad | Sí | Verificar el SoA | Implementado | Indicadores y objetivos en la app (`src/services/security/isms.js:53`) |
-| A.18.2.3 | Comprobación del cumplimiento técnico | Sí | Pruebas técnicas | Implementado | `npm test`, `npm run lint`, securityheaders.com, prueba de RLS |
+| A.18.2.3 | Comprobación del cumplimiento técnico | Sí | Pruebas técnicas | Parcial | `npm test`, `npm run lint`, CI, securityheaders.com; la prueba real de RLS con dos cuentas está pendiente (docs/PENDIENTES_MANUALES.md) |
 
 ## Anexo B. Matriz de trazabilidad
 
@@ -898,9 +929,9 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 
 | Punto | Texto original | Interpretación vigente | Motivo |
 |---|---|---|---|
-| RF04, RNF08 | "sensor … conectado al ESP32"; "compatible con los ESP32" | **Arduino UNO/Nano o ESP32** con módulo AD8232 | El firmware `sensor_ecg_ad8232.ino` usa pines de UNO (A0, D10, D11) y la app tiene perfiles de 10 y 12 bits (`src/data/deviceProfiles.js`) |
-| RF23 | "funcionamiento del sensor infrarrojo" | **Sensor AD8232 de biopotencial**: electrodos RA/LA/RL, derivación I, detección leads-off, filtros | El proyecto mide ECG eléctrico, no fotopletismografía; contenido en `src/data/learn/sensorAd8232.js` |
-| Esquema | `esquema_circuito.svg` (raíz) | **`docs/esquema_circuito_ad8232.svg`** | El SVG de la raíz describe un sensor de lactato (LMP91000), ajeno a este proyecto |
+| RF04, RNF08 | "sensor … conectado al ESP32"; "compatible con los ESP32" | **ESP32 con sensor óptico PPG MAX30100** (firmware `sensor_ppg_max30100_esp32`), cámara del celular como PPG y, opcionalmente, AD8232 (Arduino UNO/Nano o ESP32) | El sensor real del prototipo es PPG, no ECG; la app admite perfiles de 10 y 12 bits (`src/data/deviceProfiles.js`). Ver `docs/ERRATAS_REQUERIMIENTOS.md` |
+| RF23 | "funcionamiento del sensor infrarrojo" | **Sensor óptico infrarrojo PPG (MAX30100) y cámara**; AD8232 (ECG) como contenido complementario | PPG ≠ ECG: el PPG mide volumen sanguíneo por luz, el ECG la actividad eléctrica. El texto original (infrarrojo) es correcto para el MAX30100; el contenido actual `sensorAd8232.js` solo cubre el ECG (pendiente ficha PPG). Ver `docs/ERRATAS_REQUERIMIENTOS.md` |
+| Esquema | `esquema_circuito.svg` (raíz) | `docs/esquema_circuito_ad8232.svg` (ECG original); **falta** el esquema ESP32 + MAX30100 | El SVG de la raíz describe un sensor de lactato (LMP91000), ajeno al proyecto; ninguno refleja aún el MAX30100 |
 
 ### B.2 Requerimientos funcionales
 
@@ -947,6 +978,34 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 | SUG-06 | `views/PrivacyView.vue`, `deleteAllMyCloudData()`, `borrar_mis_datos()` | E `inicio.spec.js` | A.18.1.1, A.18.1.4 |
 | SUG-09 | `views/MonitorView.vue` (acuse obligatorio + evento `ELECTRICAL_SAFETY_ACK`) | M (Web Serial requiere hardware) | A.12.4.1 |
 | SUG-10/11 | `.github/workflows/ci.yml`, `playwright.config.js`, `e2e/*.spec.js` | CI | A.14.2.8, A.14.2.9 |
+| MOVIL-01 (PWA instalable) | `public/manifest.webmanifest`, `public/sw.js`, `composables/usePwaInstall.js`, `components/pwa/PwaPrompt.vue`, `vercel.json` (CSP sin cambios, `camera=(self)`) | E `pwa.spec.js` | A.14.2.5, A.13.1.1 |
+| MOVIL-02 (fuente cámara PPG) | `services/sources/CameraSource.js`, `utils/dsp/ppgCamera.js`, `components/camera/CameraWizard.vue`, `data/deviceProfiles.js` | U `ppgCamera.spec.js`; E `camara.spec.js`; M (dedo real) | A.18.1.4, A.14.2.5 |
+| MOVIL-03 (auditoría de cámara) | `auditLog.js` (`CAMERA_STARTED`, `CAMERA_STOPPED`, `CAMERA_DENIED`, `TORCH_UNAVAILABLE`), `supabase/schema.sql`, `supabase/migracion_eventos_camara.sql` | U `schema.spec.js` | A.12.4.1, A.12.4.2 |
+
+### B.5 Rediseño visual (oct-2026)
+
+| Requisito de la usuaria | Implementación | Pruebas | Controles |
+|---|---|---|---|
+| Mantenedor de usuarios (CRUD) | `views/UserSelectView.vue`, `services/users/userList.js`, `stores/users.js` (`updateAlias`, `deleteUserData`) | U `monitoreoCatalog.spec.js`, E `monitoreos.spec.js` | A.9.2.1, A.18.1.4 |
+| Guardar / descartar monitoreo | `components/monitoreos/SaveMonitoringDialog.vue`, `stores/session.js`, `services/monitoreos/monitoreoService.js` | U `monitoreoService.spec.js`, E `monitoreos.spec.js` | A.12.4.1, A.8.2.1 |
+| Gestión de monitoreos (filtros, editar, eliminar, exportar) | `views/SessionsView.vue`, `SessionDetailView.vue`, `services/monitoreos/catalog.js`, `composables/useExportMonitoreos.js` | U `monitoreoCatalog.spec.js`, `informes.spec.js` | A.9.4.1, A.12.4.1, A.18.1.4 |
+| Comparar / Aprende con monitoreos guardados | `components/compare/MonitoreoPicker.vue`, `views/CompareView.vue`, `components/learn/MyMonitorings.vue`, `services/monitoreos/analysis.js` | U `informes.spec.js`, E `monitoreos.spec.js` | — |
+| Informes PDF/CSV seudonimizados e historial | `services/report/pdfWriter.js`, `informes.js`, `historial.js` | U `informes.spec.js`, `historial.spec.js` | A.8.2.2, A.18.1.4 |
+| Reimportar CSV exportados | `services/export/csvImporter.js` | U `importarExportado.spec.js` | A.14.2.5 |
+| Aviso de perfil incorrecto | `services/parsing/ecgCsvParser.js`, `stores/channels.js` | U `ecgCsvParser.spec.js` | A.14.2.5 |
+| Nuevos eventos de auditoría | `auditLog.js`, `supabase/schema.sql` | U `schema.spec.js` | A.12.4.1 |
+| Navegación y 375 px | `components/layout/AppHeader.vue`, `assets/styles/base.css` | E `monitoreos.spec.js`, `pwa.spec.js` | — |
+
+### B.6 Cuentas, pacientes y visibilidad (oct-2026)
+
+| Requisito | Componente | Prueba | Controles |
+|---|---|---|---|
+| Iniciar sesión / crear cuenta / recuperar | `views/account/*`, `services/accounts/*`, `stores/account.js` | U `cuentas.spec.js`, E `cuentas.spec.js` | A.9.2.1, A.9.4.2, A.9.4.3 |
+| Pacientes propios por cuenta | `stores/users.js`, `cloudSync.js`, tabla `pacientes` (RLS) | U `visibilidad.spec.js` (SQL) | A.9.1.1, A.9.4.1, A.18.1.4 |
+| Vincular datos locales / limpiar al salir | `services/accounts/linkLocal.js`, `storage/index.js` | — (manual) | A.8.3.2, A.11.2.7 |
+| Visibilidad privado/público con consentimiento | `services/monitoreos/visibilidad.js`, `SaveMonitoringDialog.vue`, `VisibilityDialog.vue` | U `visibilidad.spec.js`, E `cuentas.spec.js` | A.13.2.1, A.18.1.4 |
+| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, funciones RPC `listar_monitoreos_publicos`/`monitoreo_publico` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
+| Auditoría de cuentas y visibilidad | `auditLog.js`, `schema.sql` | U `schema.spec.js` | A.12.4.1 |
 
 
 ## Anexo C. Índice de documentos del SGSI
@@ -979,7 +1038,7 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 
 ### D.1 Requisitos
 
-Node.js 20 o superior y npm. Para las pruebas E2E, Chromium instalado mediante Playwright. Para usar el sensor real: navegador Chrome o Edge de escritorio, módulo AD8232 con el firmware `sensor_ecg_ad8232.ino` cargado en un Arduino UNO/Nano (o ESP32 por USB), con alimentación a batería o Bluetooth durante el uso de electrodos.
+Node.js 20 o superior y npm. Para las pruebas E2E, Chromium instalado mediante Playwright. Para usar el sensor real: navegador Chrome o Edge de escritorio, ESP32 con MAX30100 (`sensor_ppg_max30100_esp32`) o módulo AD8232 con el firmware `sensor_ecg_ad8232.ino` cargado en un Arduino UNO/Nano (o ESP32 por USB), con alimentación a batería o Bluetooth durante el uso de electrodos.
 
 ### D.2 Ejecución local
 
@@ -1002,7 +1061,7 @@ Sin variables de entorno, la aplicación funciona de forma 100 % local (IndexedD
 ### D.3 Configuración de Supabase (opcional)
 
 1. Crear el proyecto y anotar la región (en este caso, us-east-1); registrarla en `docs/sgsi/proveedores.md`.
-2. En Authentication → Sign In / Providers, activar «Allow anonymous sign-ins» y fijar un límite bajo de altas anónimas por IP.
+2. En Authentication → Sign In / Providers, mantener el correo habilitado con «Confirm email» activo y desactivar los inicios de sesión anónimos; luego ejecutar también `supabase/migracion_endurecimiento.sql`.
 3. En el editor SQL, ejecutar completo `supabase/schema.sql` (idempotente).
 4. Crear la cuenta administradora (Authentication → Users, con contraseña robusta y MFA) e insertarla en `public.administradores` a partir de su correo.
 5. Opcional: activar `pg_cron` y programar `purgar_sesiones(30)`.

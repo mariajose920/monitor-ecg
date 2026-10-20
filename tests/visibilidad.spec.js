@@ -100,27 +100,64 @@ describe('vista pública', () => {
   })
 })
 
-function leerMigracion() {
-  for (const ruta of ['../../supabase/migracion_cuentas_pacientes.sql', '../supabase/migracion_cuentas_pacientes.sql']) {
-    const url = new URL(ruta, `file://${process.cwd().replace(/\\/g, '/')}/`)
+function leerSql(nombre) {
+  for (const base of ['../../supabase/', '../supabase/']) {
+    const url = new URL(base + nombre, 'file://' + process.cwd().replaceAll(String.fromCharCode(92), '/') + '/')
     if (existsSync(url)) return readFileSync(url, 'utf8')
   }
   return null
 }
 
-describe('migración SQL', () => {
-  const sql = leerMigracion()
+describe('migración de endurecimiento (funciones públicas y retención)', () => {
+  const sql = leerSql('migracion_endurecimiento.sql')
+  const schema = leerSql('schema.sql')
 
-  it.skipIf(!sql)('la vista pública no expone etiqueta, alias, propietario ni nombre', () => {
-    const vista = /create or replace view public\.monitoreos_publicos[\s\S]*?where s\.visibilidad/.exec(sql)[0]
-    for (const prohibido of ['propietario', 'etiqueta', 'alias', "'nombre'", "'notas'", 'usuarioId', 'paciente_id']) {
-      expect(vista, prohibido).not.toContain(prohibido)
+  it.skipIf(!sql)('elimina la vista y define funciones con search_path fijo', () => {
+    expect(sql).toContain('drop view if exists public.monitoreos_publicos;')
+    expect(sql).not.toMatch(/create (or replace )?view/)
+    for (const fn of ['listar_monitoreos_publicos', 'monitoreo_publico']) {
+      expect(sql).toContain('create or replace function public.' + fn)
     }
-    expect(vista).toContain('security_barrier')
+    expect((sql.match(/security definer\s+set search_path = public/g) ?? []).length).toBeGreaterThanOrEqual(3)
   })
 
-  it.skipIf(!sql)('anon no tiene acceso y las políticas usan (select auth.uid())', () => {
-    expect(sql).toMatch(/revoke all on public\.monitoreos_publicos from public, anon/)
+  it.skipIf(!sql)('las funciones públicas no exponen etiqueta, alias, propietario ni nombre', () => {
+    const cuerpo = /create or replace function public\.listar_monitoreos_publicos[\s\S]*?offset greatest/.exec(sql)[0]
+    for (const prohibido of ['propietario', 'etiqueta', 'alias', "'nombre'", "'notas'", 'usuarioId', 'paciente_id']) {
+      expect(cuerpo, prohibido).not.toContain(prohibido)
+    }
+    expect(cuerpo).toContain("'Paciente anónimo'")
+    expect(cuerpo).toContain('least(')
+    expect(cuerpo).toContain('100')
+  })
+
+  it.skipIf(!sql)('anon sin acceso y authenticated con execute', () => {
+    expect(sql).toContain('revoke all on function public.listar_monitoreos_publicos(integer, integer) from public, anon;')
+    expect(sql).toContain('grant execute on function public.listar_monitoreos_publicos(integer, integer) to authenticated;')
+    expect(sql).toContain('revoke all on function public.monitoreo_publico(uuid) from public, anon;')
+    expect(sql).not.toContain('to anon')
+  })
+
+  it.skipIf(!sql)('retención de 365 días y tarea pg_cron idempotente', () => {
+    expect(sql).toContain('purgar_sesiones(dias integer default 365)')
+    expect(sql).toContain('create extension if not exists pg_cron')
+    expect(sql).toContain("cron.unschedule('purga-ecg')")
+    expect(sql).toContain("cron.schedule('purga-ecg'")
+    expect(sql).toContain('purgar_sesiones(365)')
+  })
+
+  it.skipIf(!schema)('schema.sql es coherente: sin vista, con funciones y 365 días', () => {
+    expect(schema).not.toMatch(/create (or replace )?view public\.monitoreos_publicos/)
+    expect(schema).toContain('listar_monitoreos_publicos')
+    expect(schema).toContain('monitoreo_publico')
+    expect(schema).toContain('purgar_sesiones(dias integer default 365)')
+  })
+})
+
+describe('migración SQL', () => {
+  const sql = leerSql('migracion_cuentas_pacientes.sql')
+
+  it.skipIf(!sql)('las políticas usan (select auth.uid()) y no hay acceso para anon', () => {
     expect(sql).not.toContain('to anon')
     expect(sql).toContain('(select auth.uid())')
   })
@@ -132,7 +169,7 @@ describe('migración SQL', () => {
   })
 
   it.skipIf(!sql)('borrar_mis_datos incluye pacientes y existe eliminar_mi_cuenta', () => {
-    expect(sql).toMatch(/delete from public\.pacientes where propietario = uid/)
-    expect(sql).toMatch(/function public\.eliminar_mi_cuenta/)
+    expect(sql).toContain('delete from public.pacientes where propietario = uid')
+    expect(sql).toContain('function public.eliminar_mi_cuenta')
   })
 })

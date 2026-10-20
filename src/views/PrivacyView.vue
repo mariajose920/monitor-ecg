@@ -78,7 +78,8 @@ async function borrarNube() {
     <p>En este navegador y equipo, cifrados con AES-GCM 256 (Web Crypto) en IndexedDB. Si el proyecto tiene la nube configurada, se replica una copia seudonimizada en Supabase (PostgreSQL con TLS, cifrado en reposo y Row Level Security: cada cuenta solo ve lo suyo —y lo que otras cuentas publican de forma anónima—; el administrador autenticado puede ver monitoreos pero no los perfiles de pacientes. Sin cuenta no se sube nada). No hay analítica ni telemetría y no se ceden datos a terceros. Supabase y Vercel actúan como proveedores en la nube (ISO/IEC 27001:2013 A.15.1).</p>
 
     <h2>Retención</h2>
-    <p>Las mediciones se borran automáticamente a los <strong>{{ settings.retencionDias }} días</strong> (plazo configurable por el administrador, máximo 180).</p>
+    <p><strong>Sesiones locales (en este equipo):</strong> se borran automáticamente a los <strong>{{ settings.retencionDias }} días</strong> (plazo configurable por el administrador, 30 días por defecto, máximo 180).</p>
+    <p><strong>Monitoreos en la nube:</strong> se conservan <strong>365 días desde su fecha de inicio</strong>, salvo que los borres antes; luego se eliminan automáticamente. Las cuentas sin acceso durante 24 meses se avisan y después se eliminan.</p>
 
     <h2>Transferencia internacional</h2>
     <p>Si la nube está activa, la copia seudonimizada se aloja en la región elegida al crear el proyecto Supabase (por defecto fuera de Chile, p. ej. EE. UU.) y el sitio se sirve desde la red de Vercel. Esto se informa en el consentimiento, se minimizan los datos (solo seudónimos) y los proveedores declaran cifrado en tránsito y en reposo. Si no aceptas la transferencia, la app funciona en modo 100 % local (sin variables de la nube).</p>

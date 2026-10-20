@@ -5,7 +5,7 @@
 
 ## 1. Objetivos (6.2 a–e)
 
-Coherentes con la política (SGSI-POL-01), medibles y derivados de los riesgos R01–R20.
+Coherentes con la política (SGSI-POL-01), medibles y derivados de los riesgos R01–R26.
 
 | ID | Objetivo | Indicador | Meta | Riesgos |
 |---|---|---|---|---|

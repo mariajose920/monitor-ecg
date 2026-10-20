@@ -1,3 +1,4 @@
+-- NOTA: la vista public.monitoreos_publicos que crea este script fue REEMPLAZADA por funciones RPC en migracion_endurecimiento.sql (ejecutarla DESPUÉS de este script).
 -- ============================================================
 -- Monitor ECG — Migración: cuentas (Supabase Auth), pacientes propios y visibilidad de monitoreos
 -- Idempotente: se puede ejecutar varias veces. Ejecutar en Supabase → SQL Editor.

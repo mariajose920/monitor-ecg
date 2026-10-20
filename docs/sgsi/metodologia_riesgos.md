@@ -1,6 +1,6 @@
 # Metodología de apreciación de riesgos
 
-> **Código:** SGSI-RSK-01 · **Versión:** 1.0 · **Fecha:** 2026-10-15 · **Clasificación:** Interno
+> **Código:** SGSI-RSK-01 · **Versión:** 1.1 · **Fecha:** 2026-10-20 · **Clasificación:** Interno
 > **Referencias:** ISO/IEC 27001:2013 cláusulas 6.1.2 y 8.2; ISO 31000:2009; ISO/IEC 27005 (guía)
 
 ## 1. Criterios (6.1.2 a)
@@ -30,7 +30,7 @@
 1. **Identificar** activos (`ISO27001_controles.md` §1.4), amenazas y vulnerabilidades por pérdida de C, I y D; asignar **dueño del riesgo**.
 2. **Analizar**: valorar I y P de forma realista con la tabla anterior; justificar valores en la columna de tratamiento.
 3. **Evaluar**: comparar con el criterio de aceptación y priorizar (Altos primero).
-4. **Registrar** en la tabla de riesgos (§3.2 del documento principal, R01–R20).
+4. **Registrar** en la tabla de riesgos (§3.2 del documento principal, R01–R26).
 
 ## 3. Consistencia (6.1.2 b)
 
@@ -40,5 +40,9 @@
 ## 4. Frecuencia (8.2)
 
 - En cada hito del curso.
-- Ante cambios significativos: nueva tecnología (p. ej. la incorporación de Supabase generó R15–R18), nuevo tipo de dato, incidente de severidad alta o cambio de proveedor.
+- Ante cambios significativos: nueva tecnología (p. ej. la incorporación de Supabase generó R15–R18, la cámara R21 y las cuentas, pacientes propios y monitoreos públicos R22–R25), nuevo tipo de dato, incidente de severidad alta o cambio de proveedor.
 - Los resultados se conservan como información documentada (historial git de este directorio).
+
+## 5. Última reapreciación
+
+2026-10-20: tras incorporar cuentas con Supabase Auth, pacientes por cuenta, monitoreos públicos, cámara PPG, sensor MAX30100, PWA y región us-east-1 se revisaron R01–R21 y se añadieron R22–R26. R16 pasó de «autenticación anónima» (eliminada) a «registro de cuentas». Los criterios de §1 no cambian.

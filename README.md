@@ -72,7 +72,7 @@ Si el sensor envía valores fuera del rango del perfil elegido (p. ej. un ESP32 
 2. *Authentication → Sign In / Providers*: **Email habilitado** (correo + contraseña) con **Confirm email** activo. El inicio de sesión anónimo **ya no se usa** (déjalo desactivado). En *Authentication → Sign In / Providers → Email* fija longitud mínima de contraseña **10** y activa *Leaked password protection* si tu plan lo permite. En *Rate Limits* deja límites bajos de registros y correos por hora.
    - *Authentication → URL Configuration*: **Site URL** = `https://monitor-ecg1.vercel.app`; **Redirect URLs**: `https://monitor-ecg1.vercel.app/acceso`, `https://monitor-ecg1.vercel.app/restablecer` (y `http://localhost:5173/**` solo para desarrollo).
    - *Authentication → Emails*: revisa las plantillas de «Confirm signup» y «Reset password» (en español) y, para producción, configura SMTP propio.
-3. *SQL Editor*: ejecutar completo `../supabase/schema.sql` (idempotente; crea tablas, RLS, cuotas, lista blanca de auditoría, `hora_servidor()`, `borrar_mis_datos()`, `pacientes`, la vista `monitoreos_publicos` y `eliminar_mi_cuenta()`). Si la base ya existía, basta con ejecutar `../supabase/migracion_cuentas_pacientes.sql` (idempotente).
+3. *SQL Editor*: ejecutar completo `../supabase/schema.sql` (idempotente; crea tablas, RLS, cuotas, lista blanca de auditoría, `hora_servidor()`, `borrar_mis_datos()`, `pacientes`, las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` y `eliminar_mi_cuenta()`). Si la base ya existía, basta con ejecutar `../supabase/migracion_cuentas_pacientes.sql` (idempotente).
 4. Crear el administrador: *Authentication → Users → Add user* (correo + contraseña fuerte, auto-confirm) y luego:
    ```sql
    insert into public.administradores (user_id)
@@ -85,7 +85,7 @@ Si el sensor envía valores fuera del rango del perfil elegido (p. ej. un ESP32 
 
 - **Rutas:** `/acceso`, `/registro`, `/recuperar`, `/restablecer`, `/pacientes` (antes `/usuarios`, que redirige).
 - **Sin cuenta** todo queda cifrado en el dispositivo y no se sube nada. **Con cuenta** los pacientes y monitoreos se sincronizan con Supabase (RLS por propietario) y al iniciar sesión se ofrece vincular los datos locales.
-- **Visibilidad:** cada monitoreo es `privado` (por defecto) o `publico` (lectura para cuentas autenticadas, vía la vista `monitoreos_publicos`, siempre «Paciente anónimo»). Se elige al guardar y se cambia desde el detalle o la lista.
+- **Visibilidad:** cada monitoreo es `privado` (por defecto) o `publico` (lectura para cuentas autenticadas, vía las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()`, siempre «Paciente anónimo»). Se elige al guardar y se cambia desde el detalle o la lista.
 - El CAPTCHA, si está configurado, se pide al crear la cuenta.
 
 ### CAPTCHA (opcional, recomendado si la demo es pública)

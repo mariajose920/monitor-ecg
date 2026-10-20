@@ -18,7 +18,7 @@ const leido = ref(false)
       <li><strong>Finalidad:</strong> exclusivamente académica (asignatura de Programación Web / bioinstrumentación).</li>
       <li><strong>Datos tratados:</strong> rango de edad, peso y nivel de actividad física habitual. Todos opcionales.</li>
       <li><strong>Dónde se guardan:</strong> solo en este equipo y navegador, cifrados (AES-GCM). No se envían a ningún servidor.</li>
-      <li><strong>Plazo de retención:</strong> el configurado por el administrador (30 días por defecto, máximo 180).</li>
+      <li><strong>Plazo de retención:</strong> el configurado por el administrador (30 días por defecto, máximo 180) en este equipo; en la nube, 365 días desde el inicio del monitoreo.</li>
       <li><strong>Quién accede:</strong> el administrador del curso desde este equipo.</li>
       <li><strong>Retiro y borrado:</strong> puedes retirar el consentimiento cuando quieras; tus datos opcionales se borran de inmediato. También puedes usar "Eliminar mis datos".</li>
       <li><strong>Importante:</strong> este sistema <strong>no es un dispositivo médico ni realiza diagnósticos</strong>.</li>

@@ -25,7 +25,7 @@ Cerrar la sesión de administrador al terminar; no dejar datos opcionales visibl
 
 | Nivel | Ejemplos | Etiqueta | Almacenar | Compartir / transferir | Eliminar |
 |---|---|---|---|---|---|
-| **Confidencial-Sensible** | Señal ECG, BPM, edad, peso, CSV exportados | Insignia roja "Confidencial-Sensible"; primera línea del CSV `# CLASIFICACION: CONFIDENCIAL-SENSIBLE…` | Cifrado (AES-GCM) o en Supabase con RLS | Solo seudonimizado, a personal autorizado, nunca por canales públicos; USB cifrado (A.8.3.1); no trasladar sin cifrar (A.8.3.3) | Borrado + *crypto-shredding*; borrar CSV tras su uso |
+| **Confidencial-Sensible** | Señal ECG, BPM, edad, peso, CSV exportados | Insignia roja "Confidencial-Sensible"; primera línea del CSV `# CLASIFICACION: CONFIDENCIAL-SENSIBLE…` | Cifrado (AES-GCM) o en Supabase con RLS | Solo seudonimizado, a personal autorizado, nunca por canales públicos; USB cifrado (A.8.3.1); no trasladar sin cifrar (A.8.3.3) | Borrado + *crypto-shredding*; borrar CSV tras su uso; local: retención del admin (30 días por defecto); nube: 365 días desde el inicio |
 | **Confidencial** | Consentimientos, auditoría, credenciales, incidentes | Insignia ámbar "Confidencial" | Cifrado / hash | Solo admin y RS | Según retención (180 días auditoría) |
 | **Interno** | Seudónimo, parámetros, código fuente | Insignia azul "Interno" | Repositorio privado / app | Equipo y docente | Libre |
 | **Público** | Contenido educativo, política, aviso de privacidad | Insignia gris "Público" | — | Libre | Libre |
@@ -38,6 +38,15 @@ La insignia de la app es el componente `DataClassBadge` y su texto emergente cit
 - Uso aceptable: publicar únicamente datos de personas que lo consintieron; no escribir nombres, RUT ni correos en nombres o notas; no intentar reidentificar a las personas de monitoreos públicos ni descargarlos masivamente.
 - Al detectar un monitoreo público que identifique a alguien, reportarlo en `/seguridad` (incidente tipo fuga); el administrador puede volverlo privado.
 - Equipos compartidos: al cerrar sesión elegir «quitar datos del equipo».
+
+## 4c. Política de retención (A.18.1.3, A.8.3.2)
+
+| Dato | Plazo | Mecanismo |
+|---|---|---|
+| Sesiones locales (IndexedDB cifrado) | Retención configurada por el administrador (**30 días por defecto**, máx. 180) | Purga al iniciar la app (`RETENTION_PURGE`) |
+| Monitoreos en la nube (Supabase) | **365 días desde su fecha de inicio**, salvo que el titular los borre antes | Tarea diaria `purga-ecg` (pg_cron, 03:15 UTC) que ejecuta `public.purgar_sesiones(365)`; desactivable con `select cron.unschedule('purga-ecg');` |
+| Cuentas sin acceso en 24 meses | Aviso por correo y, tras el plazo de aviso, eliminación | **Procedimiento manual / futuro** (no automatizado): el administrador revisa `auth.users.last_sign_in_at`, avisa y elimina |
+| Auditoría local y réplica | 180 días | Rotación de la cadena de hashes |
 
 ## 5. Devolución de activos (A.8.1.4, A.11.2.5)
 

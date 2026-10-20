@@ -8,9 +8,9 @@ Rutas relativas a `monitor-ecg-vue/` salvo `supabase/` y `docs/`. Pruebas: **U**
 
 | Punto | Texto original | Interpretación vigente | Motivo |
 |---|---|---|---|
-| RF04, RNF08 | "sensor … conectado al ESP32"; "compatible con los ESP32" | **Arduino UNO/Nano o ESP32** con módulo AD8232 | El firmware `sensor_ecg_ad8232.ino` usa pines de UNO (A0, D10, D11) y la app tiene perfiles de 10 y 12 bits (`src/data/deviceProfiles.js`) |
-| RF23 | "funcionamiento del sensor infrarrojo" | **Sensor AD8232 de biopotencial**: electrodos RA/LA/RL, derivación I, detección leads-off, filtros | El proyecto mide ECG eléctrico, no fotopletismografía; contenido en `src/data/learn/sensorAd8232.js` |
-| Esquema | `esquema_circuito.svg` (raíz) | **`docs/esquema_circuito_ad8232.svg`** | El SVG de la raíz describe un sensor de lactato (LMP91000), ajeno a este proyecto |
+| RF04, RNF08 | "sensor … conectado al ESP32"; "compatible con los ESP32" | **ESP32 con sensor óptico PPG MAX30100** (firmware `sensor_ppg_max30100_esp32`), cámara del celular como PPG y, opcionalmente, AD8232 (Arduino UNO/Nano o ESP32) | El sensor real del prototipo es PPG, no ECG; la app admite perfiles de 10 y 12 bits (`src/data/deviceProfiles.js`). Ver `docs/ERRATAS_REQUERIMIENTOS.md` |
+| RF23 | "funcionamiento del sensor infrarrojo" | **Sensor óptico infrarrojo PPG (MAX30100) y cámara**; AD8232 (ECG) como contenido complementario | PPG ≠ ECG: el PPG mide volumen sanguíneo por luz, el ECG la actividad eléctrica. El texto original (infrarrojo) es correcto para el MAX30100; el contenido actual `sensorAd8232.js` solo cubre el ECG (pendiente ficha PPG). Ver `docs/ERRATAS_REQUERIMIENTOS.md` |
+| Esquema | `esquema_circuito.svg` (raíz) | `docs/esquema_circuito_ad8232.svg` (ECG original); **falta** el esquema ESP32 + MAX30100 | El SVG de la raíz describe un sensor de lactato (LMP91000), ajeno al proyecto; ninguno refleja aún el MAX30100 |
 
 ## 2. Requerimientos funcionales
 
@@ -83,5 +83,5 @@ Rutas relativas a `monitor-ecg-vue/` salvo `supabase/` y `docs/`. Pruebas: **U**
 | Pacientes propios por cuenta | `stores/users.js`, `cloudSync.js`, tabla `pacientes` (RLS) | U `visibilidad.spec.js` (SQL) | A.9.1.1, A.9.4.1, A.18.1.4 |
 | Vincular datos locales / limpiar al salir | `services/accounts/linkLocal.js`, `storage/index.js` | — (manual) | A.8.3.2, A.11.2.7 |
 | Visibilidad privado/público con consentimiento | `services/monitoreos/visibilidad.js`, `SaveMonitoringDialog.vue`, `VisibilityDialog.vue` | U `visibilidad.spec.js`, E `cuentas.spec.js` | A.13.2.1, A.18.1.4 |
-| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, vista `monitoreos_publicos` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
+| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, funciones RPC `listar_monitoreos_publicos`/`monitoreo_publico` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
 | Auditoría de cuentas y visibilidad | `auditLog.js`, `schema.sql` | U `schema.spec.js` | A.12.4.1 |

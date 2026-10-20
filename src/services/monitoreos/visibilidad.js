@@ -2,7 +2,7 @@
  * Reglas de visibilidad de monitoreos (A.13.2.x, A.18.1.4). Lógica pura, probada con Vitest.
  *  - 'privado' (por defecto): solo el propietario.
  *  - 'publico': legible, en solo lectura, por cualquier cuenta autenticada, mediante la vista
- *    public.monitoreos_publicos. Se publica: señal, BPM, actividad, fecha UTC y "Paciente anónimo".
+ *    las funciones RPC public.listar_monitoreos_publicos / monitoreo_publico. Se publica: señal, BPM, actividad, fecha UTC y "Paciente anónimo".
  *  - Los datos del paciente (rango de edad, peso…) NO se publican salvo segunda casilla explícita.
  *  - Nunca se publican: etiqueta, alias, nombre del monitoreo, nota, identificadores de paciente ni propietario.
  */
@@ -63,7 +63,7 @@ export function camposVisibilidadNube(meta) {
   return { visibilidad: vis, compartir_perfil: snap !== null, perfilCompartido: snap }
 }
 
-/** Convierte una fila de public.monitoreos_publicos en un "monitoreo" de solo lectura para la interfaz. */
+/** Convierte una fila de listar_monitoreos_publicos() en un "monitoreo" de solo lectura para la interfaz. */
 export function mapearMonitoreoPublico(row) {
   const parts = Array.isArray(row?.participantes) ? row.participantes : []
   const participantes = parts.map((p, i) => {

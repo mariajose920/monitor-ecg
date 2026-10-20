@@ -194,8 +194,8 @@ revoke all on function public.hora_servidor() from public;
 grant execute on function public.hora_servidor() to authenticated;
 
 -- ---------- Retención (SEC-32): borrar sesiones con más de N días ----------
--- Ejecutar manualmente o programar con pg_cron:  select public.purgar_sesiones(30);
-create or replace function public.purgar_sesiones(dias integer default 30)
+-- Política: 365 días desde el inicio del monitoreo. Programada con pg_cron en migracion_endurecimiento.sql. Manual:  select public.purgar_sesiones(365);
+create or replace function public.purgar_sesiones(dias integer default 365)
 returns integer
 language plpgsql
 security definer
@@ -391,7 +391,7 @@ grant execute on function public.borrar_mis_datos() to authenticated;
 
 -- ---------- Purga programada (SEC-32) ----------
 -- Requiere la extensión pg_cron (Database → Extensions → pg_cron). Ejecutar UNA vez:
---   select cron.schedule('purga-ecg', '15 3 * * *', $$select public.purgar_sesiones(30)$$);
+--   select cron.schedule('purga-ecg', '15 3 * * *', $select public.purgar_sesiones(365)$);  (ya incluido en migracion_endurecimiento.sql)
 -- Para quitarla:  select cron.unschedule('purga-ecg');
 
 -- ============================================================
@@ -544,29 +544,88 @@ create policy "dueño borra bloques" on public.bloques_muestras
   for delete to authenticated using (
     exists (select 1 from public.sesiones s where s.id = sesion_id and s.propietario = (select auth.uid())));
 
--- Vista segura: solo columnas permitidas, seudónimo anónimo. Corre con los derechos del dueño de la vista
--- (necesario para leer filas ajenas) pero filtra por visibilidad='publico' (security_barrier).
-create or replace view public.monitoreos_publicos with (security_barrier = true) as
-select
-  s.id,
-  s.inicio,
-  s.fin,
-  s.datos ->> 'actividadPrincipal' as actividad,
-  'Paciente anónimo'::text as paciente,
-  coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'canalIndex', p -> 'canalIndex',
-      'fs', p -> 'fs',
-      'actividad', p -> 'actividad',
-      'resumen', p -> 'resumen'))
-    from jsonb_array_elements(case when jsonb_typeof(s.datos -> 'participantes') = 'array'
-                                   then s.datos -> 'participantes' else '[]'::jsonb end) p
-  ), '[]'::jsonb) as participantes,
-  case when s.compartir_perfil then s.datos -> 'perfilCompartido' else null end as perfil
-from public.sesiones s
-where s.visibilidad = 'publico' and s.estado = 'finalizada';
-revoke all on public.monitoreos_publicos from public, anon;
-grant select on public.monitoreos_publicos to authenticated;
+-- Lo público se expone SOLO por funciones RPC (security definer, search_path fijo, columnas permitidas).
+-- Sustituye a la vista public.monitoreos_publicos (alerta security_definer_view del asesor).
+drop view if exists public.monitoreos_publicos;
+create or replace function public.listar_monitoreos_publicos(p_limit integer default 50, p_offset integer default 0)
+returns table (
+  id uuid,
+  inicio timestamptz,
+  fin timestamptz,
+  actividad text,
+  paciente text,
+  participantes jsonb,
+  perfil jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    s.id,
+    s.inicio,
+    s.fin,
+    s.datos ->> 'actividadPrincipal',
+    'Paciente anónimo'::text,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'canalIndex', p -> 'canalIndex',
+        'fs', p -> 'fs',
+        'actividad', p -> 'actividad',
+        'resumen', p -> 'resumen'))
+      from jsonb_array_elements(case when jsonb_typeof(s.datos -> 'participantes') = 'array'
+                                     then s.datos -> 'participantes' else '[]'::jsonb end) p
+    ), '[]'::jsonb),
+    case when s.compartir_perfil then s.datos -> 'perfilCompartido' else null end
+  from public.sesiones s
+  where s.visibilidad = 'publico' and s.estado = 'finalizada'
+    and (select auth.uid()) is not null
+  order by s.inicio desc
+  limit least(greatest(coalesce(p_limit, 50), 1), 100)
+  offset greatest(coalesce(p_offset, 0), 0);
+$$;
+revoke all on function public.listar_monitoreos_publicos(integer, integer) from public, anon;
+grant execute on function public.listar_monitoreos_publicos(integer, integer) to authenticated;
+
+create or replace function public.monitoreo_publico(p_id uuid)
+returns table (
+  id uuid,
+  inicio timestamptz,
+  fin timestamptz,
+  actividad text,
+  paciente text,
+  participantes jsonb,
+  perfil jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    s.id,
+    s.inicio,
+    s.fin,
+    s.datos ->> 'actividadPrincipal',
+    'Paciente anónimo'::text,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'canalIndex', p -> 'canalIndex',
+        'fs', p -> 'fs',
+        'actividad', p -> 'actividad',
+        'resumen', p -> 'resumen'))
+      from jsonb_array_elements(case when jsonb_typeof(s.datos -> 'participantes') = 'array'
+                                     then s.datos -> 'participantes' else '[]'::jsonb end) p
+    ), '[]'::jsonb),
+    case when s.compartir_perfil then s.datos -> 'perfilCompartido' else null end
+  from public.sesiones s
+  where s.id = p_id and s.visibilidad = 'publico' and s.estado = 'finalizada'
+    and (select auth.uid()) is not null;
+$$;
+revoke all on function public.monitoreo_publico(uuid) from public, anon;
+grant execute on function public.monitoreo_publico(uuid) to authenticated;
+
 
 -- ---------- Supresión: borrar_mis_datos() ahora incluye pacientes ----------
 create or replace function public.borrar_mis_datos()

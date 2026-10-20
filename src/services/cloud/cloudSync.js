@@ -278,12 +278,21 @@ export async function fetchPacientes() {
   }))
 }
 
-/** Lista de monitoreos públicos (solo lectura, vista segura). */
-export async function fetchPublicos({ limite = 60 } = {}) {
+/** Lista de monitoreos públicos (solo lectura, función RPC segura; máx. 100 por llamada). */
+export async function fetchPublicos({ limite = 60, desde = 0 } = {}) {
   if (!(await ensureCloudSession())) throw new Error('Inicia sesión para ver los monitoreos de la comunidad.')
-  const { data, error } = await supabase.from('monitoreos_publicos').select('*').order('inicio', { ascending: false }).limit(limite)
+  const { data, error } = await supabase.rpc('listar_monitoreos_publicos', { p_limit: Math.min(limite, 100), p_offset: desde })
   if (error) throw error
   return (data ?? []).map(mapearMonitoreoPublico)
+}
+
+/** Detalle de un monitoreo público (RPC). */
+export async function fetchPublico(id) {
+  if (!(await ensureCloudSession())) throw new Error('Inicia sesión para ver este monitoreo.')
+  const { data, error } = await supabase.rpc('monitoreo_publico', { p_id: id })
+  if (error) throw error
+  const fila = Array.isArray(data) ? data[0] : data
+  return fila ? mapearMonitoreoPublico(fila) : null
 }
 
 /** Señal de un canal de un monitoreo (propio o público) desde la nube, en el formato de getChannelSignal. */

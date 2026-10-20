@@ -35,7 +35,7 @@
 
 - Las personas se registran con correo y contraseña (≥ 10 caracteres) y confirman el correo; el alta, el acceso y la baja quedan en la auditoría. La baja (`eliminar_mi_cuenta()`) borra cuenta, pacientes, monitoreos e incidentes propios.
 - Cada cuenta es dueña de sus pacientes y monitoreos (RLS por propietario). El **administrador no accede a los perfiles de pacientes**; sí puede leer monitoreos para soporte, sin identificación del paciente.
-- Un monitoreo `publico` es legible, en solo lectura, por cualquier cuenta autenticada y solo a través de la vista `monitoreos_publicos`. Nunca por anónimos.
+- Un monitoreo `publico` es legible, en solo lectura, por cualquier cuenta autenticada y solo a través de las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` (security definer, `search_path` fijo, máx. 100 filas; sustituyen a la vista `monitoreos_publicos`). Nunca por anónimos.
 - Revisión de accesos: se revisan trimestralmente las cuentas con rol de administrador (`public.administradores`).
 
 ## 4. Responsabilidades del usuario (A.9.3.1)
@@ -53,3 +53,12 @@ No compartir el PIN ni la contraseña; no escribirlos en el equipo del laborator
 ## 6. Revisión de esta política
 
 Junto con la política general (A.5.1.2), o antes si cambia la arquitectura de autenticación.
+
+## Política de retención (A.18.1.3, A.8.3.2)
+
+| Dato | Plazo | Mecanismo |
+|---|---|---|
+| Sesiones locales (IndexedDB cifrado) | Retención configurada por el administrador (**30 días por defecto**, máx. 180) | Purga al iniciar la app (`RETENTION_PURGE`) |
+| Monitoreos en la nube (Supabase) | **365 días desde su fecha de inicio**, salvo que el titular los borre antes | Tarea diaria `purga-ecg` (pg_cron, 03:15 UTC) que ejecuta `public.purgar_sesiones(365)`; desactivable con `select cron.unschedule('purga-ecg');` |
+| Cuentas sin acceso en 24 meses | Aviso por correo y, tras el plazo de aviso, eliminación | **Procedimiento manual / futuro** (no automatizado): el administrador revisa `auth.users.last_sign_in_at`, avisa y elimina |
+| Auditoría local y réplica | 180 días | Rotación de la cadena de hashes |
