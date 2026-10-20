@@ -40,11 +40,22 @@ const modoCamaraMovil = computed(() => movil && props.canal.fuente === 'camera')
 
 const finalizando = ref(false)
 
-/** Finalizar: detiene la grabación (si la hay; entonces se pregunta guardar, descartar o decidir después) y apaga la fuente. */
+/**
+ * Finalizar: apaga la fuente y siempre explica qué pasó con el monitoreo.
+ *  - Si hay una grabación en curso: la detiene y abre la ventana Guardar / Descartar / Decidir después.
+ *  - Si quedó un borrador pendiente: vuelve a abrir esa ventana.
+ *  - Si no se grabó nada (no había usuario): lo avisa.
+ */
 async function finalizar() {
   finalizando.value = true
   try {
-    if (session.activa && enSesion.value) await session.detener()
+    if (session.activa && enSesion.value) {
+      await session.detener()
+    } else if (session.pendiente) {
+      session.pedirGuardar()
+    } else if (!props.canal.usuarioId) {
+      notify('No se grabó nada porque no había un usuario elegido. Elige «¿Quién se mide?» antes de medir para poder guardar.', { tipo: 'aviso', duracionMs: 7000 })
+    }
     await channels.disconnect(props.canal.id)
   } catch (e) {
     notify(e.message || 'No se pudo finalizar.', { tipo: 'error' })

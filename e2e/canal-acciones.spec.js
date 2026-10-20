@@ -29,3 +29,52 @@ test('la grabación empieza sola y Finalizar pregunta guardar, descartar o decid
   await page.getByTestId('abrir-guardar').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 })
+
+async function conectarConUsuario(page) {
+  await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+  await page.getByTestId('crear-usuario-rapido').click()
+  await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
+  await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
+}
+
+test('Finalizar (A) volver a Monitor con la fuente conectada y finalizar', async ({ page }) => {
+  await page.goto('/monitor')
+  await conectarConUsuario(page)
+  await expect(page.getByLabel('Control del monitoreo').getByText('● Grabando')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('link', { name: 'Inicio' }).first().click()
+  await page.getByRole('link', { name: 'Monitor' }).first().click()
+  page.once('dialog', (d) => d.accept())
+  await page.getByTestId('canal-finalizar').click()
+  await expect(page.getByRole('dialog', { name: 'Guardar monitoreo' })).toBeVisible({ timeout: 8000 })
+})
+
+test('Finalizar (B) tras "Decidir después", el siguiente monitoreo y su Finalizar', async ({ page }) => {
+  await page.goto('/monitor')
+  await conectarConUsuario(page)
+  await expect(page.getByLabel('Control del monitoreo').getByText('● Grabando')).toBeVisible({ timeout: 15_000 })
+  await page.getByTestId('canal-finalizar').click()
+  await page.getByRole('dialog').getByRole('button', { name: /Decidir/ }).click()
+  await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
+  await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
+  await page.getByTestId('canal-finalizar').click()
+  await expect(page.getByRole('dialog', { name: 'Guardar monitoreo' })).toBeVisible({ timeout: 8000 })
+})
+
+test('Finalizar (C) conectar primero y elegir usuario después', async ({ page }) => {
+  await page.goto('/monitor')
+  await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
+  await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
+  await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+  await page.getByTestId('crear-usuario-rapido').click()
+  await expect(page.getByLabel('Control del monitoreo').getByText('● Grabando')).toBeVisible({ timeout: 15_000 })
+  await page.getByTestId('canal-finalizar').click()
+  await expect(page.getByRole('dialog', { name: 'Guardar monitoreo' })).toBeVisible({ timeout: 8000 })
+})
+
+test('Finalizar (D) finalizar sin usuario avisa que no se grabó', async ({ page }) => {
+  await page.goto('/monitor')
+  await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
+  await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
+  await page.getByTestId('canal-finalizar').click()
+  await expect(page.getByRole('alert').filter({ hasText: /No se grabó nada/ })).toBeVisible({ timeout: 5000 })
+})

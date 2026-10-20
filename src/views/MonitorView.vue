@@ -80,15 +80,26 @@ onMounted(async () => {
  * no se inicia otro (primero se guarda o se descarta).
  */
 const listoParaGrabar = computed(() => channels.channels.some((c) => c.usuarioId && (c.estado === 'streaming' || c.estado === 'leads-off')))
-watch(listoParaGrabar, async (listo) => {
-  if (!listo || session.activa || session.pendiente) return
+let avisadoPendiente = null
+async function intentarGrabar() {
+  if (!listoParaGrabar.value || session.activa) return
+  if (session.pendiente) {
+    // No se puede grabar otro monitoreo hasta resolver el borrador: se avisa una vez por borrador.
+    if (avisadoPendiente !== session.pendiente.id) {
+      avisadoPendiente = session.pendiente.id
+      notify('Tienes un monitoreo sin guardar. Guárdalo o descártalo para que este se grabe.', { tipo: 'aviso', duracionMs: 7000 })
+    }
+    return
+  }
   try {
     await session.iniciar(channels.channels)
     notify('Grabando automáticamente. Presiona Finalizar para guardar o descartar.', { tipo: 'ok', duracionMs: 4000 })
   } catch {
     /* aún no hay datos suficientes: se reintenta cuando cambie el estado */
   }
-})
+}
+// También al volver a esta pantalla con la fuente ya conectada y cuando se resuelve un borrador.
+watch([listoParaGrabar, () => session.pendiente, () => session.activa], intentarGrabar, { immediate: true })
 
 function agregar() {
   try {
