@@ -8,7 +8,7 @@ function montar(sesiones) {
     saveSession: vi.fn(async (m) => void db.set(m.id, structuredClone(m))),
     deleteSession: vi.fn(async (id) => void db.delete(id)),
   }
-  const cloud = { pushSession: vi.fn(), deleteCloudSessions: vi.fn() }
+  const cloud = { sincronizarMonitoreo: vi.fn(), deleteCloudSessions: vi.fn() }
   const audit = vi.fn(async () => null)
   return { svc: createMonitoreoService({ repo, cloud, audit }), db, repo, cloud, audit }
 }
@@ -25,7 +25,7 @@ describe('monitoreoService', () => {
     const m = await svc.guardar('s1-aaaa-bbbb', { nombre: 'Mi prueba', notas: 'secreto', actividad: 'caminata' }, { actor: 'participant:Usuario 1', ctx })
     expect(m.guardado).toBe(true)
     expect(db.get('s1-aaaa-bbbb')).toMatchObject({ guardado: true, nombre: 'Mi prueba', actividadPrincipal: 'caminata' })
-    expect(cloud.pushSession).toHaveBeenCalledOnce()
+    expect(cloud.sincronizarMonitoreo).toHaveBeenCalledOnce()
     const [evento, actor, detalle] = audit.mock.calls[0]
     expect([evento, actor]).toEqual(['SESSION_SAVED', 'participant:Usuario 1'])
     expect(JSON.stringify(detalle)).not.toMatch(/Mi prueba|secreto/)
@@ -43,11 +43,12 @@ describe('monitoreoService', () => {
     expect(db.get('s1')).toMatchObject({ nombre: 'B', notas: 'n', actividadPrincipal: 'ejercicio', guardado: true })
     expect(audit.mock.calls[0][0]).toBe('SESSION_UPDATED')
   })
-  it('descartar: solo borradores; borra local y nube', async () => {
+  it('descartar: solo borradores; borra lo local y no toca la nube (un borrador nunca se sube)', async () => {
     const { svc, db, cloud, audit } = montar([base('s1', ['u1']), base('s2', ['u1'], { guardado: true })])
     await svc.descartar('s1', { ctx })
     expect(db.has('s1')).toBe(false)
-    expect(cloud.deleteCloudSessions).toHaveBeenCalledWith(['s1'])
+    expect(cloud.deleteCloudSessions).not.toHaveBeenCalled()
+    expect(cloud.sincronizarMonitoreo).not.toHaveBeenCalled()
     expect(audit.mock.calls[0][0]).toBe('SESSION_DISCARDED')
     await expect(svc.descartar('s2', { ctx })).rejects.toThrow(/Solo se pueden descartar/)
   })

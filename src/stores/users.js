@@ -4,14 +4,18 @@ import { loadUsers, saveUsers, nextUserNumber } from '@/services/storage/userRep
 import { deleteByUser, listSessions, getSession, saveSession as saveSessionLocal } from '@/services/storage/sessionRepository.js'
 import { pushSession, deleteCloudSessions, deleteCloudChunks, pushPaciente, deletePaciente, fetchPacientes, cloudCuenta } from '@/services/cloud/cloudSync.js'
 import { audit } from '@/services/audit/auditService.js'
+import { nubeDatosActiva, retirarConsentimientoNube } from '@/services/cloud/cloudSync.js'
+import { mezclarPacienteNube } from '@/services/cloud/datosNube.js'
+import {
+  CONSENT_VERSION, CONSENT_SCOPE, consentimientoVigente, declaracionVigente, crearDeclaracion, crearConsentimiento,
+} from '@/services/privacidad/consentimiento.js'
+import { ALIAS_RE, validarAlias } from '@/services/privacidad/alias.js'
 import { newId } from '@/utils/ids.js'
 import { RANGOS_EDAD, NIVELES_ACTIVIDAD } from '@/data/activities.js'
 import { normalizarEtiquetaLegada as normalizarEtiqueta, etiquetaDe } from '@/services/users/etiquetas.js'
 
-/** Versión del texto de consentimiento: si cambia, se vuelve a pedir (SEC-17). */
-export const CONSENT_VERSION = '1.0'
-export const CONSENT_SCOPE = Object.freeze(['age', 'weight', 'activity'])
-export const ALIAS_RE = /^[A-Za-z0-9 _-]{1,20}$/
+// Versión del texto de consentimiento (SEC-17, C-02): vive en services/privacidad/consentimiento.js; si cambia, se vuelve a pedir.
+export { CONSENT_VERSION, CONSENT_SCOPE, consentimientoVigente, declaracionVigente, ALIAS_RE }
 const ACTIVE_KEY = 'ecg.activeUser'
 
 /** Valida los datos opcionales (SEC-20). Devuelve { perfil } o { error }. */
@@ -31,9 +35,7 @@ export function validarPerfil(p) {
   return { perfil: { rangoEdad, pesoKg, nivelActividad } }
 }
 
-export function consentimientoVigente(u) {
-  return !!u?.consentimiento && u.consentimiento.consentVersion === CONSENT_VERSION
-}
+const cloudCuentaId = () => cloudCuenta.value?.id ?? null
 
 export const useUsersStore = defineStore('users', () => {
   const users = ref([])
@@ -69,11 +71,16 @@ export const useUsersStore = defineStore('users', () => {
     return u.alias ? `${u.etiqueta} · ${u.alias}` : u.etiqueta
   }
 
-  /** RF01/SEC-13: el sistema genera "Usuario N"; alias opcional validado. */
-  async function createUser(alias = '') {
+  /**
+   * RF01/SEC-13: el sistema genera "Paciente N"; alias opcional (solo en este dispositivo).
+   * C-18: sin menores; se exige la declaración de que la persona medida es mayor de edad.
+   */
+  async function createUser(alias = '', { declaraMayorEdad = false } = {}) {
     await ensureLoaded()
+    if (declaraMayorEdad !== true) throw new Error('Confirma que la persona medida es mayor de 18 años. Esta aplicación no mide menores de edad.')
     const a = String(alias || '').trim()
-    if (a && !ALIAS_RE.test(a)) throw new Error('Alias inválido: solo letras sin tilde, números, espacio, _ y - (máx. 20).')
+    const errAlias = validarAlias(a)
+    if (errAlias) throw new Error(errAlias)
     const numero = await nextUserNumber(users.value)
     const ahora = new Date().toISOString()
     const u = {
@@ -83,6 +90,7 @@ export const useUsersStore = defineStore('users', () => {
       alias: a || null,
       perfil: null,
       consentimiento: null,
+      declaracion: crearDeclaracion({ por: cloudCuentaId() }),
       creadoEn: ahora,
       actualizadoEn: ahora,
     }
@@ -115,10 +123,22 @@ export const useUsersStore = defineStore('users', () => {
     sessionStorage.removeItem(ACTIVE_KEY)
   }
 
+  /** C-18: pacientes anteriores a la versión 2.0 no tienen la declaración; hasta darla no se suben a la nube ni se publican. */
+  async function declararMayorEdad(id) {
+    const u = byId(id)
+    if (!u) return
+    u.declaracion = crearDeclaracion({ por: cloudCuentaId() })
+    u.actualizadoEn = new Date().toISOString()
+    await persist()
+    pushPaciente(u)
+    await audit('PATIENT_UPDATED', `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'declaracion' })
+  }
+
+  /** C-02: el consentimiento registra quién lo otorga (cuenta), el canal, la declaración de mayoría de edad y el alcance. */
   async function giveConsent(id) {
     const u = byId(id)
     if (!u) return
-    u.consentimiento = { userId: u.id, consentVersion: CONSENT_VERSION, acceptedAt: new Date().toISOString(), scope: [...CONSENT_SCOPE] }
+    u.consentimiento = crearConsentimiento(u, { cuentaId: cloudCuentaId(), nube: nubeDatosActiva() })
     u.actualizadoEn = new Date().toISOString()
     await persist()
     pushPaciente(u)
@@ -133,12 +153,15 @@ export const useUsersStore = defineStore('users', () => {
     u.perfil = null
     u.actualizadoEn = new Date().toISOString()
     await persist()
-    pushPaciente(u)
-    // Retirar el consentimiento también retira los datos del paciente de los monitoreos públicos.
+    // La retirada llega a la nube aunque la nube esté apagada ahora (solo actualiza una fila ya existente); el servidor, además, pasa a
+    // privado todo lo público de ese paciente (trigger tg_paciente_perfil).
+    retirarConsentimientoNube(u)
+    // Retirar el consentimiento retira los datos del paciente Y pasa a privado lo que se había publicado (C-04).
     for (const sesion of await listSessions({ usuarioId: id })) {
-      if (sesion.compartirPerfil || sesion.perfilCompartido) {
-        const limpia = { ...sesion, compartirPerfil: false }
+      if (sesion.compartirPerfil || sesion.perfilCompartido || sesion.visibilidad === 'publico') {
+        const limpia = { ...sesion, compartirPerfil: false, visibilidad: 'privado' }
         delete limpia.perfilCompartido
+        delete limpia.consentPublicacion
         await saveSessionLocal(limpia)
         pushSession(limpia)
       }
@@ -149,7 +172,7 @@ export const useUsersStore = defineStore('users', () => {
   async function updateProfile(id, datos) {
     const u = byId(id)
     if (!u) throw new Error('Usuario no encontrado')
-    if (!consentimientoVigente(u)) throw new Error('Se requiere consentimiento informado para guardar datos opcionales.')
+    if (!consentimientoVigente(u)) throw new Error('Se requiere el consentimiento informado vigente (versión ' + CONSENT_VERSION + ') para guardar datos opcionales.')
     const r = validarPerfil(datos)
     if (r.error) throw new Error(r.error)
     u.perfil = r.perfil
@@ -158,16 +181,15 @@ export const useUsersStore = defineStore('users', () => {
     pushPaciente(u)
   }
 
-  /** Edita el alias (el seudónimo "Usuario N" no cambia). El detalle de auditoría no incluye el alias. */
+  /** Edita el alias (el seudónimo "Paciente N" no cambia). El alias SOLO existe en este dispositivo: no se sube y no entra en el detalle de auditoría. */
   async function updateAlias(id, alias, actor = null) {
     const u = byId(id)
     if (!u) throw new Error('Usuario no encontrado')
     const a = String(alias || '').trim()
-    if (a && !ALIAS_RE.test(a)) throw new Error('Alias inválido: solo letras sin tilde, números, espacio, _ y - (máx. 20).')
+    const err = validarAlias(a)
+    if (err) throw new Error(err)
     u.alias = a || null
-    u.actualizadoEn = new Date().toISOString()
     await persist()
-    pushPaciente(u)
     if (cloudCuenta.value) await audit('PATIENT_UPDATED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'alias' })
     await audit('USER_UPDATED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'alias' })
   }
@@ -195,16 +217,16 @@ export const useUsersStore = defineStore('users', () => {
     if (activeUserId.value === id) clearActive()
   }
 
-/** Con cuenta: une los pacientes de la nube con los locales (gana el más reciente) y sube los locales nuevos. */
+/** Con cuenta Y la nube activada: une los pacientes de la nube con los locales (gana el más reciente) y sube los locales nuevos. */
   async function sincronizarConNube() {
-    if (!cloudCuenta.value) return
+    if (!nubeDatosActiva()) return
     await ensureLoaded()
     const nube = await fetchPacientes()
     const porId = new Map(users.value.map((u) => [u.id, u]))
     for (const n of nube) {
       const l = porId.get(n.id)
-      if (!l) users.value.push(normalizarEtiqueta(n))
-      else if (n.actualizadoEn > l.actualizadoEn) Object.assign(l, normalizarEtiqueta(n))
+      if (!l) users.value.push(normalizarEtiqueta(mezclarPacienteNube(null, n)))
+      else if (n.actualizadoEn > l.actualizadoEn) Object.assign(l, normalizarEtiqueta(mezclarPacienteNube(l, n)))
       else if (n.actualizadoEn < l.actualizadoEn) pushPaciente(l)
     }
     const idsNube = new Set(nube.map((n) => n.id))
@@ -220,6 +242,6 @@ export const useUsersStore = defineStore('users', () => {
 
   return {
     users, loaded, activeUserId, activeUser, load, ensureLoaded, sincronizarConNube, byId, labelOf, createUser, selectUser,
-    clearActive, giveConsent, withdrawConsent, updateProfile, updateAlias, deleteUserData, reset,
+    clearActive, declararMayorEdad, giveConsent, withdrawConsent, updateProfile, updateAlias, deleteUserData, reset,
   }
 })

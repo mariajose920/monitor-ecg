@@ -42,7 +42,7 @@ const accesos = [
         <li>Contexto seguro (HTTPS/localhost): <strong>{{ caps.secureContext ? 'Sí' : 'No' }}</strong></li>
         <li>Cifrado local (Web Crypto + IndexedDB): <strong>{{ caps.webCrypto && caps.indexedDb ? 'Sí' : 'No' }}</strong></li>
       </ul>
-      <p class="muted small">Todos los datos se guardan solo en este navegador, cifrados. Consulta el <RouterLink to="/privacidad">aviso de privacidad</RouterLink>.</p>
+      <p class="muted small">Los datos se guardan en este navegador, cifrados (una barrera básica, no una bóveda). Con cuenta, la nube es opcional y viene apagada. Consulta el <RouterLink to="/privacidad">aviso de privacidad</RouterLink>.</p>
     </section>
   </section>
 </template>

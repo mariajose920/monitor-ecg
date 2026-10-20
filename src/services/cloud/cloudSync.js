@@ -1,8 +1,10 @@
 import { ref } from 'vue'
 import { supabase, cloudEnabled } from './supabaseClient.js'
 import { createRateLimiter, CLIENT_LIMITS } from '@/utils/rateLimiter.js'
-import { camposVisibilidadNube, mapearMonitoreoPublico } from '@/services/monitoreos/visibilidad.js'
+import { mapearMonitoreoPublico } from '@/services/monitoreos/visibilidad.js'
 import { numeroDeEtiqueta } from '@/services/users/etiquetas.js'
+import { nubeActivada } from './nubeOptIn.js'
+import { filaSesionNube, filaPacienteNube, puedeSubirPaciente, eventoParaNube } from './datosNube.js'
 import { EVENTOS_SOLO_SERVIDOR } from '@/services/audit/auditLog.js'
 import { createAuditOutbox } from './auditOutbox.js'
 import { getDb } from '@/services/storage/db.js'
@@ -47,6 +49,14 @@ function encolar(fn) {
  * sin cuenta no se sube nada a la nube (A.9.4.1, A.18.1.4).
  */
 export const cloudCuenta = ref(null) // { id, email } | null
+
+/**
+ * C-03: con cuenta, la nube es OPCIONAL y viene apagada. Mientras no se active, no se sube ningún paciente ni monitoreo
+ * (los borradores nunca se suben, estén o no activadas). Las bajas (borrados) sí se propagan: solo envían ids.
+ */
+export function nubeDatosActiva() {
+  return cloudEnabled && !!cloudCuenta.value && nubeActivada.value === true
+}
 export async function ensureCloudSession() {
   if (!cloudEnabled) return false
   try {
@@ -79,51 +89,30 @@ function sinError({ error }) {
 
 /** Sube/actualiza los metadatos de una sesión (participantes seudonimizados). */
 export function pushSession(meta, forzar = false) {
-  if (!cloudEnabled) return Promise.resolve()
+  // Los borradores (sin "Guardar") y todo con la nube apagada se quedan en el dispositivo.
+  if (!nubeDatosActiva() || meta.guardado === false || meta.estado === 'activa') return Promise.resolve()
   const nueva = !sesionesConocidas.has(meta.id)
   if (nueva && !forzar && !permitir('session')) return Promise.resolve()
   sesionesConocidas.add(meta.id)
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
-    const vis = camposVisibilidadNube(meta)
-    const pacienteId = meta.participantes?.[0]?.usuarioId ?? null
-    sinError(await supabase.from('sesiones').upsert({
-      id: meta.id,
-      paciente_id: pacienteId,
-      visibilidad: vis.visibilidad,
-      compartir_perfil: vis.compartir_perfil,
-      inicio: meta.inicio,
-      fin: meta.fin,
-      estado: meta.estado,
-      motivo_fin: meta.motivoFin,
-      datos: {
-        participantes: meta.participantes,
-        parametrosAplicados: meta.parametrosAplicados,
-        notas: meta.notas,
-        nombre: meta.nombre ?? null,
-        guardado: meta.guardado !== false,
-        actividadPrincipal: meta.actividadPrincipal ?? null,
-        ...(vis.perfilCompartido ? { perfilCompartido: vis.perfilCompartido } : {}),
-      },
-      actualizado_en: new Date().toISOString(),
-    }))
+    sinError(await supabase.from('sesiones').upsert(filaSesionNube(meta)))
   })
 }
 
-/** Sube un bloque de ~2 s de muestras. */
-export function pushChunk(sessionId, canal, chunk) {
-  if (!cloudEnabled || !permitir('chunk')) return Promise.resolve()
-  return encolar(async () => {
-    sinError(await supabase.from('bloques_muestras').upsert({
-      sesion_id: sessionId,
-      canal,
-      seq: chunk.seq,
-      t: Array.from(chunk.t),
-      ecg_raw: Array.from(chunk.raw),
-      leads_off: Array.from(chunk.lo),
-      bpm: chunk.bpm ? Array.from(chunk.bpm) : null,
-    }))
-  })
+/** Igual que pushSession pero fuera de la cola y PROPAGANDO el error (subida completa de un monitoreo guardado). */
+export async function upsertSesion(meta) {
+  if (!nubeDatosActiva() || meta.guardado === false || meta.estado !== 'finalizada') throw new Error('La nube no está activada para esta cuenta.')
+  if (!(await ensureCloudSession())) throw new Error('No hay conexión con la nube.')
+  sinError(await supabase.from('sesiones').upsert(filaSesionNube(meta)))
+  sesionesConocidas.add(meta.id)
+}
+
+/** Igual que pushPaciente pero fuera de la cola y propagando el error. */
+export async function upsertPaciente(u) {
+  if (!nubeDatosActiva() || !puedeSubirPaciente(u)) throw new Error('El paciente no se puede subir (nube desactivada o sin declaración de mayoría de edad).')
+  if (!(await ensureCloudSession())) throw new Error('No hay conexión con la nube.')
+  sinError(await supabase.from('pacientes').upsert(filaPacienteNube(u)))
 }
 
 /** Borra en la nube las sesiones indicadas (derecho de supresión, SEC-30/31). */
@@ -213,7 +202,10 @@ export function pushAudit(tipo, _actor, detalle) {
   if (!cloudEnabled || EVENTOS_SOLO_SERVIDOR.includes(tipo)) return Promise.resolve()
   const cuentaId = cloudCuenta.value?.id
   if (!cuentaId) return Promise.resolve() // sin cuenta no se sube nada
-  return auditOutbox.enqueue({ tipo, detalle: detalle ?? {}, cuentaId }).then(() => vaciarAuditoria())
+  // Con la nube apagada solo salen eventos de seguridad mínimos y sin identificadores de paciente ni de sesión (C-03).
+  const ev = eventoParaNube(tipo, detalle, { nubeActiva: nubeActivada.value === true })
+  if (!ev) return Promise.resolve()
+  return auditOutbox.enqueue({ tipo: ev.tipo, detalle: ev.detalle, cuentaId }).then(() => vaciarAuditoria())
 }
 
 /** Parámetros globales definidos por el administrador (RF15, RF26, RF27). */
@@ -304,27 +296,30 @@ export async function fetchServerTime() {
 // Pacientes (propiedad de la cuenta, RLS: solo el propietario) y lectura de monitoreos públicos.
 // ---------------------------------------------------------------------------------------------
 
-const filaPaciente = (u) => ({
-  id: u.id,
-  etiqueta: u.etiqueta,
-  alias: u.alias ?? null,
-  perfil: u.consentimiento ? (u.perfil ?? null) : null,
-  consentimiento: u.consentimiento ?? null,
-  creado_en: u.creadoEn,
-  actualizado_en: u.actualizadoEn,
-})
-
 /** @param {{alConflictoEtiqueta?: () => void}} [o] se invoca si el servidor rechaza la etiqueta por duplicada en la cuenta (23505, C-21) */
 export function pushPaciente(u, { alConflictoEtiqueta } = {}) {
-  if (!cloudEnabled) return Promise.resolve()
+  // Solo con la nube activada y con la declaración de mayoría de edad; solo etiqueta (+ perfil con consentimiento vigente); nunca el alias.
+  if (!nubeDatosActiva() || !puedeSubirPaciente(u)) return Promise.resolve()
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
-    const { error } = await supabase.from('pacientes').upsert(filaPaciente(u))
+    const { error } = await supabase.from('pacientes').upsert(filaPacienteNube(u))
     if (error?.code === '23505' && alConflictoEtiqueta) {
       setTimeout(() => alConflictoEtiqueta(), 0)
       return
     }
     if (error) throw error
+  })
+}
+
+/**
+ * Retiro del consentimiento: llega a la nube AUNQUE la nube esté apagada ahora (solo actualiza una fila que ya existe; nunca
+ * crea ni sube datos nuevos). El servidor, además, pasa a privado lo público de ese paciente.
+ */
+export function retirarConsentimientoNube(u) {
+  if (!cloudEnabled || !cloudCuenta.value) return Promise.resolve()
+  return encolar(async () => {
+    if (!(await ensureCloudSession())) return
+    sinError(await supabase.from('pacientes').update({ consentimiento: null, perfil: null, actualizado_en: new Date().toISOString() }).eq('id', u.id))
   })
 }
 
@@ -345,9 +340,10 @@ export async function fetchPacientes() {
     id: f.id,
     numero: numeroDeEtiqueta(f.etiqueta),
     etiqueta: f.etiqueta,
-    alias: f.alias,
+    alias: null, // el alias solo existe en el dispositivo
     perfil: f.perfil,
     consentimiento: f.consentimiento,
+    declaracion: f.declaracion ?? null,
     creadoEn: f.creado_en,
     actualizadoEn: f.actualizado_en,
   }))
@@ -427,6 +423,7 @@ export async function eliminarMiCuenta() {
 
 /** Sube sesiones y bloques existentes con reintentos ante la cuota por minuto del servidor. */
 export async function subirBloquesConReintento(sesionId, canal, chunk, intentos = 4) {
+  if (!nubeDatosActiva()) throw new Error('La nube no está activada para esta cuenta.')
   for (let i = 0; i < intentos; i++) {
     const { error } = await supabase.from('bloques_muestras').upsert({
       sesion_id: sesionId, canal, seq: chunk.seq,
@@ -434,16 +431,12 @@ export async function subirBloquesConReintento(sesionId, canal, chunk, intentos 
       bpm: chunk.bpm ? Array.from(chunk.bpm) : null,
     })
     if (!error) return true
-    if (error.code !== 'P0001') return false
+    if (error.code !== 'P0001') throw error // ECG01 (tope de almacenamiento), permisos, etc.: no se reintenta
     await new Promise((r) => setTimeout(r, 15_000))
   }
-  return false
+  throw new Error('Demasiadas solicitudes seguidas a la nube.')
 }
 
-export async function subirSesionDirecta(meta) {
-  await pushSession(meta, true)
-  await cola.catch(() => {})
-}
 
 // ---------------------------------------------------------------------------------------------
 // Moderación de lo público y acceso excepcional del administrador (C-04, C-06). Todo por RPC en el servidor.

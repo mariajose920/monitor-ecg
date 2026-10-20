@@ -1,6 +1,7 @@
 import { aplicarMetadatos, puedeEditar, puedeEliminar, validarMetadatos } from './catalog.js'
 import { shortId } from '@/utils/ids.js'
 import { validarVisibilidad, visibilidadDe, perfilPublicable } from './visibilidad.js'
+import { crearConsentimientoPublicacion, publicacionVigente } from '@/services/privacidad/consentimiento.js'
 
 /**
  * Casos de uso sobre monitoreos guardados: guardar, editar, descartar y eliminar
@@ -9,22 +10,28 @@ import { validarVisibilidad, visibilidadDe, perfilPublicable } from './visibilid
  *
  * @param {object} deps
  * @param {{getSession:Function, saveSession:Function, deleteSession:Function}} deps.repo
- * @param {{pushSession:Function, deleteCloudSessions:Function}} deps.cloud
+ * @param {{sincronizarMonitoreo:Function, deleteCloudSessions:Function}} deps.cloud  sincronizarMonitoreo sube un monitoreo GUARDADO (solo con la nube activada)
  * @param {Function} deps.audit (evento, actor, detalles)
  */
 /**
  * Aplica la elección de visibilidad (si viene en datos). Publicar exige cuenta, consentimiento explícito y,
  * para incluir datos del paciente, una segunda casilla. Privado borra cualquier copia del perfil.
  */
-export function aplicarVisibilidad(meta, datos, { cuenta = false, perfilDe = null } = {}) {
+export function aplicarVisibilidad(meta, datos, { cuenta = false, perfilDe = null, cuentaId = null, nube = true, declarados = null } = {}) {
   if (!datos || datos.visibilidad === undefined) return meta
   if (datos.visibilidad === 'publico' && !cuenta) throw new Error('Para publicar un monitoreo necesitas iniciar sesión con una cuenta.')
+  if (datos.visibilidad === 'publico' && declarados && !declarados(meta)) throw new Error('Para publicar, declara antes la mayoría de edad de la persona medida (Pacientes → Ver → Declarar).')
+  if (datos.visibilidad === 'publico' && !nube) throw new Error('Para publicar un monitoreo activa antes "Guardar mis datos en la nube" en Mi cuenta.')
   const perfil = perfilDe ? perfilPublicable(perfilDe(meta)) : null
   const v = validarVisibilidad({ ...datos, tienePerfil: perfil !== null })
   if (!v.ok) throw new Error(Object.values(v.errores)[0])
   const out = { ...meta, visibilidad: v.valores.visibilidad, compartirPerfil: v.valores.compartirPerfil }
   if (v.valores.compartirPerfil) out.perfilCompartido = perfil
   else delete out.perfilCompartido
+  // C-04/C-02: consentimiento de publicación POR MONITOREO (versión y fecha); el servidor lo exige para aceptar 'publico'.
+  if (out.visibilidad === 'publico') {
+    if (!publicacionVigente(meta.consentPublicacion)) out.consentPublicacion = crearConsentimientoPublicacion({ por: cuentaId })
+  } else delete out.consentPublicacion
   return out
 }
 
@@ -42,7 +49,7 @@ export function createMonitoreoService({ repo, cloud, audit }) {
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
     const nuevo = aplicarVisibilidad(aplicarMetadatos(meta, datos, { guardar: true }), datos, { cuenta, perfilDe })
     await repo.saveSession(nuevo)
-    cloud.pushSession(nuevo)
+    cloud.sincronizarMonitoreo(nuevo) // sin esperar: solo si la nube está activada; un borrador NUNCA llega aquí
     await audit('SESSION_SAVED', actor, { sesion: shortId(id), actividad: nuevo.actividadPrincipal ?? null })
     if (visibilidadDe(nuevo) !== visibilidadDe(meta)) await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo) })
     return nuevo
@@ -54,7 +61,7 @@ export function createMonitoreoService({ repo, cloud, audit }) {
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
     const nuevo = aplicarVisibilidad(aplicarMetadatos(meta, datos), datos, { cuenta, perfilDe })
     await repo.saveSession(nuevo)
-    cloud.pushSession(nuevo)
+    cloud.sincronizarMonitoreo(nuevo)
     await audit('SESSION_UPDATED', actor, { sesion: shortId(id) })
     if (visibilidadDe(nuevo) !== visibilidadDe(meta)) await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo) })
     return nuevo
@@ -67,20 +74,19 @@ export function createMonitoreoService({ repo, cloud, audit }) {
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
     const nuevo = aplicarVisibilidad(meta, datos, { cuenta, perfilDe })
     await repo.saveSession(nuevo)
-    cloud.pushSession(nuevo)
+    cloud.sincronizarMonitoreo(nuevo)
     if (visibilidadDe(nuevo) !== visibilidadDe(meta) || nuevo.compartirPerfil !== meta.compartirPerfil) {
       await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo), perfil: nuevo.compartirPerfil === true })
     }
     return nuevo
   }
 
-  /** Descarta un borrador: borra sesión y bloques (local y nube). */
+  /** Descarta un borrador: borra sesión y bloques locales (un borrador nunca se sube; no hay nada que borrar en la nube). */
   async function descartar(id, { actor = 'system', ctx = {} } = {}) {
     const meta = await cargar(id)
     if (meta.guardado !== false && meta.estado !== 'activa') throw new Error('Solo se pueden descartar monitoreos sin guardar; usa Eliminar.')
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
     await repo.deleteSession(id)
-    cloud.deleteCloudSessions([id])
     await audit('SESSION_DISCARDED', actor, { sesion: shortId(id) })
   }
 

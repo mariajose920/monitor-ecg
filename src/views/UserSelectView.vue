@@ -8,8 +8,11 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import LinkLocalBanner from '@/components/account/LinkLocalBanner.vue'
+import CloudOptInBanner from '@/components/account/CloudOptInBanner.vue'
 import { useAccountStore } from '@/stores/account.js'
-import { useUsersStore, consentimientoVigente, ALIAS_RE } from '@/stores/users.js'
+import { useUsersStore, consentimientoVigente, declaracionVigente } from '@/stores/users.js'
+import { validarAlias } from '@/services/privacidad/alias.js'
+import { requiereReconsentimiento, TEXTO_DECLARACION_MAYOR_EDAD } from '@/services/privacidad/consentimiento.js'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useSessionStore } from '@/stores/session.js'
 import { useAuthStore } from '@/stores/auth.js'
@@ -40,6 +43,7 @@ const modoDialogo = ref(null) // 'crear' | 'editar'
 const objetivoId = ref(null)
 const verId = ref(null)
 const aliasForm = ref('')
+const declaraForm = ref(false)
 const errorAlias = ref('')
 const verConsentimiento = ref(false)
 const confirmarRetiro = ref(false)
@@ -60,6 +64,7 @@ const conteo = (u) => monitoreos.conteos[u.id] ?? 0
 
 function abrirCrear() {
   aliasForm.value = ''
+  declaraForm.value = false
   errorAlias.value = ''
   modoDialogo.value = 'crear'
 }
@@ -79,14 +84,19 @@ function cerrarDialogo() {
 async function enviarAlias() {
   errorAlias.value = ''
   const a = aliasForm.value.trim()
-  if (a && !ALIAS_RE.test(a)) {
-    errorAlias.value = 'Solo letras sin tilde, números, espacio, _ y - (máx. 20).'
+  const errA = validarAlias(a)
+  if (errA) {
+    errorAlias.value = errA
+    return
+  }
+  if (modoDialogo.value === 'crear' && !declaraForm.value) {
+    errorAlias.value = 'Confirma que la persona medida es mayor de 18 años.'
     return
   }
   ocupado.value = true
   try {
     if (modoDialogo.value === 'crear') {
-      const u = await users.createUser(a)
+      const u = await users.createUser(a, { declaraMayorEdad: declaraForm.value })
       users.selectUser(u.id)
       notify(`Creado ${u.etiqueta} y elegido como paciente activo.`, { tipo: 'ok' })
       cerrarDialogo()
@@ -118,6 +128,11 @@ function ordenarPor(id) {
 }
 
 const ariaSort = (id) => (campo.value === id ? (dir.value === 'asc' ? 'ascending' : 'descending') : 'none')
+
+async function declarar(u) {
+  await users.declararMayorEdad(u.id)
+  notify(`Declaración registrada para ${u.etiqueta}.`, { tipo: 'ok' })
+}
 
 async function aceptarConsentimiento() {
   verConsentimiento.value = false
@@ -171,6 +186,7 @@ async function eliminar() {
       Modo <strong>sin cuenta</strong>: los seudónimos <strong>«Paciente N»</strong> viven solo en este dispositivo. <RouterLink to="/acceso">Inicia sesión</RouterLink> para administrarlos desde tu cuenta.
       La correspondencia seudónimo ↔ persona, si se necesita, se gestiona <strong>fuera de la app</strong>.
     </p>
+    <CloudOptInBanner />
     <LinkLocalBanner />
 
     <div class="toolbar">
@@ -243,7 +259,15 @@ async function eliminar() {
         <dt>Actualizado</dt><dd>{{ formatFecha(detalle.actualizadoEn) }}</dd>
         <dt>Monitoreos guardados</dt><dd>{{ conteo(detalle) }}</dd>
         <dt>Consentimiento</dt>
-        <dd>{{ consentimientoVigente(detalle) ? `Vigente (v${detalle.consentimiento.consentVersion}, ${formatFecha(detalle.consentimiento.acceptedAt)})` : 'No otorgado' }}</dd>
+        <dd>{{ consentimientoVigente(detalle) ? `Vigente (v${detalle.consentimiento.consentVersion}, ${formatFecha(detalle.consentimiento.acceptedAt)})` : requiereReconsentimiento(detalle) ? `Caducado (v${detalle.consentimiento.consentVersion}): hay que aceptar el texto nuevo` : 'No otorgado' }}</dd>
+        <dt>Mayoría de edad</dt>
+        <dd>
+          <template v-if="declaracionVigente(detalle)">Declarada ({{ formatFecha(detalle.declaracion.fecha) }})</template>
+          <template v-else>
+            Sin declarar: no se sube a la nube ni se publica.
+            <button class="btn small" :disabled="!puedeGestionar(detalle)" data-testid="declarar-mayor-edad" @click="declarar(detalle)">Declarar que es mayor de 18 años</button>
+          </template>
+        </dd>
       </dl>
       <p class="small muted">Los datos opcionales (edad, peso, actividad habitual) solo se muestran y editan al editar el paciente activo.</p>
       <div class="row">
@@ -261,9 +285,12 @@ async function eliminar() {
         <div class="field">
           <label for="alias">Alias (opcional)</label>
           <input id="alias" v-model="aliasForm" type="text" maxlength="20" autocomplete="off" placeholder="p. ej. Grupo A-2" aria-describedby="alias-ayuda">
-          <p id="alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT, correo ni otros datos identificables.</strong> El seudónimo «Paciente N» lo asigna el sistema.</p>
-          <p v-if="errorAlias" class="error-text" role="alert">{{ errorAlias }}</p>
+          <p id="alias-ayuda" class="hint"><strong>No uses nombres reales, RUT, correo ni otros datos identificables.</strong> El alias solo se guarda en este dispositivo y nunca se sube. El seudónimo «Paciente N» lo asigna el sistema.</p>
         </div>
+        <div v-if="modoDialogo === 'crear'" class="field">
+          <label class="check"><input v-model="declaraForm" type="checkbox" data-testid="declara-mayor-edad"> {{ TEXTO_DECLARACION_MAYOR_EDAD }}</label>
+        </div>
+        <p v-if="errorAlias" class="error-text" role="alert">{{ errorAlias }}</p>
       </form>
       <template v-if="modoDialogo === 'editar' && objetivo">
         <h3>Datos opcionales</h3>
@@ -283,7 +310,7 @@ async function eliminar() {
       </template>
     </BaseDialog>
 
-    <ConsentDialog v-if="verConsentimiento && objetivo" :etiqueta="objetivo.etiqueta" @acepto="aceptarConsentimiento" @no-acepto="rechazarConsentimiento" />
+    <ConsentDialog v-if="verConsentimiento && objetivo" :etiqueta="objetivo.etiqueta" :reconsentimiento="requiereReconsentimiento(objetivo)" @acepto="aceptarConsentimiento" @no-acepto="rechazarConsentimiento" />
 
     <BaseDialog v-if="confirmarRetiro" titulo="Retirar consentimiento" @cerrar="confirmarRetiro = false">
       <p>Se borrarán de inmediato los datos opcionales (edad, peso, actividad física). Los monitoreos se conservan.</p>

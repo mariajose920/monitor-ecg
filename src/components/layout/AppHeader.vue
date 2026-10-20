@@ -124,7 +124,7 @@ function alternarTema() {
             <template v-else>Sin paciente · Elegir</template>
           </span>
         </RouterLink>
-        <RouterLink :to="cuenta.iniciada ? '/pacientes' : '/acceso'" :class="['chip', 'chip-cuenta', cuenta.iniciada ? 'ok' : 'neutral']" data-testid="chip-cuenta">
+        <RouterLink :to="cuenta.iniciada ? '/cuenta' : '/acceso'" :class="['chip', 'chip-cuenta', cuenta.iniciada ? 'ok' : 'neutral']" data-testid="chip-cuenta">
           <span class="chip-ico" aria-hidden="true">🔐</span>
           <span class="punto" aria-hidden="true">{{ cuenta.iniciada ? '●' : '○' }}</span>
           <span class="chip-txt">{{ cuenta.iniciada ? 'Con cuenta' : 'Sin cuenta' }}</span>

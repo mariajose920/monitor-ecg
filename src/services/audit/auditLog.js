@@ -30,7 +30,12 @@ export const AUDIT_EVENTS = Object.freeze([
   'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_RECOVERY_REQUESTED',
   // TANDA 1 (C-04, C-06, C-08): contraseña cambiada desde la sesión; acceso excepcional del admin; moderación de contenido público
   'ACCOUNT_PASSWORD_CHANGED', 'ADMIN_DATA_ACCESS', 'CONTENT_REPORTED', 'CONTENT_REMOVED', 'CONTENT_REPORT_REVIEWED',
+  // TANDA 2 (C-03, C-07, C-10): nube opcional por cuenta; cierre por inactividad; evidencias del SGSI (auditoría interna, revisión por la dirección)
+  'CLOUD_SYNC_CHANGED', 'SESSION_IDLE_TIMEOUT', 'ISMS_EVIDENCE_RECORDED',
 ])
+
+/** Eventos de la TANDA 2 (están en supabase/migracion_tanda2.sql y en schema.sql; tests/schema.spec.js lo verifica). */
+export const EVENTOS_TANDA2 = Object.freeze(['CLOUD_SYNC_CHANGED', 'SESSION_IDLE_TIMEOUT', 'ISMS_EVIDENCE_RECORDED'])
 
 /**
  * Eventos que SOLO inserta el servidor en la nube (origen 'servidor' en public.tipos_evento): la función SQL que hace la

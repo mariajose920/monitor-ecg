@@ -6,7 +6,7 @@
 -- ESTADO / ORDEN (H-18): este archivo es la FUENTE ÚNICA para una instalación nueva e integra TODO, incluida la TANDA 1
 -- (migracion_endurecimiento_2.sql: sus sentencias están copiadas al final de este archivo, entre las marcas CUERPO).
 -- Para una base ya existente aplica, en este orden, solo lo que falte:
---   migracion_cuentas_pacientes -> migracion_endurecimiento -> migracion_admin_mfa -> migracion_admin_roles -> migracion_endurecimiento_2.
+--   migracion_cuentas_pacientes -> migracion_endurecimiento -> migracion_admin_mfa -> migracion_admin_roles -> migracion_endurecimiento_2 -> migracion_tanda2.
 -- Las migraciones 1-4 son históricas (se abortan si ya se aplicó la 2) y migracion_eventos_camara.sql no hace nada.
 --
 -- ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017), Anexo A
@@ -1719,3 +1719,149 @@ $$;
 --   select tipo, origen from public.tipos_evento order by 1;
 --   select has_table_privilege('authenticated', 'public.auditoria', 'insert');   -- debe dar false
 -- <<< FIN DEL CUERPO <<<
+
+-- ============================================================
+-- TANDA 2 (privacidad en la app): mismo cuerpo que supabase/migracion_tanda2.sql
+-- ============================================================
+
+-- >>> CUERPO (schema.sql incluye este mismo cuerpo desde aquí hasta el final) >>>
+
+-- ------------------------------------------------------------
+-- 1. Declaración de mayoría de edad del paciente (C-18)
+-- ------------------------------------------------------------
+alter table public.pacientes add column if not exists declaracion jsonb;
+select public._agregar_check('public.pacientes', 'pacientes_declaracion_tamano', 'declaracion is null or pg_column_size(declaracion) <= 512');
+
+-- ------------------------------------------------------------
+-- 2. Limpieza de lo que no debe estar en la nube (C-17)
+-- ------------------------------------------------------------
+create or replace function public._limpiar_datos_sesion(d jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when jsonb_typeof(d) is distinct from 'object' then d
+    else (d - 'notas' - 'nombre' - 'parametrosAplicados')
+      || case when jsonb_typeof(d -> 'participantes') = 'array'
+              then jsonb_build_object('participantes', coalesce((
+                     select jsonb_agg((p - 'eventos') #- '{fuente,info}')
+                       from jsonb_array_elements(d -> 'participantes') p), '[]'::jsonb))
+              else '{}'::jsonb end
+  end;
+$$;
+revoke all on function public._limpiar_datos_sesion(jsonb) from public, anon, authenticated;
+
+-- El alias nunca se guarda en la nube (aunque un cliente antiguo lo envíe).
+create or replace function public.tg_paciente_alias()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.alias := null;
+  return new;
+end;
+$$;
+drop trigger if exists paciente_alias on public.pacientes;
+create trigger paciente_alias before insert or update on public.pacientes
+  for each row execute function public.tg_paciente_alias();
+revoke all on function public.tg_paciente_alias() from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 3. Retiro del consentimiento / de la declaración: lo público del paciente vuelve a privado (C-04, punto 5)
+-- ------------------------------------------------------------
+create or replace function public.tg_paciente_perfil()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.perfil is null and old.perfil is not null then
+    update public.sesiones
+       set compartir_perfil = false, datos = datos - 'perfilCompartido'
+     where paciente_id = new.id;
+  end if;
+  -- Retiro del consentimiento (o de la declaración de mayoría de edad): todo lo suyo que estaba público pasa a privado.
+  if (old.consentimiento is not null and new.consentimiento is null)
+     or (old.declaracion is not null and new.declaracion is null) then
+    update public.sesiones
+       set visibilidad = 'privado', compartir_perfil = false,
+           datos = datos - 'perfilCompartido' - 'consentPublicacion'
+     where paciente_id = new.id and visibilidad = 'publico';
+  end if;
+  new.actualizado_en := now();
+  return new;
+end;
+$$;
+drop trigger if exists paciente_perfil on public.pacientes;
+create trigger paciente_perfil before update on public.pacientes
+  for each row execute function public.tg_paciente_perfil();
+revoke all on function public.tg_paciente_perfil() from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 4. Publicación: consentimiento por monitoreo + mayoría de edad; limpieza de datos (C-04, C-17)
+-- ------------------------------------------------------------
+create or replace function public.tg_sesion_paciente()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_ya_publico boolean;
+begin
+  if new.paciente_id is not null and not exists (
+    select 1 from public.pacientes p where p.id = new.paciente_id and p.propietario = new.propietario) then
+    raise exception 'El paciente no pertenece a la cuenta' using errcode = '42501';
+  end if;
+  if new.visibilidad = 'publico' and exists (select 1 from public.retiros_contenido r where r.sesion_id = new.id) then
+    raise exception 'Operación no permitida' using errcode = '42501';
+  end if;
+  new.datos := public._limpiar_datos_sesion(new.datos);
+  if new.visibilidad = 'privado' then
+    new.compartir_perfil := false;
+    new.datos := new.datos - 'perfilCompartido' - 'consentPublicacion';
+  else
+    -- Pasar a 'publico' (o crear ya público) exige el consentimiento de publicación de ESTE monitoreo (versión 2.0, con fecha)
+    -- y que el paciente tenga la declaración de mayoría de edad. Lo que ya era público antes de esta migración no se re-evalúa
+    -- en cada edición (el INSERT de un upsert sobre una fila ya pública cuenta como edición).
+    select (s.visibilidad = 'publico') into v_ya_publico from public.sesiones s where s.id = new.id;
+    if not coalesce(v_ya_publico, false) then
+      if coalesce(new.datos #>> '{consentPublicacion,version}', '') <> '2.0'
+         or coalesce(new.datos #>> '{consentPublicacion,fecha}', '') = '' then
+        raise exception 'Falta el consentimiento de publicación' using errcode = '22023';
+      end if;
+      if new.paciente_id is null or not exists (
+           select 1 from public.pacientes p
+            where p.id = new.paciente_id and (p.declaracion ->> 'mayorEdad') = 'true') then
+        raise exception 'Falta la declaración de mayoría de edad' using errcode = '22023';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists sesion_paciente on public.sesiones;
+create trigger sesion_paciente before insert or update on public.sesiones
+  for each row execute function public.tg_sesion_paciente();
+revoke all on function public.tg_sesion_paciente() from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 5. Limpieza de lo ya subido (una vez; idempotente)
+-- ------------------------------------------------------------
+update public.pacientes set alias = null where alias is not null;
+update public.sesiones set datos = public._limpiar_datos_sesion(datos)
+ where datos ? 'notas' or datos ? 'nombre' or datos ? 'parametrosAplicados'
+    or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(datos -> 'participantes') = 'array' then datos -> 'participantes' else '[]'::jsonb end) p
+                where p ? 'eventos' or (p -> 'fuente') ? 'info');
+
+-- ------------------------------------------------------------
+-- 6. Lista blanca de auditoría: eventos nuevos (la única lista es tipos_evento; tests/schema.spec.js la compara con la app)
+-- ------------------------------------------------------------
+insert into public.tipos_evento (tipo, origen) values
+  ('CLOUD_SYNC_CHANGED', 'cliente'), ('SESSION_IDLE_TIMEOUT', 'cliente'), ('ISMS_EVIDENCE_RECORDED', 'cliente')
+on conflict (tipo) do update set origen = excluded.origen;
+
+-- >>> FIN DEL CUERPO <<<

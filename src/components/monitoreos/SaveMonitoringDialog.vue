@@ -4,6 +4,8 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import { ACTIVIDADES } from '@/data/activities.js'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import { cloudCuenta } from '@/services/cloud/cloudSync.js'
+import { nubeActivada } from '@/services/cloud/nubeOptIn.js'
+import { TEXTO_CONSENTIMIENTO_PUBLICACION } from '@/services/privacidad/consentimiento.js'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { validarVisibilidad, visibilidadDe, perfilPublicable, CAMPOS_PUBLICADOS, CAMPOS_NO_PUBLICADOS } from '@/services/monitoreos/visibilidad.js'
 import { validarMetadatos, sugerirNombre, actividadPrincipal, NOMBRE_MAX, NOTA_MAX } from '@/services/monitoreos/catalog.js'
@@ -26,6 +28,7 @@ const form = reactive({
 })
 const monitoreos = useMonitoreosStore()
 const conCuenta = computed(() => !!cloudCuenta.value)
+const puedePublicar = computed(() => conCuenta.value && nubeActivada.value)
 const hayPerfil = computed(() => perfilPublicable(monitoreos.perfilDe(props.sesion)) !== null)
 const vis = reactive({
   visibilidad: visibilidadDe(props.sesion),
@@ -39,11 +42,11 @@ const titulo = computed(() => (props.modo === 'guardar' ? 'Guardar monitoreo' : 
 
 function enviar() {
   const v = validarMetadatos(form)
-  const extra = conCuenta.value ? validarVisibilidad({ ...vis, tienePerfil: hayPerfil.value }) : { ok: true, errores: {} }
+  const extra = puedePublicar.value ? validarVisibilidad({ ...vis, tienePerfil: hayPerfil.value }) : { ok: true, errores: {} }
   errores.value = { ...v.errores, ...extra.errores }
   if (v.ok && extra.ok) {
     // Sin cuenta no se envía visibilidad: el monitoreo se queda privado y local.
-    emit('guardar', conCuenta.value ? { ...v.valores, ...vis } : v.valores)
+    emit('guardar', puedePublicar.value ? { ...v.valores, ...vis } : v.valores)
   }
 }
 </script>
@@ -54,7 +57,7 @@ function enviar() {
       <div class="field">
         <label for="mon-nombre">Nombre del monitoreo</label>
         <input id="mon-nombre" v-model="form.nombre" type="text" :maxlength="NOMBRE_MAX" autocomplete="off" :aria-invalid="!!errores.nombre" aria-describedby="mon-nombre-ayuda">
-        <p id="mon-nombre-ayuda" class="hint">Letras, números, espacio y . , : ( ) / # _ - (máx. {{ NOMBRE_MAX }}).</p>
+        <p id="mon-nombre-ayuda" class="hint">Letras, números, espacio y . , : ( ) / # _ - (máx. {{ NOMBRE_MAX }}). El nombre solo se guarda en este dispositivo (no se sube).</p>
         <p v-if="errores.nombre" class="error-text" role="alert">{{ errores.nombre }}</p>
       </div>
       <div class="field">
@@ -67,16 +70,16 @@ function enviar() {
       <div class="field">
         <label for="mon-notas">Nota (opcional)</label>
         <textarea id="mon-notas" v-model="form.notas" rows="3" :maxlength="NOTA_MAX" aria-describedby="mon-notas-ayuda" />
-        <p id="mon-notas-ayuda" class="hint"><strong>No escribas nombres, RUT, correo ni otros datos que identifiquen a una persona.</strong> Máx. {{ NOTA_MAX }} caracteres.</p>
+        <p id="mon-notas-ayuda" class="hint"><strong>No escribas nombres reales, RUT, correo ni otros datos que identifiquen a una persona.</strong> La nota solo se guarda en este dispositivo (no se sube). Máx. {{ NOTA_MAX }} caracteres.</p>
         <p v-if="errores.notas" class="error-text" role="alert">{{ errores.notas }}</p>
       </div>
       <fieldset class="field vis-box" data-testid="bloque-visibilidad">
         <legend>Visibilidad del monitoreo <DataClassBadge /></legend>
         <label class="radio"><input v-model="vis.visibilidad" type="radio" value="privado" name="mon-vis"> <strong>Privado</strong> · solo tú, dentro de tu cuenta (recomendado)</label>
-        <label class="radio"><input v-model="vis.visibilidad" type="radio" value="publico" name="mon-vis" :disabled="!conCuenta"> <strong>Público</strong> · cualquier persona con una cuenta podrá verlo (solo lectura)</label>
+        <label class="radio"><input v-model="vis.visibilidad" type="radio" value="publico" name="mon-vis" :disabled="!puedePublicar"> <strong>Público</strong> · cualquier persona con una cuenta podrá verlo (solo lectura)</label>
         <div v-if="vis.visibilidad === 'publico'" class="alert warn" data-testid="aviso-publico">
           <p><strong>Se publicará:</strong> {{ CAMPOS_PUBLICADOS.join(', ') }}. <strong>No se publicará:</strong> {{ CAMPOS_NO_PUBLICADOS.join(', ') }}. Puedes volver a privado cuando quieras y se retira de inmediato.</p>
-          <label class="check"><input v-model="vis.consentimientoPublicar" type="checkbox" data-testid="consentimiento-publicar"> Entiendo y acepto publicar la señal, el BPM, la actividad y la fecha de este monitoreo de forma anónima.</label>
+          <label class="check"><input v-model="vis.consentimientoPublicar" type="checkbox" data-testid="consentimiento-publicar"> {{ TEXTO_CONSENTIMIENTO_PUBLICACION }}</label>
           <p v-if="errores.consentimientoPublicar" class="error-text" role="alert">{{ errores.consentimientoPublicar }}</p>
           <template v-if="hayPerfil">
             <label class="check"><input v-model="vis.compartirPerfil" type="checkbox" data-testid="compartir-perfil"> Incluir datos del paciente (rango de edad, actividad…)</label>
@@ -86,11 +89,13 @@ function enviar() {
 
         </div>
       </fieldset>
-      <p v-if="!conCuenta" class="hint" data-testid="aviso-sin-cuenta">Sin cuenta, el monitoreo queda solo en este dispositivo y no se puede publicar. Inicia sesión para guardarlo en tu cuenta y poder publicarlo.</p>
+      <p v-if="!conCuenta" class="hint" data-testid="aviso-sin-cuenta">Sin cuenta, el monitoreo queda solo en este dispositivo y no se puede publicar. Inicia sesión y activa la nube para poder publicarlo.</p>
+      <p v-else-if="!nubeActivada" class="hint" data-testid="aviso-nube-apagada">«Guardar mis datos en la nube» está apagado: este monitoreo se guardará solo en este dispositivo y no se podrá publicar. Puedes activarlo en <RouterLink to="/cuenta">Mi cuenta</RouterLink>.</p>
+      <p v-else class="hint" data-testid="aviso-nube-activa">«Guardar mis datos en la nube» está activado: al guardar se copiará a tu nube (Supabase, EE. UU.) la señal, el BPM y la actividad. El nombre y la nota no se suben.</p>
     </form>
 
     <p v-if="confirmandoDescarte" class="alert danger" role="alert">
-      ¿Descartar este monitoreo? Se borrarán sus muestras de este navegador y de la nube. No se puede deshacer.
+      ¿Descartar este monitoreo? Se borrarán sus muestras de este navegador (un borrador nunca se envía a la nube). No se puede deshacer.
     </p>
 
     <template #acciones>

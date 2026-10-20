@@ -76,6 +76,7 @@ test.describe('Registro (/registro)', () => {
     await page.getByTestId('acepta-privacidad').check()
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
     await expect(page.getByText('Las contraseñas no coinciden.')).toBeVisible()
+    await expect(page.getByText('Debes declarar que eres mayor de 18 años')).toBeVisible()
   })
 
   test('con datos válidos pero sin nube no simula un alta ni confirma la existencia de cuentas', async ({ page }) => {
@@ -84,6 +85,7 @@ test.describe('Registro (/registro)', () => {
     await page.getByLabel('Contraseña', { exact: true }).fill('claveSegura2026')
     await page.getByLabel('Repite la contraseña').fill('claveSegura2026')
     await page.getByTestId('acepta-privacidad').check()
+    await page.getByTestId('mayor-edad').check()
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
     await expect(page.getByTestId('error-registro')).toContainText('no están disponibles')
     await expect(page.getByTestId('registro-ok')).toBeHidden()
@@ -116,6 +118,7 @@ test('el diálogo de guardar ofrece visibilidad: privado por defecto y público 
   test.setTimeout(90_000)
   await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByRole('button', { name: 'Crear paciente' }).click()
   await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
   await page.goto('/monitor')

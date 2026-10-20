@@ -4,17 +4,18 @@ import { newId, shortId } from '@/utils/ids.js'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
 import { SessionRecorder } from '@/services/acquisition/sessionRecorder.js'
 import { saveSession as saveSessionLocal, saveChunk } from '@/services/storage/sessionRepository.js'
-import { pushSession, pushChunk } from '@/services/cloud/cloudSync.js'
 import { audit } from '@/services/audit/auditService.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { useSettingsStore } from './settings.js'
 
 const clone = (o) => JSON.parse(JSON.stringify(o))
 
-/** Guarda en local (cifrado) y replica en la nube sin bloquear la medición. */
+/**
+ * Guarda SOLO en local (cifrado). Un monitoreo sin guardar es un borrador: ni sus metadatos ni su señal se suben a la nube
+ * (C-03); si la nube está activada, se sube todo de una vez cuando la persona pulsa "Guardar monitoreo".
+ */
 async function saveSession(meta) {
   await saveSessionLocal(meta)
-  pushSession(meta)
 }
 
 /**
@@ -88,7 +89,6 @@ export const useSessionStore = defineStore('session', () => {
       rt.recorder = new SessionRecorder({
         onChunk: async (chunk) => {
           await saveChunk(id, ch.id, chunk.seq, chunk)
-          pushChunk(id, ch.id, chunk)
         },
         onError: () => notify('Error al guardar datos de la sesión (¿almacenamiento lleno?).', { tipo: 'error' }),
       })

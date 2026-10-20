@@ -6,8 +6,8 @@ import { visibles, conteoPorUsuario, esUtilizable } from '@/services/monitoreos/
 import { useUsersStore } from './users.js'
 import { useAuthStore } from './auth.js'
 import { useSessionStore } from './session.js'
-import { cloudCuenta } from '@/services/cloud/cloudSync.js'
-import { consentimientoVigente } from './users.js'
+import { cloudCuenta, nubeDatosActiva } from '@/services/cloud/cloudSync.js'
+import { consentimientoVigente, declaracionVigente } from './users.js'
 
 /**
  * Lista compartida de monitoreos (sesiones) para Usuarios, Monitoreos, Comparar y Aprende.
@@ -55,7 +55,15 @@ export const useMonitoreosStore = defineStore('monitoreos', () => {
     const u = users.byId(meta?.participantes?.[0]?.usuarioId)
     return u && consentimientoVigente(u) ? u.perfil : null
   }
-  const opts = () => ({ actor: actor(), ctx: { usuarioId: users.activeUserId, esAdmin: auth.isAdmin }, cuenta: !!cloudCuenta.value, perfilDe })
+  const opts = () => ({
+    actor: actor(),
+    ctx: { usuarioId: users.activeUserId, esAdmin: auth.isAdmin },
+    cuenta: !!cloudCuenta.value,
+    cuentaId: cloudCuenta.value?.id ?? null,
+    nube: nubeDatosActiva(), // publicar exige la nube activada (lo público vive en la nube)
+    declarados: (meta) => (meta?.participantes ?? []).every((p) => declaracionVigente(users.byId(p.usuarioId))),
+    perfilDe,
+  })
 
   async function guardar(id, datos) {
     const m = await monitoreoService.guardar(id, datos, opts())

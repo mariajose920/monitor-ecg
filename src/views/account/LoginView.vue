@@ -5,12 +5,14 @@ import { useAccountStore } from '@/stores/account.js'
 import { AuthError } from '@/services/accounts/authService.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { safeRedirect, ACCESO_REDIRECT_WHITELIST } from '@/router/guards.js'
+import { valorInicialCompartido } from '@/services/cloud/almacenSesion.js'
+import { INACTIVIDAD_SESION_MIN } from '@/data/privacidad.js'
 
 /** Inicio de sesión (Supabase Auth). Errores genéricos: no revela si el correo existe (A.9.4.2). */
 const cuenta = useAccountStore()
 const router = useRouter()
 const route = useRoute()
-const form = reactive({ correo: '', password: '' })
+const form = reactive({ correo: '', password: '', equipoCompartido: valorInicialCompartido() })
 const errores = ref({})
 const mensaje = ref('')
 const ocupado = ref(false)
@@ -39,7 +41,7 @@ async function enviar() {
 <template>
   <section class="auth-card card" aria-labelledby="acceso-titulo">
     <h1 id="acceso-titulo">Iniciar sesión</h1>
-    <p class="muted">Con tu cuenta administras tus propios pacientes y tus monitoreos, que quedan guardados en la nube y solo tú puedes ver (salvo los que decidas publicar).</p>
+    <p class="muted">Con tu cuenta administras tus propios pacientes y monitoreos. Siguen guardándose en este dispositivo; solo si activas «Guardar mis datos en la nube» (apagado por defecto) se copian a la nube, y solo tú los ves salvo los que decidas publicar.</p>
 
     <p v-if="cuenta.iniciada" class="alert info" role="status">
       Ya tienes la sesión iniciada como <strong>{{ cuenta.cuenta.email }}</strong>. <RouterLink to="/pacientes">Ir a mis pacientes</RouterLink>
@@ -56,6 +58,13 @@ async function enviar() {
         <input id="acc-pass" v-model="form.password" type="password" autocomplete="current-password" maxlength="128" :aria-invalid="!!errores.password" aria-describedby="acc-pass-err">
         <p id="acc-pass-err" class="error-text" role="alert">{{ errores.password }}</p>
       </div>
+      <div class="field">
+        <label class="check"><input v-model="form.equipoCompartido" type="checkbox" data-testid="equipo-compartido"> Estoy en un equipo compartido</label>
+        <p class="hint">
+          Marcada: la sesión se pierde al cerrar la pestaña, se cierra tras {{ INACTIVIDAD_SESION_MIN }} min sin actividad y, al salir, se quitan tus datos de este equipo.
+          Desmarca solo si el equipo es tuyo.
+        </p>
+      </div>
       <p v-if="mensaje && !Object.keys(errores).length" class="alert danger" role="alert" data-testid="error-acceso">{{ mensaje }}</p>
       <button type="submit" class="btn primary block" :disabled="ocupado">Iniciar sesión</button>
     </form>
@@ -65,7 +74,7 @@ async function enviar() {
       <li><RouterLink to="/registro">Crear una cuenta</RouterLink></li>
       <li><RouterLink to="/pacientes" data-testid="usar-sin-cuenta">Usar sin cuenta (solo en este dispositivo)</RouterLink></li>
     </ul>
-    <p class="hint">Sin cuenta todo queda cifrado en este navegador y no se sube nada a la nube. <RouterLink to="/privacidad">Aviso de privacidad</RouterLink>.</p>
+    <p class="hint">Sin cuenta todo queda cifrado en este navegador y no se sube nada de pacientes ni monitoreos a la nube. <RouterLink to="/privacidad">Aviso de privacidad</RouterLink>.</p>
   </section>
 </template>
 

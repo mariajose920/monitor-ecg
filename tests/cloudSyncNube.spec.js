@@ -36,6 +36,7 @@ vi.mock('@/services/storage/db.js', () => ({
 }))
 
 const nube = await import('@/services/cloud/cloudSync.js')
+const { nubeActivada } = await import('@/services/cloud/nubeOptIn.js')
 const authService = await import('@/services/accounts/authService.js')
 
 beforeEach(() => {
@@ -45,6 +46,7 @@ beforeEach(() => {
   enLinea = true
   meta.clear()
   nube.cloudCuenta.value = { id: 'cuenta-1', email: 'a@b.cl' }
+  nubeActivada.value = true
 })
 
 describe('auditoría de la nube (registrar_evento + cola)', () => {

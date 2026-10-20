@@ -15,6 +15,7 @@ test.describe('Monitor sin pasar por Usuarios (PC)', () => {
 
     // Nuevo usuario sin salir del Monitor
     await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+    await page.getByTestId('declara-mayor-edad').check()
     await page.getByTestId('crear-usuario-rapido').click()
     await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
     await expect(page.getByTestId('quien-se-mide')).toHaveValue(/.+/)

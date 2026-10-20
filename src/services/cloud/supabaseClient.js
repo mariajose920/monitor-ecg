@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { crearAlmacenAuth, CLAVE_AUTH } from './almacenSesion.js'
 
 /**
  * Cliente Supabase (opcional). Si faltan las variables de entorno la app funciona solo en local.
@@ -16,6 +17,7 @@ export const cloudEnabled = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url) && 
 
 export const supabase = cloudEnabled
   ? createClient(url, key, {
-      auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ecg-cloud-auth' },
+      // C-07: el token vive en sessionStorage (equipo compartido) o en localStorage (equipo personal), según lo elegido al iniciar sesión.
+      auth: { persistSession: true, autoRefreshToken: true, storageKey: CLAVE_AUTH, storage: crearAlmacenAuth() },
     })
   : null

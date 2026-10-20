@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 async function crearUsuario(page) {
   await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByRole('button', { name: 'Crear paciente' }).click()
   await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
 }
@@ -130,6 +131,7 @@ test('mantenedor de usuarios: crear, buscar, editar alias y estados vacíos', as
   for (const alias of ['Grupo A', 'Grupo B']) {
     await page.getByTestId('nuevo-usuario').click()
     await page.getByLabel('Alias (opcional)').fill(alias)
+    await page.getByTestId('declara-mayor-edad').check()
     await page.getByRole('button', { name: 'Crear paciente' }).click()
   }
   await page.getByLabel('Buscar por seudónimo o alias').fill('grupo a')
@@ -151,6 +153,7 @@ test('vistas principales sin desborde horizontal a 375 px', async ({ page }) => 
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByRole('button', { name: 'Crear paciente' }).click()
   for (const ruta of ['/', '/pacientes', '/monitor', '/monitoreos', '/comparar', '/aprende/mis-monitoreos']) {
     await page.goto(ruta)

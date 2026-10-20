@@ -23,7 +23,7 @@ export const secureStorage = createSecureStorage({
  * cuenta para no dejar datos de salud en un equipo compartido. Ajustes, auditoría e incidentes no se separan.
  */
 let espacio = ''
-const DATOS_RE = /^(users|sessions:|session:|chunk:)/
+export const DATOS_RE = /^(users|sessions:|session:|chunk:)/
 
 export function setDataNamespace(ns) {
   espacio = ns ? `acct:${ns}:` : ''

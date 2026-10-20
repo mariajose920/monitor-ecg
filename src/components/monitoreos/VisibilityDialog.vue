@@ -3,6 +3,8 @@ import { reactive, ref, computed } from 'vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import { cloudCuenta } from '@/services/cloud/cloudSync.js'
+import { nubeActivada } from '@/services/cloud/nubeOptIn.js'
+import { TEXTO_CONSENTIMIENTO_PUBLICACION } from '@/services/privacidad/consentimiento.js'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { validarVisibilidad, visibilidadDe, perfilPublicable, CAMPOS_PUBLICADOS, CAMPOS_NO_PUBLICADOS } from '@/services/monitoreos/visibilidad.js'
 
@@ -13,7 +15,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['guardar', 'cerrar'])
 const monitoreos = useMonitoreosStore()
-const conCuenta = computed(() => !!cloudCuenta.value)
+const conCuenta = computed(() => !!cloudCuenta.value && nubeActivada.value)
 const hayPerfil = computed(() => perfilPublicable(monitoreos.perfilDe(props.sesion)) !== null)
 const vis = reactive({
   visibilidad: visibilidadDe(props.sesion),
@@ -34,7 +36,7 @@ function enviar() {
   <BaseDialog titulo="Visibilidad del monitoreo" ancho="560px" @cerrar="emit('cerrar')">
     <form id="form-visibilidad" novalidate @submit.prevent="enviar">
       <p><DataClassBadge /></p>
-      <p v-if="!conCuenta" class="alert warn" role="alert">Para publicar un monitoreo necesitas iniciar sesión con una cuenta.</p>
+      <p v-if="!conCuenta" class="alert warn" role="alert">Para publicar un monitoreo necesitas iniciar sesión con una cuenta y activar «Guardar mis datos en la nube» (<RouterLink to="/cuenta">Mi cuenta</RouterLink>).</p>
       <fieldset class="field" :disabled="!conCuenta">
         <legend>¿Quién puede ver este monitoreo?</legend>
         <label class="radio"><input v-model="vis.visibilidad" type="radio" value="privado" name="vis-det"> <strong>Privado</strong> · solo tú, dentro de tu cuenta</label>
@@ -42,7 +44,7 @@ function enviar() {
       </fieldset>
       <div v-if="vis.visibilidad === 'publico'" class="alert warn">
         <p><strong>Se publicará:</strong> {{ CAMPOS_PUBLICADOS.join(', ') }}. <strong>No se publicará:</strong> {{ CAMPOS_NO_PUBLICADOS.join(', ') }}.</p>
-        <label class="radio"><input v-model="vis.consentimientoPublicar" type="checkbox" data-testid="vis-consentimiento"> Entiendo y acepto publicar la señal, el BPM, la actividad y la fecha de este monitoreo de forma anónima.</label>
+        <label class="radio"><input v-model="vis.consentimientoPublicar" type="checkbox" data-testid="vis-consentimiento"> {{ TEXTO_CONSENTIMIENTO_PUBLICACION }}</label>
         <p v-if="errores.consentimientoPublicar" class="error-text" role="alert">{{ errores.consentimientoPublicar }}</p>
         <template v-if="hayPerfil">
           <label class="radio"><input v-model="vis.compartirPerfil" type="checkbox"> Incluir datos del paciente (rango de edad, actividad…)</label>

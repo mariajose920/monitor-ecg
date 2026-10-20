@@ -30,3 +30,11 @@ export function clearPrefs() {
     /* ignorar */
   }
 }
+
+export function removePref(key) {
+  try {
+    localStorage.removeItem(PREFIX + key)
+  } catch {
+    /* ignorar */
+  }
+}

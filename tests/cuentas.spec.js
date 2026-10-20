@@ -30,10 +30,10 @@ describe('validación de cuenta', () => {
   })
 
   it('valida el formulario de registro completo', () => {
-    const ok = validarRegistro({ correo: 'a@b.cl', password: 'claveSegura2026', confirmar: 'claveSegura2026', acepta: true })
+    const ok = validarRegistro({ correo: 'a@b.cl', password: 'claveSegura2026', confirmar: 'claveSegura2026', acepta: true, mayorEdad: true })
     expect(ok.ok).toBe(true)
     const mal = validarRegistro({ correo: 'x', password: 'claveSegura2026', confirmar: 'otra', acepta: false })
-    expect(Object.keys(mal.errores).sort()).toEqual(['acepta', 'confirmar', 'correo'])
+    expect(Object.keys(mal.errores).sort()).toEqual(['acepta', 'confirmar', 'correo', 'mayorEdad'])
   })
 
   it('valida el inicio de sesión y usa un mensaje genérico', () => {

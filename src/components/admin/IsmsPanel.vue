@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { cloudEnabled, cloudEstado } from '@/services/cloud/cloudSync.js'
 import { listarAdministradores } from '@/services/security/adminMfa.js'
 import { INCIDENT_TYPES, TRANSITIONS } from '@/services/security/incidents.js'
+import { TIPOS_EVIDENCIA, RESPONSABLE_MAX, REFERENCIA_MAX } from '@/services/security/evidencias.js'
 import { POLICY_VERSION, ACCESS_REVIEW_DAYS } from '@/services/security/isms.js'
 import { formatFecha } from '@/utils/time.js'
 import { notify } from '@/services/notifications/notifier.js'
@@ -80,6 +81,21 @@ async function registrarRevision() {
     await cargar()
   } catch (e) {
     notify(e.message, { tipo: 'error' })
+  }
+}
+
+// ---------- C-10 Evidencias del SGSI (9.2 y 9.3) ----------
+const ev = ref({ tipo: 'auditoria_interna', fecha: new Date().toISOString().slice(0, 10), responsable: '', referencia: '' })
+const evError = ref('')
+async function registrarEvidencia() {
+  evError.value = ''
+  try {
+    await isms.registrarEvidencia({ ...ev.value })
+    ev.value.responsable = ''
+    ev.value.referencia = ''
+    notify('Evidencia registrada en la auditoría.', { tipo: 'ok' })
+  } catch (e) {
+    evError.value = e.message
   }
 }
 
@@ -163,6 +179,27 @@ async function aceptarPolitica() {
       </div>
       <label class="check"><input v-model="confirmaRevision" type="checkbox"> Revisé las cuentas y los privilegios son los adecuados (conceder o retirar roles: pestaña Administradores; contingencia del dueño: docs/sgsi/recuperacion_acceso_admin.md)</label>
       <button class="btn" :disabled="!confirmaRevision" @click="registrarRevision">Registrar revisión</button>
+    </section>
+
+    <section class="card" data-testid="evidencias-sgsi">
+      <h2>Evidencias del SGSI (9.2 y 9.3)</h2>
+      <p class="muted small">Marca que la auditoría interna o la revisión por la dirección <strong>se realizaron</strong>, con fecha y responsable. No se registran resultados aquí: el acta firmada se archiva en docs/sgsi/evidencias/.</p>
+      <ul class="small">
+        <li v-for="(t, id) in TIPOS_EVIDENCIA" :key="id">
+          {{ t.nombre }} ({{ t.clausula }}):
+          <template v-if="isms.resumenEv[id]"><strong>{{ isms.resumenEv[id].fecha }}</strong> · {{ isms.resumenEv[id].responsable }} (hace {{ isms.resumenEv[id].dias }} días)</template>
+          <template v-else><span class="error-text">sin evidencia registrada</span></template>
+        </li>
+      </ul>
+      <form class="grid cols-2" novalidate @submit.prevent="registrarEvidencia">
+        <div class="field"><label for="ev-tipo">Tipo</label>
+          <select id="ev-tipo" v-model="ev.tipo"><option v-for="(t, id) in TIPOS_EVIDENCIA" :key="id" :value="id">{{ t.nombre }} ({{ t.clausula }})</option></select></div>
+        <div class="field"><label for="ev-fecha">Fecha de realización</label><input id="ev-fecha" v-model="ev.fecha" type="date"></div>
+        <div class="field"><label for="ev-resp">Responsable</label><input id="ev-resp" v-model="ev.responsable" :maxlength="RESPONSABLE_MAX" autocomplete="off"></div>
+        <div class="field"><label for="ev-ref">Referencia del acta (opcional)</label><input id="ev-ref" v-model="ev.referencia" :maxlength="REFERENCIA_MAX" autocomplete="off" placeholder="p. ej. docs/sgsi/evidencias/AI-01.md"></div>
+        <p v-if="evError" class="error-text" role="alert">{{ evError }}</p>
+        <div><button type="submit" class="btn" data-testid="registrar-evidencia">Registrar evidencia</button></div>
+      </form>
     </section>
 
     <section class="card">

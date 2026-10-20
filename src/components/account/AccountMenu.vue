@@ -30,14 +30,14 @@ async function salir(borrar) {
   <div class="cuenta" data-testid="menu-cuenta">
     <template v-if="cuenta.iniciada">
       <span class="chip info correo" :title="cuenta.cuenta.email"><span aria-hidden="true">🔐</span><span class="sr-only">Cuenta: </span>{{ cuenta.cuenta.email }}</span>
-      <button class="btn small ghost" data-testid="cerrar-sesion-cuenta" @click="saliendo = true">Cerrar sesión</button>
+      <RouterLink class="btn small ghost" to="/cuenta" data-testid="enlace-mi-cuenta">Mi cuenta</RouterLink>
+      <button class="btn small ghost" data-testid="cerrar-sesion-cuenta" @click="cuenta.equipoCompartido ? salir(true) : (saliendo = true)">Cerrar sesión</button>
     </template>
     <RouterLink v-else class="btn small" to="/acceso" data-testid="enlace-acceso">Iniciar sesión</RouterLink>
 
     <BaseDialog v-if="saliendo" titulo="Cerrar sesión" @cerrar="saliendo = false">
       <p>
-        Tus pacientes y monitoreos están guardados en tu cuenta. En un equipo compartido conviene
-        <strong>quitar los datos de salud de este equipo</strong> al salir.
+        {{ cuenta.equipoCompartido ? 'Iniciaste sesión en un equipo compartido: se recomienda quitar los datos de salud de este equipo al salir.' : 'Tus datos cifrados pueden quedar en este equipo (es tuyo) o quitarse ahora.' }}
       </p>
       <template #acciones>
         <button class="btn" :disabled="ocupado" @click="saliendo = false">Cancelar</button>

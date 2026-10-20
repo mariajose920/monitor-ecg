@@ -107,6 +107,7 @@ test('si un administrador leyó datos de la persona, ella ve cuándo y por qué 
   await simularNube(page, { accesos: [{ sesion_id: 'bbbbbbbb-0000-4000-8000-000000000001', motivo: 'Soporte por solicitud del titular', creado_en: '2026-10-03T10:00:00Z' }] })
   await iniciarSesion(page)
   await page.getByTestId('nuevo-usuario').click() // /monitoreos exige un paciente activo
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByRole('button', { name: 'Crear paciente' }).click()
   await expect(page.getByTestId('usuario-activo')).toBeVisible()
   await page.getByLabel('Principal').getByRole('link', { name: 'Monitoreos' }).click()

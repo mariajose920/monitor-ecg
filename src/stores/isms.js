@@ -12,8 +12,10 @@ import {
 import { pushIncident, fetchServerTime, cloudEnabled, cloudCuenta, fetchIncidentesNube, actualizarIncidenteNube } from '@/services/cloud/cloudSync.js'
 import { conRenovacionTotp } from '@/services/security/adminRenovacion.js'
 import { getPref, setPref } from '@/utils/prefs.js'
+import { validarEvidencia, resumenEvidencias } from '@/services/security/evidencias.js'
 
 const KEY_INCIDENTS = 'isms:incidentes'
+const KEY_EVIDENCIAS = 'isms:evidencias'
 const MAX_INCIDENTS = 500
 
 /**
@@ -30,6 +32,7 @@ export const useIsmsStore = defineStore('isms', () => {
   const politica = ref(getPref('politicaAceptada', null))
   const ultimaRevisionUtc = ref(getPref('revisionAccesosUtc', null))
   const reloj = ref(null) // { ok, skewMs, comprobadoUtc } | null
+  const evidencias = ref([])
 
   const debeAceptarPolitica = computed(() => needsPolicyAcceptance(politica.value))
   const revision = computed(() => accessReviewStatus(ultimaRevisionUtc.value))
@@ -38,6 +41,8 @@ export const useIsmsStore = defineStore('isms', () => {
   async function load() {
     const list = await secureStorage.getItem(KEY_INCIDENTS)
     incidentes.value = Array.isArray(list) ? list : []
+    const ev = await secureStorage.getItem(KEY_EVIDENCIAS)
+    evidencias.value = Array.isArray(ev) ? ev : []
     cargado.value = true
     sincronizarNube().catch(() => {})
   }
@@ -115,6 +120,23 @@ export const useIsmsStore = defineStore('isms', () => {
     await audit('ACCESS_REVIEW_DONE', 'admin', resumen)
   }
 
+  /**
+   * C-10: registra que se realizó la auditoría interna (9.2) o la revisión por la dirección (9.3), con fecha y responsable.
+   * No guarda resultados. Queda en el almacén local cifrado y en la auditoría (local y, con cuenta, en la nube vía registrar_evento).
+   */
+  async function registrarEvidencia(datos) {
+    useAuthStore().assertAdmin()
+    await ensureLoaded()
+    const v = validarEvidencia(datos)
+    if (!v.ok) throw new Error(Object.values(v.errores)[0])
+    const ev = { ...v.valores, registradaUtc: new Date().toISOString() }
+    evidencias.value = [...evidencias.value, ev].slice(-200)
+    await secureStorage.setItem(KEY_EVIDENCIAS, evidencias.value)
+    await audit('ISMS_EVIDENCE_RECORDED', 'admin', { tipo: ev.tipo, fecha: ev.fecha, responsable: ev.responsable, referencia: ev.referencia })
+    return ev
+  }
+  const resumenEv = computed(() => resumenEvidencias(evidencias.value))
+
   /** A.12.4.4: compara el reloj local con la hora del servidor (si hay nube). */
   async function checkClock() {
     if (!cloudEnabled) {
@@ -145,6 +167,7 @@ export const useIsmsStore = defineStore('isms', () => {
 
   function reset() {
     incidentes.value = []
+    evidencias.value = []
     cargado.value = false
     politica.value = getPref('politicaAceptada', null)
     ultimaRevisionUtc.value = getPref('revisionAccesosUtc', null)
@@ -153,5 +176,6 @@ export const useIsmsStore = defineStore('isms', () => {
   return {
     incidentes, abiertos, politica, ultimaRevisionUtc, reloj, debeAceptarPolitica, revision,
     load, ensureLoaded, sincronizarNube, report, update, acceptPolicy, recordAccessReview, checkClock, metrics, reset,
+    evidencias, resumenEv, registrarEvidencia,
   }
 })

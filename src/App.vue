@@ -8,10 +8,12 @@ import PwaPrompt from '@/components/pwa/PwaPrompt.vue'
 import { useAuthStore } from '@/stores/auth.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { getPref } from '@/utils/prefs.js'
+import { useInactividad } from '@/composables/useInactividad.js'
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const inactividad = useInactividad()
 
 // Tema guardado (preferencia no sensible)
 document.documentElement.dataset.theme = getPref('tema', 'dark')
@@ -35,6 +37,10 @@ watch(
     <RouterView />
   </main>
   <AppFooter />
+  <div v-if="inactividad.aviso.value" class="aviso-inactividad alert warn" role="alertdialog" aria-live="assertive" data-testid="aviso-inactividad">
+    <p>Cerraremos tu sesión en {{ inactividad.segundos.value }} s por inactividad. Si hay un monitoreo sin guardar en un equipo compartido, se perderá.</p>
+    <button class="btn primary" data-testid="seguir-conectada" @click="inactividad.seguir()">Seguir con la sesión abierta</button>
+  </div>
   <ToastHost />
   <PwaPrompt />
 </template>
@@ -44,6 +50,16 @@ watch(
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.aviso-inactividad {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: 520px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 35%);
 }
 
 #app > main {

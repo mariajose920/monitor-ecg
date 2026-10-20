@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test'
 test('la grabación empieza sola y Finalizar pregunta guardar, descartar o decidir después', async ({ page }) => {
   await page.goto('/monitor')
   await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByTestId('crear-usuario-rapido').click()
   await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
   await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
@@ -32,6 +33,7 @@ test('la grabación empieza sola y Finalizar pregunta guardar, descartar o decid
 
 async function conectarConUsuario(page) {
   await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByTestId('crear-usuario-rapido').click()
   await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
   await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
@@ -65,6 +67,7 @@ test('Finalizar (C) conectar primero y elegir usuario después', async ({ page }
   await page.getByRole('button', { name: 'Iniciar fuente' }).first().click()
   await expect(page.getByTestId('bpm').first()).toHaveText(/\d{2,3}\s*BPM/, { timeout: 15_000 })
   await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByTestId('crear-usuario-rapido').click()
   await expect(page.getByLabel('Control del monitoreo').getByText('● Grabando')).toBeVisible({ timeout: 15_000 })
   await page.getByTestId('canal-finalizar').click()

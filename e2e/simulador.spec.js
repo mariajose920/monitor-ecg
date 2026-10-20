@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test'
 test('el simulador muestra BPM en vivo con alternativa textual del gráfico', async ({ page }) => {
   await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
+  await page.getByTestId('declara-mayor-edad').check()
   await page.getByRole('button', { name: 'Crear paciente' }).click()
   await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
 

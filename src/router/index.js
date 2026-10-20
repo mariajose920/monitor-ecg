@@ -8,6 +8,7 @@ const routes = [
   { path: '/usuarios', redirect: (to) => ({ path: '/pacientes', query: to.query }) },
   { path: '/acceso', name: 'acceso', component: () => import('@/views/account/LoginView.vue'), meta: { title: 'Iniciar sesión' } },
   { path: '/registro', name: 'registro', component: () => import('@/views/account/RegisterView.vue'), meta: { title: 'Crear cuenta' } },
+  { path: '/cuenta', name: 'cuenta', component: () => import('@/views/account/CuentaView.vue'), meta: { title: 'Mi cuenta' } },
   { path: '/recuperar', name: 'recuperar', component: () => import('@/views/account/RecoverView.vue'), meta: { title: 'Recuperar contraseña' } },
   { path: '/restablecer', name: 'restablecer', component: () => import('@/views/account/ResetPasswordView.vue'), meta: { title: 'Nueva contraseña' } },
   { path: '/monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue'), meta: { title: 'Monitor' } },

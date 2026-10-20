@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
-import { AUDIT_EVENTS, EVENTOS_SOLO_SERVIDOR } from '@/services/audit/auditLog.js'
+import { AUDIT_EVENTS, EVENTOS_SOLO_SERVIDOR, EVENTOS_TANDA2 } from '@/services/audit/auditLog.js'
 
 /**
  * La lista blanca de tipos de auditoría del servidor (tabla public.tipos_evento) debe coincidir con AUDIT_EVENTS (A.12.4.1)
@@ -15,11 +15,32 @@ function leer(nombre) {
   return null
 }
 
+/** Une TODAS las sentencias insert de tipos_evento del archivo (schema.sql tiene la de la TANDA 1 y la de la TANDA 2). */
 function tiposDe(sql) {
-  const m = /insert into public\.tipos_evento \(tipo, origen\) values([\s\S]*?)on conflict/.exec(sql ?? '')
-  if (!m) return null
-  return [...m[1].matchAll(/\('([A-Z_]+)',\s*'(cliente|admin|servidor)'\)/g)].map((x) => ({ tipo: x[1], origen: x[2] }))
+  const bloques = [...(sql ?? '').matchAll(/insert into public\.tipos_evento \(tipo, origen\) values([\s\S]*?)on conflict/g)]
+  if (!bloques.length) return null
+  return bloques.flatMap((m) => [...m[1].matchAll(/\('([A-Z_]+)',\s*'(cliente|admin|servidor)'\)/g)].map((x) => ({ tipo: x[1], origen: x[2] })))
 }
+
+describe('migracion_tanda2.sql ↔ EVENTOS_TANDA2', () => {
+  const sql = leer('migracion_tanda2.sql')
+  it.skipIf(!sql)('añade exactamente los eventos de la TANDA 2, como "cliente"', () => {
+    const filas = tiposDe(sql)
+    expect(filas.map((f) => f.tipo).sort()).toEqual([...EVENTOS_TANDA2].sort())
+    expect(filas.every((f) => f.origen === 'cliente')).toBe(true)
+  })
+  it.skipIf(!sql)('exige consentimiento de publicación 2.0 y declaración de mayoría de edad, y limpia alias y notas', () => {
+    expect(sql).toMatch(/consentPublicacion,version/)
+    expect(sql).toMatch(/declaracion ->> 'mayorEdad'/)
+    expect(sql).toMatch(/new\.alias := null/)
+    expect(sql).toMatch(/'notas' - 'nombre' - 'parametrosAplicados'/)
+    expect(sql).toMatch(/old\.consentimiento is not null and new\.consentimiento is null/)
+  })
+  it.skipIf(!sql)('schema.sql contiene el mismo cuerpo que la migración', () => {
+    const cuerpo = (t) => t.slice(t.indexOf('-- >>> CUERPO'), t.indexOf('-- >>> FIN DEL CUERPO <<<')).replace(/\r\n/g, '\n')
+    expect(leer('schema.sql').replace(/\r\n/g, '\n')).toContain(cuerpo(sql))
+  })
+})
 
 for (const archivo of ['schema.sql', 'migracion_endurecimiento_2.sql']) {
   describe(`${archivo} ↔ AUDIT_EVENTS`, () => {
@@ -33,7 +54,9 @@ for (const archivo of ['schema.sql', 'migracion_endurecimiento_2.sql']) {
     it.skipIf(!sql)('contiene exactamente los eventos de la aplicación, sin repetidos', () => {
       const enSql = filas.map((f) => f.tipo)
       expect(new Set(enSql).size).toBe(enSql.length)
-      expect([...enSql].sort()).toEqual([...AUDIT_EVENTS].sort())
+      // La migración de la TANDA 1 es anterior a los eventos de la TANDA 2 (los añade migracion_tanda2.sql).
+      const esperados = archivo === 'schema.sql' ? AUDIT_EVENTS : AUDIT_EVENTS.filter((e) => !EVENTOS_TANDA2.includes(e))
+      expect([...enSql].sort()).toEqual([...esperados].sort())
     })
 
     it.skipIf(!sql)('los eventos de origen "servidor" coinciden con EVENTOS_SOLO_SERVIDOR', () => {

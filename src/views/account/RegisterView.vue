@@ -7,7 +7,7 @@ import { captchaEnabled } from '@/services/cloud/captcha.js'
 
 /** Crear cuenta: correo + contraseña (≥ 10) y aviso de confirmación por correo. */
 const cuenta = useAccountStore()
-const form = reactive({ correo: '', password: '', confirmar: '', acepta: false })
+const form = reactive({ correo: '', password: '', confirmar: '', acepta: false, mayorEdad: false })
 const errores = ref({})
 const mensaje = ref('')
 const exito = ref('')
@@ -58,8 +58,12 @@ async function enviar() {
         <p id="reg-conf-err" class="error-text" role="alert">{{ errores.confirmar }}</p>
       </div>
       <div class="field">
-        <label class="check"><input v-model="form.acepta" type="checkbox" data-testid="acepta-privacidad" :aria-invalid="!!errores.acepta" aria-describedby="reg-acepta-err"> He leído el <RouterLink to="/privacidad" target="_blank">aviso de privacidad</RouterLink> (los datos de salud se tratan con tu consentimiento).</label>
+        <label class="check"><input v-model="form.acepta" type="checkbox" data-testid="acepta-privacidad" :aria-invalid="!!errores.acepta" aria-describedby="reg-acepta-err"> He leído el <RouterLink to="/privacidad" target="_blank">aviso de privacidad</RouterLink>: tus datos solo salen de tu dispositivo si activas la nube, y los datos de salud se tratan con consentimiento.</label>
         <p id="reg-acepta-err" class="error-text" role="alert">{{ errores.acepta }}</p>
+      </div>
+      <div class="field">
+        <label class="check"><input v-model="form.mayorEdad" type="checkbox" data-testid="mayor-edad" :aria-invalid="!!errores.mayorEdad" aria-describedby="reg-edad-err"> Declaro que soy mayor de 18 años. La aplicación no está dirigida a menores de edad.</label>
+        <p id="reg-edad-err" class="error-text" role="alert">{{ errores.mayorEdad }}</p>
       </div>
       <p v-if="captchaEnabled" class="hint">Se pedirá una verificación anti-bots al crear la cuenta.</p>
       <p v-if="mensaje && !Object.keys(errores).length" class="alert danger" role="alert" data-testid="error-registro">{{ mensaje }}</p>
