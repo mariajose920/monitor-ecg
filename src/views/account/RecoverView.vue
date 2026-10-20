@@ -26,6 +26,7 @@ async function enviar() {
 <template>
   <section class="auth-card card" aria-labelledby="rec-titulo">
     <h1 id="rec-titulo">Recuperar contraseña</h1>
+    <p class="alert info small" data-testid="recuperar-admin">Las cuentas con rol de administrador requieren además el segundo factor; si perdiste el acceso, contacta al responsable del proyecto (procedimiento formal).</p>
     <p v-if="exito" class="alert ok" role="status" data-testid="recuperar-ok">{{ exito }}</p>
     <form v-else novalidate data-testid="form-recuperar" @submit.prevent="enviar">
       <div class="field">

@@ -7,6 +7,9 @@ import { defineConfig, devices } from '@playwright/test'
  * Requiere el navegador: `npm run test:e2e:install` (una vez).
  */
 const PORT = 4174
+// Segunda copia CON nube configurada (URL del proyecto del CSP + clave falsa): TODA la red a Supabase se
+// intercepta con page.route en e2e/*.nube.spec.js; nunca se contacta la base real.
+const PORT_NUBE = 4175
 
 export default defineConfig({
   testDir: './e2e',
@@ -20,8 +23,11 @@ export default defineConfig({
     trace: 'on-first-retry',
     locale: 'es-CL',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
+  projects: [
+    { name: 'chromium', testIgnore: '**/*.nube.spec.js', use: { ...devices['Desktop Chrome'] } },
+    { name: 'nube', testMatch: '**/*.nube.spec.js', use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${PORT_NUBE}` } },
+  ],
+  webServer: [{
     command: `npx vite build --outDir dist-e2e --emptyOutDir && npx vite preview --outDir dist-e2e --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
@@ -34,4 +40,17 @@ export default defineConfig({
       VITE_CAPTCHA_PROVIDER: '',
     },
   },
+  {
+    command: `npx vite build --outDir dist-e2e-nube --emptyOutDir && npx vite preview --outDir dist-e2e-nube --port ${PORT_NUBE} --strictPort`,
+    url: `http://localhost:${PORT_NUBE}`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
+    env: {
+      VITE_SUPABASE_URL: 'https://ohdgfdbmnrwndffhtqdg.supabase.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_clave_falsa_solo_para_pruebas_e2e',
+      NEXT_PUBLIC_SUPABASE_URL: '',
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
+      VITE_CAPTCHA_PROVIDER: '',
+    },
+  }],
 })

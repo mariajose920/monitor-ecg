@@ -57,6 +57,7 @@ export async function ensureCloudSession() {
 }
 
 async function refrescarAdmin() {
+  // es_admin() = rol asignado Y sesión aal2 (privilegios efectivos); sin segundo factor es false.
   const { data, error } = await supabase.rpc('es_admin')
   cloudAdmin.value = !error && data === true
 }
@@ -184,23 +185,6 @@ export async function pushCloudParametros({ parametros, sincronizacion }) {
   }
   sinError(await supabase.from('parametros').upsert(fila))
   return true
-}
-
-/** Inicio de sesión del administrador en la nube (autenticación real en el servidor, A.9.4.2). */
-export async function cloudAdminLogin(email, password) {
-  if (!cloudEnabled) throw new Error('La nube no está configurada.')
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw new Error('Credenciales de la nube inválidas.')
-  await refrescarAdmin()
-  if (!cloudAdmin.value) {
-    await cloudAdminLogout()
-    throw new Error('Esta cuenta no figura como administradora en la base de datos.')
-  }
-}
-
-/** Deja de actuar como administrador en la app (la sesión de la cuenta no se cierra aquí). */
-export async function cloudAdminLogout() {
-  cloudAdmin.value = false
 }
 
 /** Réplica de una notificación de incidente o debilidad (A.16.1.2 / A.16.1.3). Sin datos de salud. */

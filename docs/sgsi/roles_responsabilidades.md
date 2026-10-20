@@ -9,7 +9,7 @@
 |---|---|---|---|
 | **Alta dirección** | Docente supervisor | Aprobar política y SoA; asignar recursos; aceptar riesgos residuales; revisión por la dirección (9.3) | Aprueba / rechaza cambios del SGSI |
 | **Responsable de seguridad (RS)** | Integrante designado del equipo | Mantener `ISO27001_controles.md` y `docs/sgsi/`; gestionar incidentes (A.16); informar a la dirección del desempeño (5.3 b) | Puede suspender exportaciones o la sincronización ante un incidente |
-| **Administrador de la plataforma** | Docente o ayudante | Configurar parámetros; revisar accesos cada 90 días (A.9.2.5) y la auditoría; aceptar la política; custodiar PIN y cuenta Supabase | Funciones `/admin`; fila en `public.administradores` |
+| **Administrador de la plataforma** | Docente o ayudante | Configurar parámetros; revisar accesos cada 90 días (A.9.2.5) y la auditoría; aceptar la política; custodiar PIN y cuenta Supabase | Funciones `/admin` (cuenta + TOTP); fila en `public.administradores` concedida por el dueño del proyecto. Debe haber **al menos dos** |
 | **Desarrolladores** | Equipo | Aplicar desarrollo seguro (A.14.2), pruebas, revisión cruzada de PR | Merge a `main` solo con revisión de otro integrante |
 | **Auditor interno** | Integrante de **otro** grupo | Auditoría interna objetiva (9.2) | Acceso de lectura a documentos y evidencias |
 | **Participante** | Persona medida | Dar/retirar consentimiento; no usar datos identificables; notificar incidentes | Solo sobre sus propios datos |
@@ -24,11 +24,15 @@ R = realiza · A = aprueba/responde · C = consultado · I = informado
 | Apreciación y tratamiento de riesgos | A | R | C | C | I |
 | Configuración de parámetros | I | I | R/A | — | — |
 | Revisión de derechos de acceso (A.9.2.5) | I | C | R/A | — | — |
+| Concesión / retiro del rol de administrador (A.9.2.3, A.9.2.6) | A | C | I | — | — |
+| Recuperación de acceso de administrador (A.9.2.4) | A | R | C | — | I |
 | Gestión de incidentes (A.16) | I | R/A | R | C | — |
 | Cambios de código (A.14.2.2) | I | C | — | R | — |
 | Auditoría interna (9.2) | A | C | C | C | R |
 | Revisión por la dirección (9.3) | R/A | R | C | I | C |
 | No conformidades (10.1) | A | R | C | R | I |
+
+**Dueño del proyecto Supabase** (responsable del proyecto): único que concede o retira el rol de administrador y que restablece contraseñas o elimina factores TOTP, siempre bajo `recuperacion_acceso_admin.md` y con aprobación de otra persona.
 
 ## 3. Segregación de tareas y confidencialidad
 

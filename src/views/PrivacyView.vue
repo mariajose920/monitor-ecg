@@ -118,7 +118,7 @@ async function borrarNube() {
 
     <h2>Limitaciones de seguridad (transparencia)</h2>
     <ul>
-      <li>La autenticación del administrador ocurre en el navegador: disuade el uso indebido casual, pero no detiene a alguien con control del equipo y de las herramientas de desarrollo.</li>
+      <li>Con la nube activa, el administrador es una cuenta con un rol asignado por el responsable del proyecto y un segundo factor (código TOTP) que valida el servidor; el rol no se puede obtener desde la aplicación. Sin nube, el administrador local con PIN disuade el uso indebido casual, pero no detiene a alguien con control del equipo y de las herramientas de desarrollo.</li>
       <li>El cifrado protege frente a la lectura casual y a copias del almacenamiento, no frente a código malicioso que se ejecute en la propia página ni frente a quien controla el navegador abierto.</li>
       <li>Sin nube configurada no hay respaldo central: si se borra el almacenamiento del navegador, los datos se pierden.</li>
       <li>Los CSV exportados quedan bajo la responsabilidad de quien los descarga.</li>

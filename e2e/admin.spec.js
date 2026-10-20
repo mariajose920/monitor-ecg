@@ -15,3 +15,15 @@ test('rutas de participante exigen elegir usuario (RF01)', async ({ page }) => {
   await page.goto('/monitoreos')
   await expect(page).toHaveURL(/\/pacientes\?redirect=monitoreos/)
 })
+
+test('sin nube no hay login de cuenta de admin: /admin/mfa vuelve al acceso con PIN y el enlace Admin se mantiene', async ({ page }) => {
+  await page.goto('/admin/mfa')
+  await expect(page).toHaveURL(/\/admin\/setup|\/admin\/acceso/)
+  await expect(page.getByTestId('enlace-admin')).toBeVisible()
+})
+
+test('la pantalla de recuperación informa del procedimiento formal para administradores (A.9.2.4)', async ({ page }) => {
+  await page.goto('/recuperar')
+  await expect(page.getByTestId('recuperar-admin')).toContainText('segundo factor')
+  await expect(page.getByTestId('recuperar-admin')).toContainText('procedimiento formal')
+})

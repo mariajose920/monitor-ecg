@@ -31,7 +31,7 @@ abierto ──► en_analisis ──► cerrado   (exige respuesta + lección ap
 | Paso | Acciones | Plazo orientativo |
 |---|---|---|
 | 1. Evaluar | ¿Afecta C, I o D de un activo de §1.4? ¿Hay datos personales? Pasar a `en_analisis` o `descartado` | Alta: < 24 h; media: < 72 h; baja: próximo hito |
-| 2. Contener | Según tipo: cerrar sesiones, cambiar PIN y contraseña de la nube, revocar admin (`delete from administradores`), pausar exportaciones, "Borrar todo" en un equipo comprometido | Inmediato |
+| 2. Contener | Según tipo: cerrar sesiones, cambiar la contraseña de la cuenta, eliminar el factor TOTP y revocar admin (`delete from administradores`, efecto inmediato; ver `recuperacion_acceso_admin.md`), cambiar el PIN solo en modo sin nube, pausar exportaciones, "Borrar todo" en un equipo comprometido | Inmediato |
 | 3. Erradicar / recuperar | Corregir la causa (código, configuración RLS, cabeceras); restaurar desde la nube o exportación | Según impacto |
 | 4. Cerrar | Registrar respuesta aplicada y lección aprendida en la app | Al terminar |
 

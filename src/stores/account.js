@@ -10,6 +10,7 @@ import { useMonitoreosStore } from './monitoreos.js'
 import { useSessionStore } from './session.js'
 import { useChannelsStore } from './channels.js'
 import { useComunidadStore } from './comunidad.js'
+import { useAuthStore } from './auth.js'
 
 /**
  * Cuenta de la persona (Supabase Auth). Sin cuenta: modo "solo en este dispositivo" (todo local cifrado,
@@ -52,7 +53,14 @@ export const useAccountStore = defineStore('account', () => {
     }
   }
 
-  async function init() {
+  let inicio = null
+  /** Idempotente y seguro ante llamadas simultáneas (main.js y los guards del router). */
+  function init() {
+    inicio ??= iniciar()
+    return inicio
+  }
+
+  async function iniciar() {
     if (listo.value) return
     try {
       const actual = await authService.sesionActual()
@@ -60,6 +68,8 @@ export const useAccountStore = defineStore('account', () => {
         cuenta.value = actual
         cloudCuenta.value = actual
         setDataNamespace(actual.id)
+        // Restaurar sesión: consulta al servidor si es administrador registrado y su nivel aal.
+        await useAuthStore().refrescarNube()
       }
       desuscribir = authService.escucharAuth(async (evento, user) => {
         if (evento === 'PASSWORD_RECOVERY') recuperando.value = true
@@ -68,6 +78,7 @@ export const useAccountStore = defineStore('account', () => {
           cuenta.value = user
           cloudCuenta.value = user
           await cambiarEspacio(user.id)
+          await useAuthStore().refrescarNube()
         }
       })
     } catch {
@@ -83,6 +94,7 @@ export const useAccountStore = defineStore('account', () => {
     cloudCuenta.value = cuenta.value
     await cambiarEspacio(user.id)
     await audit('ACCOUNT_LOGIN', 'system')
+    await useAuthStore().alIniciarSesionCuenta()
     await revisarVinculable()
   }
 
@@ -109,6 +121,7 @@ export const useAccountStore = defineStore('account', () => {
     cuenta.value = null
     cloudCuenta.value = null
     vinculable.value = null
+    useAuthStore().cerrarNube() // cerrar la cuenta cierra el modo admin (A.9.2.6)
     if (uid && borrarDatos) await clearDataNamespace(uid)
     await cambiarEspacio(null)
   }
@@ -148,6 +161,7 @@ export const useAccountStore = defineStore('account', () => {
     await eliminarMiCuenta()
     cuenta.value = null
     cloudCuenta.value = null
+    useAuthStore().cerrarNube()
     if (uid) await clearDataNamespace(uid)
     await cambiarEspacio(null)
   }

@@ -41,7 +41,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function exportAll(pin, includeOptional = false) {
     const auth = useAuthStore()
     auth.assertAdmin()
-    if (!(await auth.reauth(pin))) throw new Error('PIN incorrecto')
+    if (!(await auth.reauth(pin))) throw new Error(auth.metodoReauth === 'totp' ? 'Código incorrecto o vencido' : 'PIN incorrecto')
     const users = useUsersStore()
     const sessions = await listSessions()
     const { csv, filas } = await buildSessionsCsv({ sessions, userById: users.byId, includeOptional })
@@ -53,7 +53,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function wipeAll(pin) {
     const auth = useAuthStore()
     auth.assertAdmin()
-    if (!(await auth.reauth(pin))) throw new Error('PIN incorrecto')
+    if (!(await auth.reauth(pin))) throw new Error(auth.metodoReauth === 'totp' ? 'Código incorrecto o vencido' : 'PIN incorrecto')
     const channels = useChannelsStore()
     await channels.disconnectAll()
     channels.reset()

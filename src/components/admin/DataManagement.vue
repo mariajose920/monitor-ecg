@@ -19,16 +19,38 @@ const dias = ref(settings.retencionDias)
 watch(() => settings.retencionDias, (v) => (dias.value = v))
 const errorRet = ref('')
 
+const pedirReauthRet = ref(false)
 async function guardarRetencion() {
   errorRet.value = ''
   const d = Number.parseInt(String(dias.value), 10)
   const e = validarRetencion(d)
   if (e) return (errorRet.value = e)
+  // Parámetro crítico (borra datos por antigüedad): con nube exige un código TOTP nuevo (A.9.4.2).
+  if (auth.nube && !pedirReauthRet.value) {
+    errorPin.value = ''
+    pedirReauthRet.value = true
+    return
+  }
   try {
     await settings.setRetencion(d)
+    pedirReauthRet.value = false
     notify('Retención guardada. La purga se aplica al iniciar la app.', { tipo: 'ok' })
   } catch (err) {
     errorRet.value = err.message
+  }
+}
+
+async function confirmarRetencion(codigo) {
+  ocupado.value = true
+  errorPin.value = ''
+  try {
+    if (!(await auth.reauth(codigo))) {
+      errorPin.value = 'Código incorrecto o vencido'
+      return
+    }
+    await guardarRetencion()
+  } finally {
+    ocupado.value = false
   }
 }
 
@@ -108,12 +130,12 @@ async function cambiarPin() {
 
     <section class="card">
       <h2>Exportar todas las sesiones <DataClassBadge level="sensitive" /></h2>
-      <p class="muted">CSV seudonimizado de todos los participantes. Requiere volver a ingresar el PIN.</p>
+      <p class="muted">CSV seudonimizado de todos los participantes. Requiere volver a confirmar tu identidad ({{ auth.nube ? 'código del segundo factor' : 'PIN' }}).</p>
       <label class="check"><input v-model="incluirOpcionales" type="checkbox"> Incluir datos opcionales (rango de edad y peso) solo de quienes dieron consentimiento</label>
       <button class="btn" @click="avisoExport = true">Exportar todo…</button>
     </section>
 
-    <section class="card">
+    <section v-if="!auth.nube" class="card">
       <h2>Cambiar PIN</h2>
       <form @submit.prevent="cambiarPin">
         <div class="grid cols-3">
@@ -128,7 +150,7 @@ async function cambiarPin() {
 
     <section class="card peligro">
       <h2>Borrar todos los datos (SEC-31)</h2>
-      <p>Borra participantes, sesiones, configuración y la <strong>clave de cifrado</strong> (cualquier residuo queda ilegible). La auditoría se reinicia con el evento ALL_DATA_WIPED. Se conserva el PIN de administrador.</p>
+      <p>Borra participantes, sesiones, configuración y la <strong>clave de cifrado</strong> (cualquier residuo queda ilegible). La auditoría se reinicia con el evento ALL_DATA_WIPED. Con la nube activa no hay PIN local; sin nube se conserva el PIN de administrador.</p>
       <button class="btn danger" @click="pedirPinBorrado = true">Borrar todo…</button>
     </section>
 
@@ -138,6 +160,7 @@ async function cambiarPin() {
       @confirmar="avisoExport = false; pedirPinExport = true; errorPin = ''"
       @cancelar="avisoExport = false"
     />
+    <PinPrompt v-if="pedirReauthRet" titulo="Confirmar cambio de retención" accion="Confirmar" :ocupado="ocupado" :error="errorPin" @confirmar="confirmarRetencion" @cancelar="pedirReauthRet = false" />
     <PinPrompt v-if="pedirPinExport" titulo="Confirmar exportación global" accion="Exportar" :ocupado="ocupado" :error="errorPin" @confirmar="exportarTodo" @cancelar="pedirPinExport = false" />
     <PinPrompt
       v-if="pedirPinBorrado"

@@ -21,7 +21,7 @@ const prohibicionesHtml = [
 ]
 
 export default [
-  { ignores: ['dist/**', 'dist-e2e/**', 'node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**'] },
+  { ignores: ['dist/**', 'dist-e2e/**', 'dist-e2e-nube/**', 'node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**'] },
   js.configs.recommended,
   ...pluginVue.configs['flat/essential'],
   security.configs.recommended,

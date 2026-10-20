@@ -125,3 +125,13 @@ Pendiente: probar el aviso de perfil con un ESP32 + MAX30100 físico; la serie d
 - **Pruebas.** `tests/visibilidad.spec.js` reescrita para validar la migración de endurecimiento (funciones, límites, permisos, cron, coherencia con `schema.sql`).
 - **Documentación.** Riesgos R22–R26, SoA recalculada con script (114 controles: 71 Sí, 27 Parcial, 16 No; estados 61 Implementado, 33 Documentado, 4 Parcial, 16 N/A), plan de tratamiento, metodología y continuidad actualizados, NC-05 a NC-07, `docs/ERRATAS_REQUERIMIENTOS.md` (PPG ≠ ECG), `docs/PENDIENTES_MANUALES.md`, `INFORME_FORMAL` (md y docx) regenerado.
 - **Verificación (20-oct):** lint 0 problemas; Vitest 212/212 (18 archivos); build correcto; Playwright 33/33; `npm audit --omit=dev` 0 vulnerabilidades.
+
+## 2026-10-20 · Administrador = cuenta + segundo factor TOTP
+
+- **Qué cambia.** Con la nube activa el administrador inicia sesión en `/acceso` como cualquier cuenta; la app consulta `es_admin_registrado()` y solo entonces muestra el botón **Admin** (encabezado y menú móvil). El panel exige `aal2` (TOTP) en la vista nueva `/admin/mfa` (inscripción con QR como SVG data-URI en `<img>`, o código de 6 dígitos). `/admin/acceso` y `/admin/setup` redirigen a `/acceso` (`redirect` en lista blanca). Se elimina el login de nube aparte de `CloudSettings`.
+- **Servidor.** `supabase/migracion_admin_mfa.sql` (reflejada en `schema.sql`): `es_admin_registrado()` (rol) y `es_admin()` (rol **y** `aal2`), `admin_listar_administradores()`, `revoke insert/update/delete` sobre `administradores`, 7 eventos de auditoría nuevos (cliente, `schema.sql`, migraciones y pruebas).
+- **Sesión privilegiada.** 15 min de inactividad (60 máx.), cerrar la cuenta cierra el modo admin, código TOTP nuevo para borrado total, exportación global y cambio de retención. Sin nube sigue el administrador local con PIN (único mecanismo; con nube el PIN no interviene).
+- **Revisión de derechos.** SGSI → Revisión lista los administradores desde el servidor y registra `ACCESS_REVIEW_DONE`.
+- **Documentación.** `docs/sgsi/recuperacion_acceso_admin.md` (concesión, retiro, recuperación con regla de dos personas), SoA A.9.2.3–A.9.2.6 y A.9.4.2, SEC-77..82, riesgo R27, `control_acceso.md`, roles, incidentes, trazabilidad y pendientes manuales.
+- **Pruebas.** `tests/adminMfa.spec.js`; E2E `e2e/admin-cuenta.nube.spec.js` (segunda copia construida con nube y toda la red a Supabase simulada con `page.route`) y ampliación de `e2e/admin.spec.js`.
+- **Limitaciones.** El servidor valida el `aal` del token vigente (hasta su expiración); no hay UI para conceder/retirar el rol (SQL del dueño del proyecto); el flujo real de TOTP solo se prueba tras aplicar la migración y habilitar MFA en Supabase.

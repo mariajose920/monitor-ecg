@@ -105,7 +105,7 @@ function alternarTema() {
 
       <nav id="nav-principal" :class="['nav', { abierto }]" aria-label="Principal">
         <RouterLink v-for="e in enlaces" :key="e.to" :to="e.to" class="nav-link">{{ e.texto }}</RouterLink>
-        <RouterLink :to="auth.isAdmin ? '/admin' : '/admin/acceso'" class="nav-link">Admin</RouterLink>
+        <RouterLink v-if="auth.mostrarBotonAdmin" :to="auth.isAdmin ? '/admin' : auth.requiereMfa ? '/admin/mfa' : '/admin/acceso'" class="nav-link" data-testid="enlace-admin">Admin</RouterLink>
         <button v-if="auth.isAdmin" class="btn small" @click="auth.logout()">Cerrar sesión admin</button>
         <AccountMenu />
         <button class="btn small ghost" @click="alternarTema">{{ etiquetaTema }}</button>

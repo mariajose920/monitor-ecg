@@ -1,3 +1,4 @@
+-- OBSOLETA para re-ejecutar: su lista blanca es anterior. La vigente está en schema.sql y migracion_admin_mfa.sql.
 -- Migración idempotente: eventos de auditoría de la cámara del celular (PPG).
 -- Aplicar en Supabase > SQL Editor. Reemplaza la lista blanca por la lista COMPLETA de AUDIT_EVENTS.
 -- ISO/IEC 27001:2013 A.12.4.1 / A.18.1.4. Se puede ejecutar varias veces sin efectos adversos.

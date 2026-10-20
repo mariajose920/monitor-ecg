@@ -4,7 +4,8 @@ import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import { useIsmsStore } from '@/stores/isms.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
-import { cloudEnabled, cloudAdmin, cloudEstado } from '@/services/cloud/cloudSync.js'
+import { cloudEnabled, cloudEstado } from '@/services/cloud/cloudSync.js'
+import { listarAdministradores } from '@/services/security/adminMfa.js'
 import { INCIDENT_TYPES, TRANSITIONS } from '@/services/security/incidents.js'
 import { POLICY_VERSION, ACCESS_REVIEW_DAYS } from '@/services/security/isms.js'
 import { formatFecha } from '@/utils/time.js'
@@ -39,9 +40,29 @@ async function cargar() {
 onMounted(cargar)
 
 // ---------- A.9.2.5 Revisión de accesos ----------
+// Con nube, la lista sale del servidor (admin_listar_administradores: solo id y fecha). Sin nube, el PIN local.
+const administradores = ref([])
+const errorAdmins = ref('')
+async function cargarAdministradores() {
+  errorAdmins.value = ''
+  if (!cloudEnabled) return
+  try {
+    administradores.value = await listarAdministradores()
+  } catch (e) {
+    administradores.value = []
+    errorAdmins.value = e.message
+  }
+}
+onMounted(cargarAdministradores)
 const cuentas = computed(() => [
-  { cuenta: 'Administrador local (PIN)', rol: 'admin', estado: auth.hasCredential ? 'Credencial definida (PBKDF2)' : 'Sin credencial', privilegios: 'Parámetros, auditoría, exportación global, borrado' },
-  { cuenta: 'Administrador en la nube (Supabase Auth)', rol: 'admin', estado: !cloudEnabled ? 'Nube no configurada' : cloudAdmin.value ? 'Sesión de admin activa' : 'Sin sesión de admin', privilegios: 'Lectura global (RLS es_admin), parámetros globales, incidentes' },
+  ...(cloudEnabled
+    ? administradores.value.map((a) => ({
+        cuenta: `Administrador ${a.user_id.slice(0, 8)}… (alta ${formatFecha(a.creado_en)})`,
+        rol: 'admin',
+        estado: 'Rol asignado; privilegios solo con TOTP (aal2)',
+        privilegios: 'Lectura global (RLS es_admin), parámetros globales, incidentes',
+      }))
+    : [{ cuenta: 'Administrador local (PIN)', rol: 'admin', estado: auth.hasCredential ? 'Credencial definida (PBKDF2)' : 'Sin credencial', privilegios: 'Parámetros, auditoría, exportación global, borrado' }]),
   { cuenta: `Participantes (${users.users.length})`, rol: 'participant', estado: 'Seudónimos "Usuario N"; sesión anónima en la nube', privilegios: 'Solo sus datos (RLS propietario = auth.uid())' },
 ])
 const confirmaRevision = ref(false)
@@ -50,8 +71,8 @@ async function registrarRevision() {
   try {
     await isms.recordAccessReview({
       participantes: users.users.length,
-      adminLocal: auth.hasCredential,
-      adminNube: cloudAdmin.value,
+      adminLocal: !cloudEnabled && auth.hasCredential,
+      administradoresNube: administradores.value.length,
       resultado: 'sin-cambios',
     })
     confirmaRevision.value = false
@@ -132,13 +153,15 @@ async function aceptarPolitica() {
         <template v-else>Última revisión hace {{ isms.revision.diasDesde }} días ({{ formatFecha(isms.ultimaRevisionUtc) }}).</template>
         Periodicidad: cada {{ ACCESS_REVIEW_DAYS }} días o al cambiar de responsable.
       </p>
+      <p v-if="errorAdmins" class="error-text small" role="alert">{{ errorAdmins }}</p>
+      <p v-if="cloudEnabled" class="muted small">Mantén al menos dos administradores para evitar bloqueos (docs/sgsi/recuperacion_acceso_admin.md).</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Cuenta</th><th>Rol</th><th>Estado</th><th>Privilegios</th></tr></thead>
           <tbody><tr v-for="c in cuentas" :key="c.cuenta"><td>{{ c.cuenta }}</td><td class="mono small">{{ c.rol }}</td><td class="small">{{ c.estado }}</td><td class="small">{{ c.privilegios }}</td></tr></tbody>
         </table>
       </div>
-      <label class="check"><input v-model="confirmaRevision" type="checkbox"> Revisé las cuentas y los privilegios son los adecuados (retirar con "Eliminar" en Participantes o cambiando el PIN)</label>
+      <label class="check"><input v-model="confirmaRevision" type="checkbox"> Revisé las cuentas y los privilegios son los adecuados (el retiro del rol lo hace el dueño del proyecto: docs/sgsi/recuperacion_acceso_admin.md)</label>
       <button class="btn" :disabled="!confirmaRevision" @click="registrarRevision">Registrar revisión</button>
     </section>
 

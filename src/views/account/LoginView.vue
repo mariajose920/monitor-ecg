@@ -1,13 +1,15 @@
 <script setup>
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAccountStore } from '@/stores/account.js'
 import { AuthError } from '@/services/accounts/authService.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { safeRedirect, ACCESO_REDIRECT_WHITELIST } from '@/router/guards.js'
 
 /** Inicio de sesión (Supabase Auth). Errores genéricos: no revela si el correo existe (A.9.4.2). */
 const cuenta = useAccountStore()
 const router = useRouter()
+const route = useRoute()
 const form = reactive({ correo: '', password: '' })
 const errores = ref({})
 const mensaje = ref('')
@@ -20,7 +22,8 @@ async function enviar() {
   try {
     await cuenta.iniciarSesion({ ...form })
     notify('Sesión iniciada.', { tipo: 'ok' })
-    router.push('/pacientes')
+    // Lista blanca: sin open redirect. Si el destino es el panel admin, el guard exige el segundo factor.
+    router.push({ name: safeRedirect(route.query.redirect, ACCESO_REDIRECT_WHITELIST, 'pacientes') })
   } catch (e) {
     if (e instanceof AuthError) {
       errores.value = e.campos

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { requireAdmin, requireUser, setupOnlyOnce } from './guards.js'
+import { requireAdmin, requireAdminMfa, adminLoginSoloSinNube, requireUser, setupOnlyOnce } from './guards.js'
 
 // Todas las vistas con lazy loading (SEC-04 para las de administración).
 const routes = [
@@ -22,6 +22,7 @@ const routes = [
   { path: '/seguridad', name: 'seguridad', component: () => import('@/views/SecurityView.vue'), meta: { title: 'Política de seguridad' } },
   { path: '/admin/setup', name: 'admin-setup', component: () => import('@/views/admin/AdminLoginView.vue'), meta: { title: 'Configurar administrador' } },
   { path: '/admin/acceso', name: 'admin-login', component: () => import('@/views/admin/AdminLoginView.vue'), meta: { title: 'Acceso administrador' } },
+  { path: '/admin/mfa', name: 'admin-mfa', component: () => import('@/views/admin/AdminMfaView.vue'), meta: { title: 'Segundo factor' } },
   { path: '/admin', name: 'admin', component: () => import('@/views/admin/AdminView.vue'), meta: { title: 'Administración', requiresAdmin: true } },
   { path: '/admin/auditoria', name: 'admin-auditoria', component: () => import('@/views/admin/AuditView.vue'), meta: { title: 'Auditoría', requiresAdmin: true } },
   { path: '/:pathMatch(.*)*', name: 'no-encontrado', component: () => import('@/views/NotFoundView.vue'), meta: { title: 'No encontrado' } },
@@ -35,6 +36,8 @@ const router = createRouter({
   },
 })
 
+router.beforeEach(adminLoginSoloSinNube)
+router.beforeEach(requireAdminMfa)
 router.beforeEach(setupOnlyOnce)
 router.beforeEach(requireAdmin)
 router.beforeEach(requireUser)

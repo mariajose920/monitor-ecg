@@ -11,7 +11,7 @@
 
 ## 2. Roles y permisos
 
-| Recurso | Participante (sin contraseña, RF02) | Administrador local (PIN) | Administrador nube (Supabase Auth) |
+| Recurso | Participante / cuenta normal | Administrador local (solo sin nube, PIN) | Administrador (nube: cuenta + rol + TOTP `aal2`) |
 |---|---|---|---|
 | Medir, ver y exportar **sus** sesiones | Sí | Sí | — |
 | Ver datos de otros participantes | No | Sí (en el equipo) | Sí (`es_admin()`) |
@@ -25,18 +25,19 @@
 | Control | Regla |
 |---|---|
 | A.9.2.1 Registro y baja | Participantes: "Usuario N" generado por el sistema; baja con "Eliminar mis datos" o desde Administración → Participantes. En la nube, sesión **anónima** por navegador |
-| A.9.2.2 Provisión | El admin de la nube se crea solo desde el panel de Supabase y se habilita con `insert into public.administradores`; el admin local se crea una única vez en `/admin/setup` |
-| A.9.2.3 Privilegios | Las acciones privilegiadas llaman a `assertAdmin()`; en la nube, políticas con `es_admin()`; la clave `service_role` no se usa en la app |
-| A.9.2.4 Información secreta | PIN sin valor por defecto, ≥ 8 caracteres, no trivial, guardado como PBKDF2; contraseña de la nube robusta + MFA del panel |
-| A.9.2.5 Revisión | **Cada 90 días** o al cambiar de responsable, en Administración → SGSI → "Registrar revisión" (evento `ACCESS_REVIEW_DONE`) |
-| A.9.2.6 Retirada | Al terminar el semestre o cambiar de administrador: cambiar PIN, `delete from public.administradores where user_id = …`, revocar accesos a Vercel/GitHub/Supabase |
+| A.9.2.2 Provisión | Con nube, el administrador es una cuenta normal (`/registro`) a la que el dueño del proyecto concede el rol con `insert into public.administradores`; sin nube, el admin local se crea una única vez en `/admin/setup` |
+| A.9.2.3 Privilegios | Las acciones privilegiadas llaman a `assertAdmin()`; en la nube, políticas con `es_admin()` = rol **y** `aal2` (segundo factor TOTP); `es_admin_registrado()` solo decide si se muestra el botón Admin; la app no puede escribir en `administradores`; la clave `service_role` no se usa en la app |
+| A.9.2.4 Información secreta | Contraseña de la cuenta ≥ 10 + secreto TOTP (se muestra solo en la inscripción); PIN local (solo sin nube) sin valor por defecto, ≥ 8, PBKDF2. **Recuperación:** el correo de restablecimiento no concede privilegios; la pérdida del TOTP sigue `recuperacion_acceso_admin.md` |
+| A.9.2.5 Revisión | **Cada 90 días** o al cambiar de responsable, en Administración → SGSI → "Revisión de derechos" (lista `admin_listar_administradores()`; evento `ACCESS_REVIEW_DONE`); verificar que hay al menos dos administradores |
+| A.9.2.6 Retirada | Al terminar el semestre o cambiar de administrador: `delete from public.administradores where user_id = …` (solo el dueño del proyecto; efecto inmediato), eliminar su factor TOTP si se va, revocar accesos a Vercel/GitHub/Supabase; sin nube, cambiar el PIN |
 
 ### 3.1 Cuentas de usuario y pacientes (A.9.2.1, A.9.2.2, A.9.2.6)
 
 - Las personas se registran con correo y contraseña (≥ 10 caracteres) y confirman el correo; el alta, el acceso y la baja quedan en la auditoría. La baja (`eliminar_mi_cuenta()`) borra cuenta, pacientes, monitoreos e incidentes propios.
 - Cada cuenta es dueña de sus pacientes y monitoreos (RLS por propietario). El **administrador no accede a los perfiles de pacientes**; sí puede leer monitoreos para soporte, sin identificación del paciente.
 - Un monitoreo `publico` es legible, en solo lectura, por cualquier cuenta autenticada y solo a través de las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` (security definer, `search_path` fijo, máx. 100 filas; sustituyen a la vista `monitoreos_publicos`). Nunca por anónimos.
-- Revisión de accesos: se revisan trimestralmente las cuentas con rol de administrador (`public.administradores`).
+- Revisión de accesos: se revisan trimestralmente las cuentas con rol de administrador (`public.administradores`, vía `admin_listar_administradores()`).
+- Procedimiento de concesión, retiro y recuperación: [`recuperacion_acceso_admin.md`](recuperacion_acceso_admin.md).
 
 ## 4. Responsabilidades del usuario (A.9.3.1)
 
@@ -45,7 +46,8 @@ No compartir el PIN ni la contraseña; no escribirlos en el equipo del laborator
 ## 5. Control de acceso a sistemas (A.9.4)
 
 - **A.9.4.1:** el participante solo ve sus sesiones (filtro por ID en local, `propietario = auth.uid()` en la nube); la vista multisensor no muestra datos opcionales.
-- **A.9.4.2:** bloqueo tras 5 fallos (5→60 min), expiración por 10 min de inactividad y 60 min máximo, reautenticación para acciones destructivas; auditoría de fallos.
+- **A.9.4.2:** con nube, el panel exige cuenta con rol + TOTP (`aal2`, aplicado por el servidor), 15 min de inactividad y 60 min máximo, código TOTP nuevo para borrado total, exportación global y cambio de retención, límite de 5 intentos/10 min, mensajes genéricos y auditoría `ADMIN_*`. Sin nube: bloqueo del PIN tras 5 fallos (5→60 min), expiración a los 10 min de inactividad y 60 min máximo, reautenticación con PIN.
+- **Limitación del modo sin nube:** el administrador local con PIN disuade el uso casual, pero no detiene a quien controla el navegador; para datos reales se debe usar la nube con TOTP. Con la nube activa el PIN **no** se usa (un solo segundo factor, verificable en el servidor).
 - **A.9.4.3:** validación de calidad del PIN (`validateNewPin`).
 - **A.9.4.5:** repositorio con acceso mínimo y rama `main` protegida.
 - **A.9.1.2:** la app solo se conecta a su propio origen y al proyecto Supabase (CSP `connect-src`).

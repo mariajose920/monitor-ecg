@@ -6,7 +6,7 @@
 -- ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017), Anexo A
 --   A.9.1.1 / A.9.4.1   Política de control de acceso / restricción del acceso → RLS en TODAS las tablas
 --   A.9.2.3             Gestión de privilegios → admin solo vía la tabla public.administradores
---   A.9.4.2             Inicio de sesión seguro → admin con Supabase Auth (email + contraseña)
+--   A.9.4.2             Inicio de sesión seguro → admin con Supabase Auth (email + contraseña) + TOTP (aal2) exigido por es_admin()
 --   A.18.1.4            Protección de datos personales (Ley 19.628 / 21.719) → solo seudónimos
 --   A.12.4.1 / A.12.4.2 Registro de eventos protegido → tabla auditoria (solo inserción)
 --   A.12.4.4            Sincronización del reloj → función hora_servidor() (fuente única de tiempo)
@@ -23,6 +23,20 @@ create table if not exists public.administradores (
 );
 alter table public.administradores enable row level security;
 
+-- ---------- Rol asignado (sin exigir aal2) ----------
+create or replace function public.es_admin_registrado()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.administradores where user_id = (select auth.uid()));
+$$;
+revoke all on function public.es_admin_registrado() from public, anon;
+grant execute on function public.es_admin_registrado() to authenticated;
+
+-- ---------- Privilegios efectivos: rol + segundo factor verificado ----------
 create or replace function public.es_admin()
 returns boolean
 language sql
@@ -30,10 +44,33 @@ stable
 security definer
 set search_path = public
 as $$
-  select exists (select 1 from public.administradores where user_id = auth.uid());
+  select exists (select 1 from public.administradores where user_id = (select auth.uid()))
+         and coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2';
 $$;
-revoke all on function public.es_admin() from public;
+revoke all on function public.es_admin() from public, anon;
 grant execute on function public.es_admin() to authenticated;
+
+-- La tabla de roles NO se modifica desde la app: ni insert, update ni delete para anon/authenticated.
+-- Conceder/retirar el rol lo hace solo el dueño del proyecto desde el SQL Editor.
+revoke insert, update, delete on public.administradores from anon, authenticated;
+
+-- ---------- Revisión de administradores (A.9.2.5): solo id y fecha, solo con privilegios efectivos ----------
+create or replace function public.admin_listar_administradores()
+returns table (user_id uuid, creado_en timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.es_admin() then
+    raise exception 'Privilegios insuficientes' using errcode = '42501';
+  end if;
+  return query select a.user_id, a.creado_en from public.administradores a order by a.creado_en;
+end;
+$$;
+revoke all on function public.admin_listar_administradores() from public, anon;
+grant execute on function public.admin_listar_administradores() to authenticated;
 
 drop policy if exists "admin ve administradores" on public.administradores;
 create policy "admin ve administradores" on public.administradores
@@ -271,7 +308,9 @@ alter table public.auditoria add constraint auditoria_tipo_lista_blanca check (t
   'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT',
   'CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE',
   'ACCOUNT_REGISTERED', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'ACCOUNT_PASSWORD_RESET', 'ACCOUNT_DELETED',
-  'PATIENT_CREATED', 'PATIENT_UPDATED', 'PATIENT_DELETED', 'VISIBILITY_CHANGED', 'LOCAL_DATA_LINKED'
+  'PATIENT_CREATED', 'PATIENT_UPDATED', 'PATIENT_DELETED', 'VISIBILITY_CHANGED', 'LOCAL_DATA_LINKED',
+  'ADMIN_ACCOUNT_LOGIN', 'ADMIN_MFA_ENROLLED', 'ADMIN_MFA_VERIFIED', 'ADMIN_MFA_FAILED',
+  'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_RECOVERY_REQUESTED'
 )) not valid;
 select public._agregar_check('public.auditoria', 'auditoria_detalle_tamano',
   'pg_column_size(detalle) <= 2048 and jsonb_typeof(detalle) = ''object''');
@@ -406,7 +445,6 @@ grant execute on function public.borrar_mis_datos() to authenticated;
 alter function public.cuota(text) set search_path = public;
 alter function public.hora_servidor() set search_path = public;
 alter function public._agregar_check(regclass, text, text) set search_path = public;
-revoke execute on function public.es_admin() from anon;
 revoke execute on function public.borrar_mis_datos() from anon;
 revoke execute on function public.hora_servidor() from anon;
 create index if not exists parametros_actualizado_por_idx on public.parametros (actualizado_por);

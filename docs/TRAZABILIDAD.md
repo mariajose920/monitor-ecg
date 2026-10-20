@@ -85,3 +85,9 @@ Rutas relativas a `monitor-ecg-vue/` salvo `supabase/` y `docs/`. Pruebas: **U**
 | Visibilidad privado/público con consentimiento | `services/monitoreos/visibilidad.js`, `SaveMonitoringDialog.vue`, `VisibilityDialog.vue` | U `visibilidad.spec.js`, E `cuentas.spec.js` | A.13.2.1, A.18.1.4 |
 | Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, funciones RPC `listar_monitoreos_publicos`/`monitoreo_publico` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
 | Auditoría de cuentas y visibilidad | `auditLog.js`, `schema.sql` | U `schema.spec.js` | A.12.4.1 |
+
+## 7. Administrador con cuenta y segundo factor (oct-2026)
+
+| Requisito | Componentes | Pruebas | Controles |
+|---|---|---|---|
+| RF25 (revisado): el administrador inicia sesión como una cuenta y se activa el botón Admin; recuperación no por cualquier persona | `supabase/migracion_admin_mfa.sql` (`es_admin_registrado()`, `es_admin()` con `aal2`, `admin_listar_administradores()`), `src/services/security/adminMfa.js`, `src/stores/auth.js`, `src/router/guards.js`, `src/views/admin/AdminMfaView.vue`, `AppHeader.vue`, `IsmsPanel.vue`, `docs/sgsi/recuperacion_acceso_admin.md` | U `tests/adminMfa.spec.js`, `tests/schema.spec.js`; E `e2e/admin-cuenta.nube.spec.js` (copia con nube y red simulada), `e2e/admin.spec.js` | A.9.2.3, A.9.2.4, A.9.2.5, A.9.2.6, A.9.4.2, A.12.4.1 (SEC-77..82) |

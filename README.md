@@ -73,10 +73,11 @@ Si el sensor envía valores fuera del rango del perfil elegido (p. ej. un ESP32 
    - *Authentication → URL Configuration*: **Site URL** = `https://monitor-ecg1.vercel.app`; **Redirect URLs**: `https://monitor-ecg1.vercel.app/acceso`, `https://monitor-ecg1.vercel.app/restablecer` (y `http://localhost:5173/**` solo para desarrollo).
    - *Authentication → Emails*: revisa las plantillas de «Confirm signup» y «Reset password» (en español) y, para producción, configura SMTP propio.
 3. *SQL Editor*: ejecutar completo `../supabase/schema.sql` (idempotente; crea tablas, RLS, cuotas, lista blanca de auditoría, `hora_servidor()`, `borrar_mis_datos()`, `pacientes`, las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` y `eliminar_mi_cuenta()`). Si la base ya existía, basta con ejecutar `../supabase/migracion_cuentas_pacientes.sql` (idempotente).
-4. Crear el administrador: *Authentication → Users → Add user* (correo + contraseña fuerte, auto-confirm) y luego:
+4. Crear el administrador: el administrador es **una cuenta normal** (se registra en `/registro` o se crea en *Authentication → Users → Add user* con correo + contraseña fuerte). Ejecutar `../supabase/migracion_admin_mfa.sql` (si no usas `schema.sql` completo), habilitar *MFA (TOTP)* en *Authentication → Multi-Factor* y conceder el rol (solo el dueño del proyecto, por SQL):
    ```sql
    insert into public.administradores (user_id)
-   select id from auth.users where email = 'correo-del-admin@ejemplo.cl';
+   select id from auth.users where email = 'correo-del-admin@ejemplo.cl'
+   on conflict (user_id) do nothing;
    ```
 5. Opcional: activar `pg_cron` y programar la purga (comando al final de `schema.sql`).
 6. Variables (en `.env.local` y en Vercel): `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` (solo la clave **publicable**; nunca `service_role`).
@@ -119,7 +120,7 @@ Si se cambia de proyecto Supabase, actualizar el host en `connect-src` de la CSP
 ## Limitaciones
 
 - **No es un dispositivo médico.** Uso solo educativo; seguir las reglas de seguridad eléctrica (portátil a batería, nunca en personas con marcapasos).
-- El PIN de admin (PBKDF2, 600 000 iteraciones) y el cifrado local protegen frente al uso casual, no frente a quien controla el navegador y DevTools; las acciones en la nube exigen la cuenta Supabase del administrador.
+- Con nube, el administrador es una cuenta con rol y segundo factor TOTP: los privilegios los impone el servidor (`es_admin()` exige `aal2`). Sin nube queda el administrador local con PIN (PBKDF2, 600 000 iteraciones), que protege frente al uso casual, no frente a quien controla el navegador y DevTools. Concesión, retiro y recuperación: `../docs/sgsi/recuperacion_acceso_admin.md`.
 - La auditoría local detecta alteraciones (cadena SHA-256), no las impide; en la nube la hora y el autor los fija el servidor.
 - Sin nube no hay respaldo central. El plan gratuito de Supabase se pausa por inactividad.
 - `BleSource` (ESP32 BLE) es un esqueleto; no se probó con hardware real en CI.

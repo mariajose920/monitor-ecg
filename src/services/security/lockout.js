@@ -35,14 +35,14 @@ export function registerSuccess() {
 }
 
 /** Crea una sesión de administrador. */
-export function newAdminSession(now) {
-  return { expiresAt: now + INACTIVIDAD_MS, hardExpiresAt: now + SESION_MAX_MS }
+export function newAdminSession(now, inactividadMs = INACTIVIDAD_MS) {
+  return { expiresAt: now + inactividadMs, hardExpiresAt: now + SESION_MAX_MS, inactividadMs }
 }
 
 /** Renueva por actividad sin superar el máximo absoluto. */
 export function touchSession(sess, now) {
   if (!isSessionValid(sess, now)) return sess
-  return { ...sess, expiresAt: Math.min(now + INACTIVIDAD_MS, sess.hardExpiresAt) }
+  return { ...sess, expiresAt: Math.min(now + (sess.inactividadMs ?? INACTIVIDAD_MS), sess.hardExpiresAt) }
 }
 
 export function isSessionValid(sess, now) {

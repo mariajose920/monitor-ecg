@@ -14,3 +14,4 @@ playwright-report/
 test-results/
 blob-report/
 !.env.production
+dist-e2e-nube/
