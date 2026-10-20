@@ -5,7 +5,6 @@ import {
   filtrarComunidad, PACIENTE_ANONIMO,
 } from '@/services/monitoreos/visibilidad.js'
 import { aplicarVisibilidad } from '@/services/monitoreos/monitoreoService.js'
-import { AUDIT_EVENTS } from '@/services/audit/auditLog.js'
 
 const PERFIL = { rangoEdad: '18-29', pesoKg: 70, nivelActividad: 'moderado' }
 const meta = (o = {}) => ({ id: 'a', participantes: [{ usuarioId: 'u1' }], ...o })
@@ -162,14 +161,51 @@ describe('migración SQL', () => {
     expect(sql).toContain('(select auth.uid())')
   })
 
-  it.skipIf(!sql)('la lista blanca de auditoría de la migración coincide con la aplicación', () => {
-    const bloque = /auditoria_tipo_lista_blanca check \(tipo in \(([\s\S]*?)\)\) not valid/.exec(sql)[1]
-    const enSql = [...bloque.matchAll(/'([A-Z_]+)'/g)].map((m) => m[1])
-    expect([...enSql].sort()).toEqual([...AUDIT_EVENTS].sort())
+  it.skipIf(!sql)('la migración histórica ya no fija la lista blanca (vive en tipos_evento)', () => {
+    expect(sql).not.toContain('auditoria_tipo_lista_blanca check')
   })
 
   it.skipIf(!sql)('borrar_mis_datos incluye pacientes y existe eliminar_mi_cuenta', () => {
     expect(sql).toContain('delete from public.pacientes where propietario = uid')
     expect(sql).toContain('function public.eliminar_mi_cuenta')
+  })
+})
+
+describe('TANDA 1: lo público sin fuga de identificadores (C-04)', () => {
+  const mig = leerSql('migracion_endurecimiento_2.sql')
+
+  it('mapea la duración en lugar de la hora de fin y no deja hora en el nombre', () => {
+    const m = mapearMonitoreoPublico({ id: 'a', inicio: '2026-10-01T00:00:00Z', duracion_s: 600, participantes: [] })
+    expect(m.fin).toBeNull()
+    expect(m.duracionS).toBe(600)
+    expect(m.nombre).toBe('Monitoreo público 2026-10-01 UTC')
+    expect(mapearMonitoreoPublico({ id: 'b', inicio: '2026-10-01T00:00:00Z', participantes: [] }).duracionS).toBeNull()
+  })
+
+  it.skipIf(!mig)('las RPC públicas truncan la fecha al día, excluyen cuentas anónimas y no devuelven propietario', () => {
+    for (const fn of ['listar_monitoreos_publicos', 'monitoreo_publico']) {
+      const ini = mig.indexOf(`create function public.${fn}(`)
+      const def = mig.slice(ini, mig.indexOf('$$;', mig.indexOf('as $$', ini)) + 3)
+      expect(def, fn).toContain("date_trunc('day'")
+      expect(def, fn).toContain('es_cuenta_registrada()')
+      expect(def, fn).toContain('duracion_s')
+      for (const prohibido of ['propietario', 'etiqueta', 'alias', 'paciente_id', "'nombre'", "'notas'"]) expect(def, prohibido).not.toContain(prohibido)
+    }
+  })
+
+  it.skipIf(!mig)('senal_publica: solo sesiones públicas finalizadas, máx. 60 bloques, sin propietario', () => {
+    const def = /create or replace function public\.senal_publica[\s\S]*?\$\$;/.exec(mig)[0]
+    expect(def).toContain("s.visibilidad = 'publico' and s.estado = 'finalizada'")
+    expect(def).toContain('least(greatest(coalesce(p_limite, 60), 1), 60)')
+    expect(def).toContain('es_cuenta_registrada()')
+    expect(def).not.toContain('propietario')
+    expect(mig).toContain('grant execute on function public.senal_publica(uuid, smallint, integer, integer) to authenticated;')
+  })
+
+  it.skipIf(!mig)('reportes: cuota diaria, una fila por cuenta y sesión, retiro que bloquea la republicación', () => {
+    expect(mig).toContain("cuota('reportes_por_dia')")
+    expect(mig).toContain('create unique index if not exists reportes_unico_idx')
+    expect(mig).toContain('retiros_contenido')
+    expect(mig).toContain("'CONTENT_REMOVED'")
   })
 })

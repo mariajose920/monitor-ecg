@@ -28,6 +28,18 @@ export const AUDIT_EVENTS = Object.freeze([
   // Administrador = cuenta + segundo factor TOTP (A.9.2.3, A.9.2.6, A.9.4.2)
   'ADMIN_ACCOUNT_LOGIN', 'ADMIN_MFA_ENROLLED', 'ADMIN_MFA_VERIFIED', 'ADMIN_MFA_FAILED',
   'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_RECOVERY_REQUESTED',
+  // TANDA 1 (C-04, C-06, C-08): contraseña cambiada desde la sesión; acceso excepcional del admin; moderación de contenido público
+  'ACCOUNT_PASSWORD_CHANGED', 'ADMIN_DATA_ACCESS', 'CONTENT_REPORTED', 'CONTENT_REMOVED', 'CONTENT_REPORT_REVIEWED',
+])
+
+/**
+ * Eventos que SOLO inserta el servidor en la nube (origen 'servidor' en public.tipos_evento): la función SQL que hace la
+ * acción ya los registra, así que el cliente NO debe replicarlos (evita el doble registro, H-20). Siguen en el log local.
+ * tests/schema.spec.js verifica que esta lista coincide con el SQL.
+ */
+export const EVENTOS_SOLO_SERVIDOR = Object.freeze([
+  'INCIDENT_UPDATED', 'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_DATA_ACCESS', 'CONTENT_REPORTED', 'CONTENT_REMOVED',
+  'CONTENT_REPORT_REVIEWED',
 ])
 
 export const GENESIS = '0'.repeat(64)

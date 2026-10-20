@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { cloudEnabled, cloudCuenta, eliminarMiCuenta, deleteAllMyCloudData } from '@/services/cloud/cloudSync.js'
+import { cloudEnabled, cloudCuenta, eliminarMiCuenta, deleteAllMyCloudData, reanudarAuditoriaNube } from '@/services/cloud/cloudSync.js'
 import * as authService from '@/services/accounts/authService.js'
 import { resumenLocal, vincularDatosLocales } from '@/services/accounts/linkLocal.js'
 import { setDataNamespace, clearDataNamespace } from '@/services/storage/index.js'
@@ -70,6 +70,7 @@ export const useAccountStore = defineStore('account', () => {
         setDataNamespace(actual.id)
         // Restaurar sesión: consulta al servidor si es administrador registrado y su nivel aal.
         await useAuthStore().refrescarNube()
+        reanudarAuditoriaNube()
       }
       desuscribir = authService.escucharAuth(async (evento, user) => {
         if (evento === 'PASSWORD_RECOVERY') recuperando.value = true
@@ -94,6 +95,7 @@ export const useAccountStore = defineStore('account', () => {
     cloudCuenta.value = cuenta.value
     await cambiarEspacio(user.id)
     await audit('ACCOUNT_LOGIN', 'system')
+    reanudarAuditoriaNube() // reenvía los eventos que quedaron pendientes por falta de red
     await useAuthStore().alIniciarSesionCuenta()
     await revisarVinculable()
   }
@@ -113,7 +115,9 @@ export const useAccountStore = defineStore('account', () => {
   async function fijarPassword(password, confirmar) {
     await authService.fijarNuevaPassword(password, confirmar, cuenta.value?.email ?? '')
     recuperando.value = false
+    // El cambio se hace con la sesión abierta: las demás sesiones de la cuenta se cerraron en el servidor (C-05).
     await audit('ACCOUNT_PASSWORD_RESET', 'system', { fase: 'cambio' })
+    await audit('ACCOUNT_PASSWORD_CHANGED', 'system', { otrasSesionesCerradas: true })
   }
 
   async function cerrarLocal(borrarDatos) {

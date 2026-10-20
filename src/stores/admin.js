@@ -87,6 +87,8 @@ export const useAdminStore = defineStore('admin', () => {
     useAuthStore().assertAdmin()
     await reautenticar(codigo)
     const fila = await srvConceder(correo)
+    // El servidor ya registra ADMIN_ROLE_GRANTED en la auditoría de la nube; este evento queda solo en el log local
+    // (pushAudit no replica los eventos de origen 'servidor': sin doble registro, H-20).
     await audit('ADMIN_ROLE_GRANTED', 'admin', { objetivo: fila.user_id })
     return fila
   }

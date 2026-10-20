@@ -83,8 +83,9 @@ describe('auditoría y SQL del administrador con MFA', () => {
   const sch = leer('..', 'supabase', 'schema.sql')
   const eventosSql = (sql) => [...(/auditoria_tipo_lista_blanca check \(tipo in \(([\s\S]*?)\)\) not valid/.exec(sql)?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map((m) => m[1])
 
-  it.skipIf(!mig)('la migración tiene la misma lista blanca que AUDIT_EVENTS', () => {
-    expect([...eventosSql(mig)].sort()).toEqual([...AUDIT_EVENTS].sort())
+  it.skipIf(!mig)('la migración histórica ya no fija la lista blanca (vive en tipos_evento, ver schema.spec.js)', () => {
+    expect(eventosSql(mig)).toEqual([])
+    expect(AUDIT_EVENTS.length).toBeGreaterThan(40)
   })
 
   it.skipIf(!mig || !sch)('es_admin() exige aal2, search_path fijo y sin acceso anónimo (migración y esquema)', () => {

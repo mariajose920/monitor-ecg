@@ -60,10 +60,10 @@ const cuentas = computed(() => [
         cuenta: `${a.email || `Administrador ${a.user_id.slice(0, 8)}…`} (alta ${formatFecha(a.creado_en)})`,
         rol: 'admin',
         estado: 'Rol asignado; privilegios solo con TOTP (aal2)',
-        privilegios: 'Lectura global (RLS es_admin), parámetros globales, incidentes',
+        privilegios: 'Parámetros globales, auditoría, incidentes y moderación; el contenido ajeno solo con motivo escrito (auditado)',
       }))
     : [{ cuenta: 'Administrador local (PIN)', rol: 'admin', estado: auth.hasCredential ? 'Credencial definida (PBKDF2)' : 'Sin credencial', privilegios: 'Parámetros, auditoría, exportación global, borrado' }]),
-  { cuenta: `Participantes (${users.users.length})`, rol: 'participant', estado: 'Seudónimos "Usuario N"; sesión anónima en la nube', privilegios: 'Solo sus datos (RLS propietario = auth.uid())' },
+  { cuenta: `Participantes (${users.users.length})`, rol: 'participant', estado: 'Seudónimos "Paciente N"; cuenta propia', privilegios: 'Solo sus datos (RLS propietario = auth.uid())' },
 ])
 const confirmaRevision = ref(false)
 

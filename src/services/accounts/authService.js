@@ -79,6 +79,13 @@ export async function fijarNuevaPassword(password, confirmar, correo = '') {
   exigirNube()
   const { error } = await supabase.auth.updateUser({ password })
   if (error) throw new AuthError('No se pudo cambiar la contraseña. Vuelve a solicitar el enlace de recuperación.')
+  // C-05 / H-03: tras cambiar la contraseña se cierran TODAS las demás sesiones de la cuenta (un token robado deja de servir).
+  // Un fallo aquí no revierte el cambio, pero no se oculta: la persona puede cerrar sesión en los demás equipos.
+  try {
+    await supabase.auth.signOut({ scope: 'others' })
+  } catch {
+    /* la contraseña ya cambió; las otras sesiones caducarán con su refresh token */
+  }
 }
 
 export async function cerrarSesionNube() {

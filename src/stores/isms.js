@@ -4,12 +4,13 @@ import { useAuthStore } from './auth.js'
 import { useUsersStore } from './users.js'
 import { secureStorage } from '@/services/storage/index.js'
 import { auditLog, audit } from '@/services/audit/auditService.js'
-import { createIncident, transitionIncident, isOpen } from '@/services/security/incidents.js'
+import { createIncident, transitionIncident, isOpen, mezclarIncidentes } from '@/services/security/incidents.js'
 import {
   POLICY_VERSION, needsPolicyAcceptance, accessReviewStatus, clockSkew,
   computeSecurityMetrics, evaluateObjectives,
 } from '@/services/security/isms.js'
-import { pushIncident, fetchServerTime, cloudEnabled } from '@/services/cloud/cloudSync.js'
+import { pushIncident, fetchServerTime, cloudEnabled, cloudCuenta, fetchIncidentesNube, actualizarIncidenteNube } from '@/services/cloud/cloudSync.js'
+import { conRenovacionTotp } from '@/services/security/adminRenovacion.js'
 import { getPref, setPref } from '@/utils/prefs.js'
 
 const KEY_INCIDENTS = 'isms:incidentes'
@@ -38,6 +39,22 @@ export const useIsmsStore = defineStore('isms', () => {
     const list = await secureStorage.getItem(KEY_INCIDENTS)
     incidentes.value = Array.isArray(list) ? list : []
     cargado.value = true
+    sincronizarNube().catch(() => {})
+  }
+
+  /**
+   * C-09: trae los incidentes de la nube (el administrador ve todos; cada persona, los suyos con su estado y respuesta) y los
+   * fusiona con la copia local; sube los que quedaron pendientes. El servidor manda en el ciclo de vida.
+   */
+  async function sincronizarNube() {
+    if (!cloudEnabled || !cloudCuenta.value) return false
+    const nube = await fetchIncidentesNube()
+    if (!nube) return false
+    const { lista, porSubir } = mezclarIncidentes(incidentes.value, nube)
+    incidentes.value = lista
+    await persist()
+    for (const inc of porSubir) pushIncident(inc)
+    return true
   }
 
   async function ensureLoaded() {
@@ -68,13 +85,17 @@ export const useIsmsStore = defineStore('isms', () => {
     await ensureLoaded()
     const idx = incidentes.value.findIndex((i) => i.id === id)
     if (idx < 0) throw new Error('Incidente no encontrado')
-    const nuevo = transitionIncident(incidentes.value[idx], estado, notas)
+    let nuevo = transitionIncident(incidentes.value[idx], estado, notas) // valida la transición antes de llamar al servidor
+    if (cloudEnabled && cloudCuenta.value && incidentes.value[idx].subido !== false) {
+      // El servidor valida y registra (INCIDENT_UPDATED); si el TOTP caducó, pide un código nuevo y reintenta.
+      const r = await conRenovacionTotp(() => actualizarIncidenteNube(id, estado, { respuesta: nuevo.respuesta, leccion: nuevo.leccion }))
+      if (r) nuevo = { ...nuevo, estado: r.estado, respuesta: r.respuesta, leccion: r.leccion, actualizadoUtc: r.actualizadoUtc ?? nuevo.actualizadoUtc }
+    }
     const copia = [...incidentes.value]
     copia[idx] = nuevo
     incidentes.value = copia
     await persist()
     await audit('INCIDENT_UPDATED', 'admin', { id, estado })
-    pushIncident(nuevo)
     return nuevo
   }
 
@@ -131,6 +152,6 @@ export const useIsmsStore = defineStore('isms', () => {
 
   return {
     incidentes, abiertos, politica, ultimaRevisionUtc, reloj, debeAceptarPolitica, revision,
-    load, ensureLoaded, report, update, acceptPolicy, recordAccessReview, checkClock, metrics, reset,
+    load, ensureLoaded, sincronizarNube, report, update, acceptPolicy, recordAccessReview, checkClock, metrics, reset,
   }
 })

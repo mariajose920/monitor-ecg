@@ -102,6 +102,7 @@ export function actividadesDe(s, participantes = s.participantes) {
 
 export function duracionMs(s) {
   if (s.fin) return Math.max(0, Date.parse(s.fin) - Date.parse(s.inicio))
+  if (Number.isFinite(s.duracionS)) return s.duracionS * 1000 // monitoreos de la comunidad: solo se publica la duración
   const r = s.participantes?.[0]?.resumen?.duracionMs
   return Number.isFinite(r) ? r : null
 }

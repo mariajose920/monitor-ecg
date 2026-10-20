@@ -10,7 +10,7 @@ export const VISIBILIDADES = Object.freeze(['privado', 'publico'])
 export const PACIENTE_ANONIMO = 'Paciente anónimo'
 
 /** Qué se publica y qué no (se muestra en el diálogo y en el aviso de privacidad). */
-export const CAMPOS_PUBLICADOS = Object.freeze(['Señal ECG', 'BPM', 'Actividad', 'Fecha y hora (UTC)', PACIENTE_ANONIMO])
+export const CAMPOS_PUBLICADOS = Object.freeze(['Señal ECG', 'BPM', 'Actividad', 'Fecha (solo el día, UTC) y duración', PACIENTE_ANONIMO])
 export const CAMPOS_NO_PUBLICADOS = Object.freeze(['Nombre o alias del paciente', 'Nombre y nota del monitoreo', 'Cuenta propietaria', 'Datos del paciente (salvo casilla adicional)'])
 
 export function esVisibilidad(v) {
@@ -85,8 +85,9 @@ export function mapearMonitoreoPublico(row) {
     guardado: true,
     visibilidad: 'publico',
     inicio: row.inicio,
-    fin: row.fin ?? null,
-    nombre: `Monitoreo público ${String(row.inicio ?? '').slice(0, 16).replace('T', ' ')} UTC`,
+    fin: null, // la hora de término no se publica (C-04): solo la duración
+    duracionS: Number.isFinite(Number(row.duracion_s)) && row.duracion_s !== null ? Number(row.duracion_s) : null,
+    nombre: `Monitoreo público ${String(row.inicio ?? '').slice(0, 10)} UTC`,
     notas: '',
     actividadPrincipal: row.actividad ?? null,
     paciente: PACIENTE_ANONIMO,

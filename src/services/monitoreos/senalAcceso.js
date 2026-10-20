@@ -15,5 +15,5 @@ export function registrarComunitarios(ids) {
 export const esComunitario = (id) => comunitarios.has(id)
 
 export function obtenerSenal(sesionId, canal) {
-  return comunitarios.has(sesionId) ? fetchSenalNube(sesionId, canal) : getChannelSignal(sesionId, canal)
+  return comunitarios.has(sesionId) ? fetchSenalNube(sesionId, canal, { publica: true }) : getChannelSignal(sesionId, canal)
 }

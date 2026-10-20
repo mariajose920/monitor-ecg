@@ -1,3 +1,13 @@
+-- migracion_admin_mfa.sql (paso 3) es HISTÓRICA. Si ya se aplicó migracion_endurecimiento_2.sql, esta migración NO debe re-ejecutarse
+-- (reabriría controles cerrados: lectura pública de bloques, lectura global del administrador, lista blanca fija).
+do $$
+begin
+  if to_regclass('public.tipos_evento') is not null then
+    raise exception 'Migración histórica superada por migracion_endurecimiento_2.sql: no se vuelve a ejecutar.';
+  end if;
+end;
+$$;
+
 -- ============================================================
 -- Migración idempotente: administrador = cuenta normal + segundo factor TOTP (aal2)
 -- Aplicar en: Supabase -> SQL Editor -> New query -> Run (se puede repetir sin perder datos).
@@ -48,7 +58,9 @@ grant execute on function public.es_admin() to authenticated;
 revoke insert, update, delete on public.administradores from anon, authenticated;
 
 -- ---------- Revisión de administradores (A.9.2.5): solo id y fecha, solo con privilegios efectivos ----------
-create or replace function public.admin_listar_administradores()
+-- H-18: sin este DROP, ejecutar esta migración sobre una base que ya tiene la versión de 3 columnas falla (cannot change return type).
+drop function if exists public.admin_listar_administradores();
+create function public.admin_listar_administradores()
 returns table (user_id uuid, creado_en timestamptz)
 language plpgsql
 stable
@@ -65,23 +77,7 @@ $$;
 revoke all on function public.admin_listar_administradores() from public, anon;
 grant execute on function public.admin_listar_administradores() to authenticated;
 
--- ---------- Lista blanca de auditoría (= AUDIT_EVENTS de src/services/audit/auditLog.js) ----------
-alter table public.auditoria drop constraint if exists auditoria_tipo_lista_blanca;
-alter table public.auditoria add constraint auditoria_tipo_lista_blanca check (tipo in (
-  'ADMIN_SETUP', 'ADMIN_LOGIN_OK', 'ADMIN_LOGIN_FAIL', 'ADMIN_LOCKED', 'ADMIN_LOGOUT', 'ADMIN_SESSION_EXPIRED',
-  'ADMIN_PIN_CHANGED', 'PARAM_CHANGED', 'USER_CREATED', 'CONSENT_GIVEN', 'CONSENT_WITHDRAWN', 'USER_DATA_DELETED',
-  'ALL_DATA_WIPED', 'CLOUD_ADMIN_LOGIN', 'CLOUD_ADMIN_LOGOUT', 'RETENTION_PURGE', 'EXPORT_CSV', 'SERIAL_CONNECTED',
-  'SERIAL_DISCONNECTED', 'SERIAL_LOST', 'SERIAL_INVALID_DATA', 'DEVICE_RESET', 'INTEGRITY_ERROR', 'AUDIT_EXPORTED',
-  'SESSION_STARTED', 'SESSION_ENDED', 'ALERT_TRIGGERED',
-  'INCIDENT_REPORTED', 'INCIDENT_UPDATED', 'POLICY_ACCEPTED', 'ACCESS_REVIEW_DONE', 'CLOCK_SKEW',
-  'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED',
-  'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT',
-  'CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE',
-  'ACCOUNT_REGISTERED', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'ACCOUNT_PASSWORD_RESET', 'ACCOUNT_DELETED',
-  'PATIENT_CREATED', 'PATIENT_UPDATED', 'PATIENT_DELETED', 'VISIBILITY_CHANGED', 'LOCAL_DATA_LINKED',
-  'ADMIN_ACCOUNT_LOGIN', 'ADMIN_MFA_ENROLLED', 'ADMIN_MFA_VERIFIED', 'ADMIN_MFA_FAILED',
-  'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_RECOVERY_REQUESTED'
-)) not valid;
+-- (La lista blanca de auditoría vive ahora en la tabla tipos_evento: migracion_endurecimiento_2.sql.)
 
 -- ============================================================
 -- EJEMPLOS (NO se ejecutan solos). Solo el dueño del proyecto, en el SQL Editor:

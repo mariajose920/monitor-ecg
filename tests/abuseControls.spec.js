@@ -65,10 +65,10 @@ describe('supabase/schema.sql (SUG-05, SUG-14)', () => {
   const disponible = Boolean(ruta)
   const sql = disponible ? readFileSync(ruta, 'utf8') : ''
 
-  it.skipIf(!disponible)('la lista blanca de auditoría coincide con AUDIT_EVENTS', () => {
-    const bloque = sql.match(/auditoria_tipo_lista_blanca check \(tipo in \(([\s\S]*?)\)\) not valid/)
+  it.skipIf(!disponible)('la lista blanca de auditoría (tabla tipos_evento) coincide con AUDIT_EVENTS', () => {
+    const bloque = sql.match(/insert into public\.tipos_evento \(tipo, origen\) values([\s\S]*?)on conflict/)
     expect(bloque).not.toBeNull()
-    const tipos = [...bloque[1].matchAll(/'([A-Z_]+)'/g)].map((m) => m[1]).sort()
+    const tipos = [...bloque[1].matchAll(/\('([A-Z_]+)',/g)].map((m) => m[1]).sort()
     expect(tipos).toEqual([...AUDIT_EVENTS].sort())
   })
 

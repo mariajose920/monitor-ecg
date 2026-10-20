@@ -2,6 +2,11 @@ import { ref } from 'vue'
 import { supabase, cloudEnabled } from './supabaseClient.js'
 import { createRateLimiter, CLIENT_LIMITS } from '@/utils/rateLimiter.js'
 import { camposVisibilidadNube, mapearMonitoreoPublico } from '@/services/monitoreos/visibilidad.js'
+import { numeroDeEtiqueta } from '@/services/users/etiquetas.js'
+import { EVENTOS_SOLO_SERVIDOR } from '@/services/audit/auditLog.js'
+import { createAuditOutbox } from './auditOutbox.js'
+import { getDb } from '@/services/storage/db.js'
+import { notify } from '@/services/notifications/notifier.js'
 
 /**
  * Sincronización con Supabase. Lo local (IndexedDB cifrado) sigue siendo la fuente principal:
@@ -24,9 +29,15 @@ function permitir(tipo) {
 }
 
 let cola = Promise.resolve()
+let ultimoAvisoLimite = 0
 function encolar(fn) {
-  cola = cola.then(fn).catch(() => {
+  cola = cola.then(fn).catch((e) => {
     cloudEstado.value = 'error'
+    // C-11: el tope de almacenamiento del servidor (ECG01) no se reintenta; se avisa una vez por minuto, con un mensaje claro.
+    if (e?.code === 'ECG01' && Date.now() - ultimoAvisoLimite > 60_000) {
+      ultimoAvisoLimite = Date.now()
+      notify(mensajeErrorNube(e), { tipo: 'error', duracionMs: 9000 })
+    }
   })
   return cola
 }
@@ -153,15 +164,56 @@ export function deleteCloudChunks(sessionId, canal) {
   })
 }
 
-/** Réplica de auditoría (A.12.4.1). Los detalles ya vienen saneados por el auditLog local. */
-export function pushAudit(tipo, actor, detalle) {
-  if (!cloudEnabled || !permitir('audit')) return Promise.resolve()
-  const actorTipo = actor === 'admin' ? 'admin' : String(actor).startsWith('participant') ? 'participant' : 'system'
-  return encolar(async () => {
-    if (!(await ensureCloudSession())) return
-    const { data } = await supabase.auth.getUser()
-    sinError(await supabase.from('auditoria').insert({ tipo, actor: actorTipo, detalle: detalle ?? {}, usuario: data.user?.id }))
-  })
+// ---------------------------------------------------------------------------------------------
+// Auditoría de la nube (C-08): el actor y la hora los fija el servidor (RPC registrar_evento); los eventos pasan por una
+// cola persistente en IndexedDB que se vacía al volver la red o al iniciar sesión, con espera exponencial.
+// ---------------------------------------------------------------------------------------------
+const CLAVE_COLA_AUDITORIA = 'outbox:audit'
+const auditOutbox = createAuditOutbox({
+  store: {
+    load: async () => (await (await getDb()).get('meta', CLAVE_COLA_AUDITORIA)) ?? [],
+    save: async (items) => {
+      await (await getDb()).put('meta', items, CLAVE_COLA_AUDITORIA)
+    },
+  },
+  send: (it) => supabase.rpc('registrar_evento', { p_tipo: it.tipo, p_detalle: it.detalle }),
+})
+export const cloudAuditPendientes = ref(0)
+let temporizadorAuditoria = null
+
+async function vaciarAuditoria() {
+  if (!cloudEnabled) return
+  const cuentaId = cloudCuenta.value?.id
+  if (!cuentaId) return
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (data.session?.user?.id !== cuentaId) return
+    await auditOutbox.flush(cuentaId)
+    cloudAuditPendientes.value = await auditOutbox.pendientes(cuentaId)
+    clearTimeout(temporizadorAuditoria)
+    const espera = auditOutbox.siguienteIntentoMs()
+    if (espera) temporizadorAuditoria = setTimeout(vaciarAuditoria, espera)
+  } catch {
+    clearTimeout(temporizadorAuditoria)
+    temporizadorAuditoria = setTimeout(vaciarAuditoria, 30_000)
+  }
+}
+if (cloudEnabled && typeof window !== 'undefined') window.addEventListener('online', () => vaciarAuditoria())
+
+/** Reenvía los eventos pendientes (al iniciar sesión, al restaurar la sesión o al volver la red). */
+export const reanudarAuditoriaNube = () => vaciarAuditoria()
+/** Olvida la cola local (borrado total de los datos del equipo). */
+export const limpiarAuditoriaPendiente = () => auditOutbox.limpiar()
+
+/**
+ * Réplica de auditoría (A.12.4.1). Los detalles ya vienen saneados por el auditLog local. El "actor" local NO se envía:
+ * el servidor lo calcula. Los eventos que el servidor registra por su cuenta no se replican (sin doble registro, H-20).
+ */
+export function pushAudit(tipo, _actor, detalle) {
+  if (!cloudEnabled || EVENTOS_SOLO_SERVIDOR.includes(tipo)) return Promise.resolve()
+  const cuentaId = cloudCuenta.value?.id
+  if (!cuentaId) return Promise.resolve() // sin cuenta no se sube nada
+  return auditOutbox.enqueue({ tipo, detalle: detalle ?? {}, cuentaId }).then(() => vaciarAuditoria())
 }
 
 /** Parámetros globales definidos por el administrador (RF15, RF26, RF27). */
@@ -189,24 +241,55 @@ export async function pushCloudParametros({ parametros, sincronizacion }) {
   return true
 }
 
-/** Réplica de una notificación de incidente o debilidad (A.16.1.2 / A.16.1.3). Sin datos de salud. */
+/**
+ * Alta de una notificación de incidente o debilidad (A.16.1.2 / A.16.1.3). Sin datos de salud. El servidor fija la fecha, el
+ * reportante y el estado inicial; un reintento no duplica ni sobrescribe (ignoreDuplicates). Los cambios de estado los hace
+ * el administrador con actualizarIncidenteNube (RPC). C-09.
+ */
 export function pushIncident(inc) {
   if (!cloudEnabled || !permitir('incident')) return Promise.resolve()
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
     sinError(await supabase.from('incidentes').upsert({
       id: inc.id,
-      creado_en: inc.creadoUtc,
-      actualizado_en: inc.actualizadoUtc,
       tipo: inc.tipo,
       severidad: inc.severidad,
       descripcion: inc.descripcion,
       reportado_por: inc.reportadoPor,
-      estado: inc.estado,
-      respuesta: inc.respuesta || null,
-      leccion: inc.leccion || null,
-    }))
+      estado: 'abierto',
+    }, { onConflict: 'id', ignoreDuplicates: true }))
   })
+}
+
+const filaIncidente = (f) => ({
+  id: f.id,
+  creadoUtc: f.creado_en,
+  actualizadoUtc: f.actualizado_en,
+  tipo: f.tipo,
+  severidad: f.severidad,
+  descripcion: f.descripcion,
+  reportadoPor: f.reportado_por,
+  estado: f.estado,
+  respuesta: f.respuesta ?? '',
+  leccion: f.leccion ?? '',
+  historial: [],
+  origen: 'nube',
+})
+
+/** Incidentes visibles para la cuenta (RLS): los propios o, con privilegios efectivos, todos. C-09. */
+export async function fetchIncidentesNube() {
+  if (!(await ensureCloudSession())) return null
+  const { data, error } = await supabase.from('incidentes').select('*').order('creado_en', { ascending: false }).limit(500)
+  if (error) throw error
+  return (data ?? []).map(filaIncidente)
+}
+
+/** Ciclo abrir -> en_analisis -> cerrado/descartado validado en el servidor (solo administrador). */
+export async function actualizarIncidenteNube(id, estado, { respuesta = '', leccion = '' } = {}) {
+  const { data, error } = await supabase.rpc('admin_actualizar_incidente', { p_id: id, p_estado: estado, p_respuesta: respuesta || null, p_leccion: leccion || null })
+  if (error) throw error
+  const f = Array.isArray(data) ? data[0] : data
+  return f ? { id: f.id, estado: f.estado, respuesta: f.respuesta ?? '', leccion: f.leccion ?? '', actualizadoUtc: f.actualizado_en } : null
 }
 
 /** Hora del servidor (fuente única acordada para la sincronización del reloj, A.12.4.4). */
@@ -231,11 +314,17 @@ const filaPaciente = (u) => ({
   actualizado_en: u.actualizadoEn,
 })
 
-export function pushPaciente(u) {
+/** @param {{alConflictoEtiqueta?: () => void}} [o] se invoca si el servidor rechaza la etiqueta por duplicada en la cuenta (23505, C-21) */
+export function pushPaciente(u, { alConflictoEtiqueta } = {}) {
   if (!cloudEnabled) return Promise.resolve()
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
-    sinError(await supabase.from('pacientes').upsert(filaPaciente(u)))
+    const { error } = await supabase.from('pacientes').upsert(filaPaciente(u))
+    if (error?.code === '23505' && alConflictoEtiqueta) {
+      setTimeout(() => alConflictoEtiqueta(), 0)
+      return
+    }
+    if (error) throw error
   })
 }
 
@@ -254,7 +343,7 @@ export async function fetchPacientes() {
   if (error) throw error
   return (data ?? []).map((f) => ({
     id: f.id,
-    numero: Number(/(d+)$/.exec(f.etiqueta)?.[1] ?? 0),
+    numero: numeroDeEtiqueta(f.etiqueta),
     etiqueta: f.etiqueta,
     alias: f.alias,
     perfil: f.perfil,
@@ -281,16 +370,33 @@ export async function fetchPublico(id) {
   return fila ? mapearMonitoreoPublico(fila) : null
 }
 
-/** Señal de un canal de un monitoreo (propio o público) desde la nube, en el formato de getChannelSignal. */
-export async function fetchSenalNube(sesionId, canal) {
+/**
+ * Señal de un canal de un monitoreo desde la nube, en el formato de getChannelSignal.
+ * Lo público SOLO se lee con la RPC senal_publica (máx. 60 bloques por llamada, sin ids de propietario): ya no existe
+ * lectura directa de bloques ajenos (C-04). Lo propio se lee de la tabla (RLS: solo el propietario).
+ */
+export const BLOQUES_POR_LLAMADA_PUBLICA = 60
+export async function fetchSenalNube(sesionId, canal, { publica = false } = {}) {
   if (!(await ensureCloudSession())) throw new Error('Inicia sesión para ver este monitoreo.')
   const filas = []
-  for (let desde = 0; ; desde += 500) {
-    const { data, error } = await supabase.from('bloques_muestras').select('seq,t,ecg_raw,leads_off,bpm')
-      .eq('sesion_id', sesionId).eq('canal', canal).order('seq').range(desde, desde + 499)
-    if (error) throw error
-    filas.push(...(data ?? []))
-    if (!data || data.length < 500) break
+  if (publica) {
+    let desde = 0
+    for (let vueltas = 0; vueltas < 200; vueltas++) {
+      const { data, error } = await supabase.rpc('senal_publica', { p_sesion: sesionId, p_canal: Number(canal), p_desde: desde, p_limite: BLOQUES_POR_LLAMADA_PUBLICA })
+      if (error) throw error
+      const bloques = data ?? []
+      filas.push(...bloques)
+      if (bloques.length < BLOQUES_POR_LLAMADA_PUBLICA) break
+      desde = Number(bloques[bloques.length - 1].seq) + 1
+    }
+  } else {
+    for (let desde = 0; ; desde += 500) {
+      const { data, error } = await supabase.from('bloques_muestras').select('seq,t,ecg_raw,leads_off,bpm')
+        .eq('sesion_id', sesionId).eq('canal', canal).order('seq').range(desde, desde + 499)
+      if (error) throw error
+      filas.push(...(data ?? []))
+      if (!data || data.length < 500) break
+    }
   }
   const n = filas.reduce((a, f) => a + f.t.length, 0)
   const t = new Float64Array(n)
@@ -337,4 +443,74 @@ export async function subirBloquesConReintento(sesionId, canal, chunk, intentos 
 export async function subirSesionDirecta(meta) {
   await pushSession(meta, true)
   await cola.catch(() => {})
+}
+
+// ---------------------------------------------------------------------------------------------
+// Moderación de lo público y acceso excepcional del administrador (C-04, C-06). Todo por RPC en el servidor.
+// ---------------------------------------------------------------------------------------------
+
+/** Mensaje claro (y genérico) para el error del servidor; ECG01 = límite de almacenamiento (C-11). */
+export function mensajeErrorNube(error) {
+  const code = String(error?.code ?? '')
+  const msg = String(error?.message ?? '')
+  if (code === 'ECG01') return 'Alcanzaste tu límite de almacenamiento en la nube. Borra monitoreos antiguos para seguir guardando.'
+  if (code === 'P0001' && /cuota/i.test(msg)) return 'Demasiadas solicitudes seguidas. Espera un momento e inténtalo de nuevo.'
+  if (code === '42501') return 'No se pudo completar la operación (permisos insuficientes).'
+  return 'No se pudo completar la operación. Inténtalo de nuevo.'
+}
+
+/** Reporta un monitoreo público (cuenta registrada; máx. 5 por día). */
+export async function reportarMonitoreo(id, motivo) {
+  if (!(await ensureCloudSession())) throw new Error('Inicia sesión para reportar un monitoreo.')
+  const { error } = await supabase.rpc('reportar_monitoreo', { p_id: id, p_motivo: String(motivo ?? '').trim() })
+  if (error) throw new Error(mensajeErrorNube(error))
+}
+
+/** Reportes de contenido (administrador). */
+export async function adminListarReportes(estado = 'abierto') {
+  const { data, error } = await supabase.rpc('admin_listar_reportes', { p_estado: estado, p_limite: 100 })
+  if (error) throw error
+  return data ?? []
+}
+export async function adminResolverReporte(id, estado) {
+  const { data, error } = await supabase.rpc('admin_resolver_reporte', { p_id: id, p_estado: estado })
+  if (error) throw error
+  return data === true
+}
+/** Pasa a privado un monitoreo reportado (motivo de 10 a 300 caracteres; queda auditado). */
+export async function adminRetirarPublicacion(id, motivo) {
+  const { data, error } = await supabase.rpc('admin_retirar_publicacion', { p_id: id, p_motivo: motivo })
+  if (error) throw error
+  return data === true
+}
+
+/** Acceso excepcional de lectura (motivo de 10 a 300 caracteres): devuelve solo los metadatos/datos de la sesión, sin señal. */
+export async function adminLeerSesion(id, motivo) {
+  const { data, error } = await supabase.rpc('admin_leer_sesion', { p_id: id, p_motivo: motivo })
+  if (error) throw error
+  return Array.isArray(data) ? (data[0] ?? null) : data
+}
+
+/** Accesos excepcionales del administrador a MIS sesiones (visible para el titular). */
+export async function fetchMisAccesosAdmin() {
+  if (!(await ensureCloudSession())) return []
+  const { data, error } = await supabase.rpc('mis_accesos_admin', { p_limite: 50 })
+  if (error) return []
+  return data ?? []
+}
+
+// ---------------------------------------------------------------------------------------------
+// Auditoría de la nube para el administrador (C-08)
+// ---------------------------------------------------------------------------------------------
+export async function adminLeerAuditoria({ limite = 100, desde = null, antesDeId = null } = {}) {
+  const { data, error } = await supabase.rpc('admin_leer_auditoria', { p_limite: limite, p_desde: desde, p_antes_de_id: antesDeId })
+  if (error) throw error
+  return data ?? []
+}
+/** @returns {Promise<{ok:boolean, filas:number, rotoEn:number|null}>} */
+export async function verificarCadenaNube() {
+  const { data, error } = await supabase.rpc('verificar_cadena_auditoria')
+  if (error) throw error
+  const f = Array.isArray(data) ? data[0] : data
+  return { ok: f?.ok === true, filas: Number(f?.filas ?? 0), rotoEn: f?.roto_en ?? null }
 }

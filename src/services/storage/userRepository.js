@@ -1,4 +1,5 @@
 import { dataStorage as secureStorage } from './index.js'
+import { siguienteNumero } from '@/services/users/etiquetas.js'
 
 /**
  * Usuarios seudonimizados (RF01–RF03). Todo el registro va cifrado (SEC-28):
@@ -19,8 +20,7 @@ export async function saveUsers(users) {
 /** Contador persistente para no reutilizar números de seudónimo. */
 export async function nextUserNumber(users) {
   const stored = (await secureStorage.getItem(KEY_COUNTER)) ?? 0
-  const maxExistente = users.reduce((m, u) => Math.max(m, u.numero || 0), 0)
-  const n = Math.max(stored, maxExistente) + 1
+  const n = siguienteNumero(stored, users)
   await secureStorage.setItem(KEY_COUNTER, n)
   return n
 }

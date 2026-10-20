@@ -1,6 +1,7 @@
 <script setup>
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import IncidentReportForm from '@/components/security/IncidentReportForm.vue'
+import MisIncidentes from '@/components/security/MisIncidentes.vue'
 import { POLITICA } from '@/data/securityPolicy.js'
 import { POLICY_VERSION } from '@/services/security/isms.js'
 
@@ -54,6 +55,7 @@ const NIVEL = { 'Confidencial-Sensible': 'sensitive', Confidencial: 'confidentia
     </article>
 
     <IncidentReportForm id="reportar" />
+    <MisIncidentes />
 
     <p class="muted small">Más detalles en el <RouterLink to="/privacidad">aviso de privacidad</RouterLink> y en <RouterLink to="/aprende/seguridad-informacion">Aprende → Seguridad de la información</RouterLink>.</p>
   </section>

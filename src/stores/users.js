@@ -6,6 +6,7 @@ import { pushSession, deleteCloudSessions, deleteCloudChunks, pushPaciente, dele
 import { audit } from '@/services/audit/auditService.js'
 import { newId } from '@/utils/ids.js'
 import { RANGOS_EDAD, NIVELES_ACTIVIDAD } from '@/data/activities.js'
+import { normalizarEtiquetaLegada as normalizarEtiqueta, etiquetaDe } from '@/services/users/etiquetas.js'
 
 /** Versión del texto de consentimiento: si cambia, se vuelve a pedir (SEC-17). */
 export const CONSENT_VERSION = '1.0'
@@ -32,11 +33,6 @@ export function validarPerfil(p) {
 
 export function consentimientoVigente(u) {
   return !!u?.consentimiento && u.consentimiento.consentVersion === CONSENT_VERSION
-}
-
-/** Los seudónimos antiguos "Usuario N" se muestran como "Paciente N". */
-function normalizarEtiqueta(u) {
-  return /^Usuario d+$/.test(u.etiqueta) ? { ...u, etiqueta: u.etiqueta.replace('Usuario', 'Paciente') } : u
 }
 
 export const useUsersStore = defineStore('users', () => {
@@ -83,7 +79,7 @@ export const useUsersStore = defineStore('users', () => {
     const u = {
       id: newId(),
       numero,
-      etiqueta: `Paciente ${numero}`,
+      etiqueta: etiquetaDe(numero),
       alias: a || null,
       perfil: null,
       consentimiento: null,
@@ -93,8 +89,18 @@ export const useUsersStore = defineStore('users', () => {
     users.value.push(u)
     await persist()
     await audit(cloudCuenta.value ? 'PATIENT_CREATED' : 'USER_CREATED', 'system', { usuario: u.etiqueta })
-    pushPaciente(u)
+    pushPaciente(u, { alConflictoEtiqueta: () => renumerar(u) })
     return u
+  }
+
+  /** C-21: el servidor ya tenía esa etiqueta en la cuenta (23505): se toma el número siguiente y se reintenta. */
+  async function renumerar(u, intentos = 0) {
+    if (intentos >= 3 || !users.value.includes(u)) return
+    u.numero = await nextUserNumber(users.value)
+    u.etiqueta = etiquetaDe(u.numero)
+    u.actualizadoEn = new Date().toISOString()
+    await persist()
+    pushPaciente(u, { alConflictoEtiqueta: () => renumerar(u, intentos + 1) })
   }
 
   /** RF02: elegir un identificador = sesión de participante, sin contraseña. */

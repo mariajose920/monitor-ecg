@@ -1,4 +1,15 @@
--- NOTA: la vista public.monitoreos_publicos que crea este script fue REEMPLAZADA por funciones RPC en migracion_endurecimiento.sql (ejecutarla DESPUÉS de este script).
+-- migracion_cuentas_pacientes.sql (paso 1 del orden; ver cabecera de migracion_endurecimiento_2.sql) es HISTÓRICA. Si ya se aplicó migracion_endurecimiento_2.sql, esta migración NO debe re-ejecutarse
+-- (reabriría controles cerrados: lectura pública de bloques, lectura global del administrador, lista blanca fija).
+do $$
+begin
+  if to_regclass('public.tipos_evento') is not null then
+    raise exception 'Migración histórica superada por migracion_endurecimiento_2.sql: no se vuelve a ejecutar.';
+  end if;
+end;
+$$;
+
+-- NOTA: la vista public.monitoreos_publicos que existía aquí fue REEMPLAZADA por RPC (migracion_endurecimiento.sql, que va DESPUÉS) y
+-- la lista blanca de auditoría ya no es un CHECK: vive en la tabla tipos_evento (migracion_endurecimiento_2.sql).
 -- ============================================================
 -- Monitor ECG — Migración: cuentas (Supabase Auth), pacientes propios y visibilidad de monitoreos
 -- Idempotente: se puede ejecutar varias veces. Ejecutar en Supabase → SQL Editor.
@@ -141,47 +152,8 @@ create policy "dueño borra bloques" on public.bloques_muestras
   for delete to authenticated using (
     exists (select 1 from public.sesiones s where s.id = sesion_id and s.propietario = (select auth.uid())));
 
--- Vista segura: solo columnas permitidas, seudónimo anónimo. Corre con los derechos del dueño de la vista
--- (necesario para leer filas ajenas) pero filtra por visibilidad='publico' (security_barrier).
-create or replace view public.monitoreos_publicos with (security_barrier = true) as
-select
-  s.id,
-  s.inicio,
-  s.fin,
-  s.datos ->> 'actividadPrincipal' as actividad,
-  'Paciente anónimo'::text as paciente,
-  coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'canalIndex', p -> 'canalIndex',
-      'fs', p -> 'fs',
-      'actividad', p -> 'actividad',
-      'resumen', p -> 'resumen'))
-    from jsonb_array_elements(case when jsonb_typeof(s.datos -> 'participantes') = 'array'
-                                   then s.datos -> 'participantes' else '[]'::jsonb end) p
-  ), '[]'::jsonb) as participantes,
-  case when s.compartir_perfil then s.datos -> 'perfilCompartido' else null end as perfil
-from public.sesiones s
-where s.visibilidad = 'publico' and s.estado = 'finalizada';
-revoke all on public.monitoreos_publicos from public, anon;
-grant select on public.monitoreos_publicos to authenticated;
-
--- ---------- Auditoría: lista blanca ampliada ----------
-alter table public.auditoria drop constraint if exists auditoria_tipo_lista_blanca;
-alter table public.auditoria add constraint auditoria_tipo_lista_blanca check (tipo in (
-  'ADMIN_SETUP', 'ADMIN_LOGIN_OK', 'ADMIN_LOGIN_FAIL', 'ADMIN_LOCKED', 'ADMIN_LOGOUT', 'ADMIN_SESSION_EXPIRED',
-  'ADMIN_PIN_CHANGED', 'PARAM_CHANGED', 'USER_CREATED', 'CONSENT_GIVEN', 'CONSENT_WITHDRAWN', 'USER_DATA_DELETED',
-  'ALL_DATA_WIPED', 'CLOUD_ADMIN_LOGIN', 'CLOUD_ADMIN_LOGOUT', 'RETENTION_PURGE', 'EXPORT_CSV', 'SERIAL_CONNECTED',
-  'SERIAL_DISCONNECTED', 'SERIAL_LOST', 'SERIAL_INVALID_DATA', 'DEVICE_RESET', 'INTEGRITY_ERROR', 'AUDIT_EXPORTED',
-  'SESSION_STARTED', 'SESSION_ENDED', 'ALERT_TRIGGERED',
-  'INCIDENT_REPORTED', 'INCIDENT_UPDATED', 'POLICY_ACCEPTED', 'ACCESS_REVIEW_DONE', 'CLOCK_SKEW',
-  'ELECTRICAL_SAFETY_ACK', 'CLOUD_DATA_DELETED',
-  'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT',
-  'CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE',
-  'ACCOUNT_REGISTERED', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'ACCOUNT_PASSWORD_RESET', 'ACCOUNT_DELETED',
-  'PATIENT_CREATED', 'PATIENT_UPDATED', 'PATIENT_DELETED', 'VISIBILITY_CHANGED', 'LOCAL_DATA_LINKED',
-  'ADMIN_ACCOUNT_LOGIN', 'ADMIN_MFA_ENROLLED', 'ADMIN_MFA_VERIFIED', 'ADMIN_MFA_FAILED',
-  'ADMIN_ROLE_GRANTED', 'ADMIN_ROLE_REVOKED', 'ADMIN_RECOVERY_REQUESTED'
-)) not valid;
+-- (Vista y lista blanca de auditoría eliminadas de este script: ver migracion_endurecimiento.sql y migracion_endurecimiento_2.sql.)
+drop view if exists public.monitoreos_publicos;
 
 -- ---------- Supresión: borrar_mis_datos() ahora incluye pacientes ----------
 create or replace function public.borrar_mis_datos()

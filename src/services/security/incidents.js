@@ -109,3 +109,55 @@ export function transitionIncident(inc, nuevoEstado, { respuesta = '', leccion =
 export function isOpen(inc) {
   return inc?.estado === 'abierto' || inc?.estado === 'en_analisis'
 }
+
+const RANGO_ESTADO = Object.freeze({ abierto: 0, en_analisis: 1, cerrado: 2, descartado: 2 })
+
+function historialDeNube(n) {
+  const h = [{ ts: n.creadoUtc, estado: 'abierto' }]
+  if (n.estado !== 'abierto') h.push({ ts: n.actualizadoUtc, estado: n.estado })
+  return h
+}
+
+/**
+ * Fusiona los incidentes locales con los de la nube (C-09, A.16.1.2/A.16.1.4). El SERVIDOR es la fuente de verdad del
+ * ciclo de vida (solo el administrador cambia el estado, y lo hace allí): si el incidente existe en la nube, su estado,
+ * respuesta y lección sustituyen a los locales (la persona que reportó ve así la respuesta). Un incidente solo local se
+ * conserva marcado como pendiente de subir (subido=false) para reintentarlo; uno ya subido que desapareció de la nube
+ * (el reportante borró sus datos) se descarta de la caché.
+ * @returns {{lista: object[], porSubir: object[]}}
+ */
+export function mezclarIncidentes(locales, nube) {
+  const enNube = new Map((nube ?? []).map((n) => [n.id, n]))
+  const lista = []
+  const vistos = new Set()
+  const porSubir = []
+  for (const l of locales ?? []) {
+    const n = enNube.get(l.id)
+    vistos.add(l.id)
+    if (!n) {
+      if (l.subido === true) continue // desapareció del servidor
+      lista.push({ ...l, subido: false })
+      porSubir.push(l)
+      continue
+    }
+    const avanzo = RANGO_ESTADO[n.estado] > RANGO_ESTADO[l.estado] || n.estado !== l.estado
+    const historial = Array.isArray(l.historial) && l.historial.length ? l.historial : historialDeNube(n)
+    lista.push({
+      ...l,
+      estado: n.estado,
+      respuesta: n.respuesta || l.respuesta || '',
+      leccion: n.leccion || l.leccion || '',
+      actualizadoUtc: n.actualizadoUtc ?? l.actualizadoUtc,
+      historial: avanzo && !historial.some((h) => h.estado === n.estado) ? [...historial, { ts: n.actualizadoUtc, estado: n.estado }] : historial,
+      subido: true,
+    })
+  }
+  for (const n of nube ?? []) {
+    if (vistos.has(n.id)) continue
+    const limpio = { ...n, historial: historialDeNube(n), subido: true }
+    delete limpio.origen
+    lista.push(limpio)
+  }
+  lista.sort((a, b) => String(a.creadoUtc).localeCompare(String(b.creadoUtc)))
+  return { lista, porSubir }
+}

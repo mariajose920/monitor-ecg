@@ -1,3 +1,13 @@
+-- migracion_admin_roles.sql (paso 4) es HISTÓRICA. Si ya se aplicó migracion_endurecimiento_2.sql, esta migración NO debe re-ejecutarse
+-- (reabriría controles cerrados: lectura pública de bloques, lectura global del administrador, lista blanca fija).
+do $$
+begin
+  if to_regclass('public.tipos_evento') is not null then
+    raise exception 'Migración histórica superada por migracion_endurecimiento_2.sql: no se vuelve a ejecutar.';
+  end if;
+end;
+$$;
+
 -- ============================================================
 -- Migración idempotente: gestión de administradores desde la app (un admin concede/retira a otro)
 -- Aplicar en: Supabase -> SQL Editor -> New query -> Run (se puede repetir sin perder datos).

@@ -1,3 +1,13 @@
+-- migracion_endurecimiento.sql (paso 2) es HISTÓRICA. Si ya se aplicó migracion_endurecimiento_2.sql, esta migración NO debe re-ejecutarse
+-- (reabriría controles cerrados: lectura pública de bloques, lectura global del administrador, lista blanca fija).
+do $$
+begin
+  if to_regclass('public.tipos_evento') is not null then
+    raise exception 'Migración histórica superada por migracion_endurecimiento_2.sql: no se vuelve a ejecutar.';
+  end if;
+end;
+$$;
+
 -- ============================================================
 -- Migración de endurecimiento (IDEMPOTENTE; se puede ejecutar varias veces)
 --  1) Reemplaza la vista public.monitoreos_publicos (alerta del asesor "security_definer_view")

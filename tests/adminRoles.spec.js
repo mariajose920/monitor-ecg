@@ -55,7 +55,9 @@ describe('gestión de administradores (A.9.2.3, A.9.2.5, A.9.2.6)', () => {
         expect(sql).toContain(`grant execute on function public.${f} to authenticated;`)
       }
       expect(sql.match(/set search_path = public/g).length).toBeGreaterThanOrEqual(3)
-      expect(sql.match(/if not public\.es_admin\(\) then/g).length).toBe(3)
+      // listar sigue con es_admin(); conceder y retirar exigen TOTP de los últimos 5 min (es_admin_reciente, C-05)
+      expect(sql.match(/if not public\.es_admin\(\) then/g).length).toBeGreaterThanOrEqual(1)
+      expect(sql.includes('es_admin_reciente(300)') || sql === mig).toBe(true)
       expect(sql).toMatch(/revoke insert, update, delete on public\.administradores from anon, authenticated/)
       expect(sql).toMatch(/>= 5/)
       expect(sql).toMatch(/jsonb_build_object\('objetivo', v_objetivo, 'por', v_yo\)/)

@@ -8,6 +8,7 @@ import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
 import SaveMonitoringDialog from '@/components/monitoreos/SaveMonitoringDialog.vue'
 import VisibilityDialog from '@/components/monitoreos/VisibilityDialog.vue'
+import AccesosAdminAviso from '@/components/account/AccesosAdminAviso.vue'
 import { visibilidadDe } from '@/services/monitoreos/visibilidad.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
@@ -174,6 +175,7 @@ const textoEliminar = computed(() => {
       <h1>Monitoreos</h1>
       <DataClassBadge level="sensitive" />
     </div>
+    <AccesosAdminAviso />
     <p class="muted">
       {{ verTodas ? 'Vista de administrador: todos los monitoreos.' : `Monitoreos de ${users.activeUser?.etiqueta}.` }}
       Se purgan automáticamente tras el plazo de retención. Para crear uno ve a <RouterLink to="/monitor">Monitor</RouterLink>.
