@@ -1,11 +1,11 @@
-import { getChannelSignal } from '@/services/storage/sessionRepository.js'
+import { obtenerSenal } from './senalAcceso.js'
 import { getProfile, maxRaw } from '@/data/deviceProfiles.js'
 import { analizarMonitoreo, reducirMinMax } from './analysis.js'
 import { renderizarGraficoJpeg } from '@/services/report/reportChart.js'
 
 /** Carga la señal de una participación y su análisis (ADC según el perfil de la fuente). */
 export async function cargarYAnalizar(sesion, participante, opciones = {}) {
-  const sig = await getChannelSignal(sesion.id, participante.canalIndex)
+  const sig = await obtenerSenal(sesion.id, participante.canalIndex)
   const perfil = getProfile(participante.fuente?.perfilId)
   const adcMax = maxRaw(perfil)
   const analisis = analizarMonitoreo({

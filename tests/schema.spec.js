@@ -24,6 +24,12 @@ describe('schema.sql ↔ AUDIT_EVENTS', () => {
     expect([...enSql].sort()).toEqual([...AUDIT_EVENTS].sort())
   })
 
+  it('los eventos de cuentas, pacientes y visibilidad existen', () => {
+    for (const e of ['ACCOUNT_REGISTERED', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'ACCOUNT_PASSWORD_RESET', 'PATIENT_CREATED', 'PATIENT_UPDATED', 'PATIENT_DELETED', 'VISIBILITY_CHANGED', 'LOCAL_DATA_LINKED']) {
+      expect(AUDIT_EVENTS).toContain(e)
+    }
+  })
+
   it('los eventos nuevos de monitoreos existen', () => {
     for (const e of ['CAMERA_STARTED', 'CAMERA_STOPPED', 'CAMERA_DENIED', 'TORCH_UNAVAILABLE', 'USER_UPDATED', 'SESSION_SAVED', 'SESSION_UPDATED', 'SESSION_DISCARDED', 'SESSION_DELETED', 'EXPORT_REPORT']) {
       expect(AUDIT_EVENTS).toContain(e)

@@ -2,6 +2,8 @@
 import { ref, computed, shallowRef, markRaw, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import MonitoreoPicker from '@/components/compare/MonitoreoPicker.vue'
+import CommunityPicker from '@/components/community/CommunityPicker.vue'
+import { useComunidadStore } from '@/stores/comunidad.js'
 import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
@@ -19,7 +21,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useChannelsStore } from '@/stores/channels.js'
 import { generateReferenceEcg, PqrstGenerator, mvToAdc } from '@/data/referenceEcg.js'
 import { readSignalFile, parseSignalCsv } from '@/services/export/csvImporter.js'
-import { getChannelSignal } from '@/services/storage/sessionRepository.js'
+import { obtenerSenal } from '@/services/monitoreos/senalAcceso.js'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
 import { prepareSignal, computeLag, computeMetrics, trimValidSegment } from '@/services/compare/compareSignals.js'
 import { notify } from '@/services/notifications/notifier.js'
@@ -47,6 +49,7 @@ const participanteSel = ref('')
 const refSesion = ref('')
 const refCanal = ref('')
 const sesiones = computed(() => monitoreos.utilizables)
+const comunidad = useComunidadStore()
 const exportandoInforme = ref(null)
 const canalSel = ref('')
 
@@ -139,19 +142,21 @@ async function obtenerExperimental() {
     rt.ring.toLinear(t, v, lo)
     return recortar({ values: v, t, leadsOff: lo, fs: rt.profile.fs, nombre: `Canal ${canalSel.value} (congelado)` })
   }
-  return cargarMonitoreo(sesionSel.value, participanteSel.value)
+  return cargarMonitoreo(sesionSel.value, participanteSel.value) // 'sesion' y 'comunidad'
 }
 
 /** Señal de un monitoreo guardado (tramo continuo ≤ 30 s sin leads-off). */
 async function cargarMonitoreo(sesionId, canal) {
-  const s = sesiones.value.find((x) => x.id === sesionId)
-  if (!s || canal === '') throw new Error('Elige un monitoreo guardado y un usuario/canal')
-  const p = participantesVisibles(s, ctxAcceso.value).find((x) => x.canalIndex === Number(canal))
+  const propio = sesiones.value.find((x) => x.id === sesionId)
+  const s = propio ?? comunidad.lista.find((x) => x.id === sesionId)
+  if (!s || canal === '') throw new Error('Elige un monitoreo y un paciente/canal')
+  const ctxS = propio ? ctxAcceso.value : { usuarioId: 'publico', esAdmin: false }
+  const p = participantesVisibles(s, ctxS).find((x) => x.canalIndex === Number(canal))
   if (!p) throw new Error('No tienes acceso a ese canal del monitoreo')
-  const sig = await getChannelSignal(s.id, Number(canal))
+  const sig = await obtenerSenal(s.id, Number(canal))
   return recortar({
     values: sig.raw, t: sig.t, leadsOff: sig.lo, fs: p.fs || FS,
-    nombre: nombreMonitoreo(s), usuario: users.byId(p.usuarioId)?.etiqueta ?? 'Usuario eliminado', monitoreo: true,
+    nombre: nombreMonitoreo(s), usuario: propio ? users.byId(p.usuarioId)?.etiqueta ?? 'Paciente eliminado' : 'Paciente anónimo (comunidad)', monitoreo: true,
   })
 }
 
@@ -165,7 +170,7 @@ async function obtenerReferencia(duracionS) {
     return { values: r.valores, fs: FS, nombre: `Sintética interna ${refBpm.value} BPM (didáctica)` }
   }
   if (refTipo.value === 'ejemplo') return cargarEjemploRef()
-  if (refTipo.value === 'monitoreo') return cargarMonitoreo(refSesion.value, refCanal.value)
+  if (refTipo.value === 'monitoreo' || refTipo.value === 'comunidad') return cargarMonitoreo(refSesion.value, refCanal.value)
   if (!refCsv.value) throw new Error('Carga un CSV de referencia')
   return refCsv.value
 }
@@ -300,6 +305,8 @@ const series = computed(() => [
         <label class="check"><input v-model="refTipo" type="radio" value="ejemplo"> CSV de ejemplo incluido (public/referencias)</label>
         <label class="check"><input v-model="refTipo" type="radio" value="monitoreo"> Monitoreo guardado</label>
         <MonitoreoPicker v-if="refTipo === 'monitoreo'" id-base="ref" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
+        <label class="check"><input v-model="refTipo" type="radio" value="comunidad"> Comunidad (públicos)</label>
+        <CommunityPicker v-if="refTipo === 'comunidad'" id-base="refc" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
         <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet convertido)</label>
         <div v-if="refTipo === 'csv'" class="field">
           <input id="ref-csv" type="file" accept=".csv,text/csv" aria-label="CSV de referencia" @change="cargarCsv($event, 'ref')">
@@ -314,6 +321,8 @@ const series = computed(() => [
         <label class="check"><input v-model="expTipo" type="radio" value="simulada"> Sensor simulado (con ruido y desfase conocido)</label>
         <label class="check"><input v-model="expTipo" type="radio" value="sesion"> Monitoreo guardado</label>
         <MonitoreoPicker v-if="expTipo === 'sesion'" id-base="exp" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="sesionSel" v-model:canal="participanteSel" />
+        <label class="check"><input v-model="expTipo" type="radio" value="comunidad"> Comunidad (públicos)</label>
+        <CommunityPicker v-if="expTipo === 'comunidad'" id-base="expc" v-model:sesion-id="sesionSel" v-model:canal="participanteSel" />
         <label class="check"><input v-model="expTipo" type="radio" value="vivo"> Congelar un canal en vivo</label>
         <div v-if="expTipo === 'vivo'" class="field">
           <select id="exp-canal" v-model="canalSel" aria-label="Canal en vivo">

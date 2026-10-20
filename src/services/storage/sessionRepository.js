@@ -1,4 +1,4 @@
-import { secureStorage } from './index.js'
+import { dataStorage as secureStorage } from './index.js'
 
 /**
  * Sesiones de medición y bloques de muestras, cifrados por bloque (SEC-28, SEC-29).

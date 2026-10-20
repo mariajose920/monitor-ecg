@@ -2,6 +2,10 @@
 import { reactive, ref, computed } from 'vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { ACTIVIDADES } from '@/data/activities.js'
+import DataClassBadge from '@/components/common/DataClassBadge.vue'
+import { cloudCuenta } from '@/services/cloud/cloudSync.js'
+import { useMonitoreosStore } from '@/stores/monitoreos.js'
+import { validarVisibilidad, visibilidadDe, perfilPublicable, CAMPOS_PUBLICADOS, CAMPOS_NO_PUBLICADOS } from '@/services/monitoreos/visibilidad.js'
 import { validarMetadatos, sugerirNombre, actividadPrincipal, NOMBRE_MAX, NOTA_MAX } from '@/services/monitoreos/catalog.js'
 
 /**
@@ -20,14 +24,27 @@ const form = reactive({
   notas: props.sesion.notas || '',
   actividad: actividadPrincipal(props.sesion) || 'reposo',
 })
+const monitoreos = useMonitoreosStore()
+const conCuenta = computed(() => !!cloudCuenta.value)
+const hayPerfil = computed(() => perfilPublicable(monitoreos.perfilDe(props.sesion)) !== null)
+const vis = reactive({
+  visibilidad: visibilidadDe(props.sesion),
+  consentimientoPublicar: false,
+  compartirPerfil: props.sesion.compartirPerfil === true,
+  consentimientoPerfil: false,
+})
 const errores = ref({})
 const confirmandoDescarte = ref(false)
 const titulo = computed(() => (props.modo === 'guardar' ? 'Guardar monitoreo' : 'Editar monitoreo'))
 
 function enviar() {
   const v = validarMetadatos(form)
-  errores.value = v.errores
-  if (v.ok) emit('guardar', v.valores)
+  const extra = conCuenta.value ? validarVisibilidad({ ...vis, tienePerfil: hayPerfil.value }) : { ok: true, errores: {} }
+  errores.value = { ...v.errores, ...extra.errores }
+  if (v.ok && extra.ok) {
+    // Sin cuenta no se envía visibilidad: el monitoreo se queda privado y local.
+    emit('guardar', conCuenta.value ? { ...v.valores, ...vis } : v.valores)
+  }
 }
 </script>
 
@@ -53,6 +70,23 @@ function enviar() {
         <p id="mon-notas-ayuda" class="hint"><strong>No escribas nombres, RUT, correo ni otros datos que identifiquen a una persona.</strong> Máx. {{ NOTA_MAX }} caracteres.</p>
         <p v-if="errores.notas" class="error-text" role="alert">{{ errores.notas }}</p>
       </div>
+      <fieldset class="field vis-box" data-testid="bloque-visibilidad">
+        <legend>Visibilidad del monitoreo <DataClassBadge /></legend>
+        <label class="radio"><input v-model="vis.visibilidad" type="radio" value="privado" name="mon-vis"> <strong>Privado</strong> · solo tú, dentro de tu cuenta (recomendado)</label>
+        <label class="radio"><input v-model="vis.visibilidad" type="radio" value="publico" name="mon-vis" :disabled="!conCuenta"> <strong>Público</strong> · cualquier persona con una cuenta podrá verlo (solo lectura)</label>
+        <div v-if="vis.visibilidad === 'publico'" class="alert warn" data-testid="aviso-publico">
+          <p><strong>Se publicará:</strong> {{ CAMPOS_PUBLICADOS.join(', ') }}. <strong>No se publicará:</strong> {{ CAMPOS_NO_PUBLICADOS.join(', ') }}. Puedes volver a privado cuando quieras y se retira de inmediato.</p>
+          <label class="check"><input v-model="vis.consentimientoPublicar" type="checkbox" data-testid="consentimiento-publicar"> Entiendo y acepto publicar la señal, el BPM, la actividad y la fecha de este monitoreo de forma anónima.</label>
+          <p v-if="errores.consentimientoPublicar" class="error-text" role="alert">{{ errores.consentimientoPublicar }}</p>
+          <template v-if="hayPerfil">
+            <label class="check"><input v-model="vis.compartirPerfil" type="checkbox" data-testid="compartir-perfil"> Incluir datos del paciente (rango de edad, actividad…)</label>
+            <label v-if="vis.compartirPerfil" class="check"><input v-model="vis.consentimientoPerfil" type="checkbox"> Confirmo que el paciente consintió que estos datos sean públicos.</label>
+            <p v-if="errores.compartirPerfil || errores.consentimientoPerfil" class="error-text" role="alert">{{ errores.compartirPerfil || errores.consentimientoPerfil }}</p>
+          </template>
+
+        </div>
+      </fieldset>
+      <p v-if="!conCuenta" class="hint" data-testid="aviso-sin-cuenta">Sin cuenta, el monitoreo queda solo en este dispositivo y no se puede publicar. Inicia sesión para guardarlo en tu cuenta y poder publicarlo.</p>
     </form>
 
     <p v-if="confirmandoDescarte" class="alert danger" role="alert">
@@ -78,3 +112,9 @@ function enviar() {
     </template>
   </BaseDialog>
 </template>
+
+<style scoped>
+.vis-box { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.radio, .check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+.radio input, .check input { margin-top: 4px; flex: none; }
+</style>

@@ -5,7 +5,7 @@ import { useUsersStore, ALIAS_RE } from '@/stores/users.js'
 import { notify } from '@/services/notifications/notifier.js'
 
 /**
- * Alta rápida de usuario sin salir del Monitor: el sistema asigna "Usuario N" (seudónimo); el alias es opcional.
+ * Alta rápida de usuario sin salir del Monitor: el sistema asigna "Paciente N" (seudónimo); el alias es opcional.
  * Los datos opcionales (edad, peso) se piden solo en /usuarios, con consentimiento.
  */
 const emit = defineEmits(['creado', 'cerrar'])
@@ -40,7 +40,7 @@ async function crear() {
       <div class="field">
         <label for="quick-alias">Alias (opcional)</label>
         <input id="quick-alias" v-model="alias" type="text" maxlength="20" autocomplete="off" aria-describedby="quick-alias-ayuda">
-        <p id="quick-alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT ni correo.</strong> El sistema asigna «Usuario N».</p>
+        <p id="quick-alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT ni correo.</strong> El sistema asigna «Paciente N».</p>
         <p v-if="error" class="error-text" role="alert">{{ error }}</p>
       </div>
     </form>

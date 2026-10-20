@@ -7,6 +7,8 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
 import SaveMonitoringDialog from '@/components/monitoreos/SaveMonitoringDialog.vue'
+import VisibilityDialog from '@/components/monitoreos/VisibilityDialog.vue'
+import { visibilidadDe } from '@/services/monitoreos/visibilidad.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
@@ -82,6 +84,20 @@ const actividadTxt = (s) => {
 }
 const bpmTxt = (s) => resumenVisible(s, ctx.value)?.bpmMedio ?? '--'
 const eliminable = (s) => puedeEliminar(s, ctx.value) && estadoDe(s) !== 'en-curso'
+
+const cambiandoVis = ref(null)
+async function guardarVisibilidad(valores) {
+  ocupado.value = true
+  try {
+    await monitoreos.cambiarVisibilidad(cambiandoVis.value.id, valores)
+    notify(valores.visibilidad === 'publico' ? 'El monitoreo ahora es público.' : 'El monitoreo ahora es privado.', { tipo: 'ok' })
+    cambiandoVis.value = null
+  } catch (e) {
+    notify(e.message, { tipo: 'error' })
+  } finally {
+    ocupado.value = false
+  }
+}
 
 async function guardarEdicion(valores) {
   ocupado.value = true
@@ -240,11 +256,12 @@ const textoEliminar = computed(() => {
               <th scope="col"><input type="checkbox" :checked="todasMarcadas" aria-label="Seleccionar todos los monitoreos mostrados" @change="marcarTodas($event.target.checked)"></th>
               <th scope="col">Nombre</th>
               <th scope="col">Fecha</th>
-              <th scope="col">Usuario</th>
+              <th scope="col">Paciente</th>
               <th scope="col">Actividad</th>
               <th scope="col">Duración</th>
               <th scope="col">BPM medio</th>
               <th scope="col">Estado</th>
+              <th scope="col">Visibilidad</th>
               <th scope="col">Acciones</th>
             </tr>
           </thead>
@@ -264,6 +281,10 @@ const textoEliminar = computed(() => {
                 <span :class="['chip', infoEstado(estadoDe(s)).clase]">{{ infoEstado(estadoDe(s)).nombre }}</span>
                 <div v-if="s.motivoFin && s.motivoFin !== 'usuario'" class="muted small">motivo: {{ s.motivoFin }}</div>
               </td>
+              <td>
+                <button v-if="esUtilizable(s)" class="btn small ghost" :aria-label="`Cambiar visibilidad de ${nombreMonitoreo(s)}`" @click="cambiandoVis = s">{{ visibilidadDe(s) === 'publico' ? '🌐 Público' : '🔒 Privado' }}</button>
+                <span v-else class="muted small">—</span>
+              </td>
               <td class="acciones">
                 <RouterLink :to="`/monitoreos/${s.id}`" class="btn small" :aria-label="`Ver ${nombreMonitoreo(s)}`">Ver</RouterLink>
                 <button v-if="estadoDe(s) !== 'en-curso'" class="btn small" :aria-label="`${esUtilizable(s) ? 'Editar' : 'Guardar'} ${nombreMonitoreo(s)}`" @click="editando = s">{{ esUtilizable(s) ? 'Editar' : 'Guardar' }}</button>
@@ -277,6 +298,8 @@ const textoEliminar = computed(() => {
     </template>
 
     <HistorialDialog v-if="verHistorial" :usuario-id="verTodas ? null : users.activeUserId" @cerrar="verHistorial = false" />
+
+    <VisibilityDialog v-if="cambiandoVis" :sesion="cambiandoVis" :ocupado="ocupado" @guardar="guardarVisibilidad" @cerrar="cambiandoVis = null" />
 
     <SaveMonitoringDialog
       v-if="editando"

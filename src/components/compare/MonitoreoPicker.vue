@@ -26,7 +26,7 @@ const texto = ref('')
 const actividad = ref('')
 const miniaturas = ref({}) // 'sesion:canal' → path d
 
-const etiqueta = (id) => users.byId(id)?.etiqueta ?? 'Usuario eliminado'
+const etiqueta = (id) => (id === 'publico' ? 'Paciente anónimo' : users.byId(id)?.etiqueta ?? 'Paciente eliminado')
 
 const usuarios = computed(() => {
   const ids = new Set()

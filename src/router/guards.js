@@ -26,7 +26,7 @@ export async function requireUser(to) {
   await users.ensureLoaded()
   if (users.activeUser) return true
   if (useAuthStore().isAdminSessionValid() && to.meta.allowAdmin) return true
-  return { name: 'usuarios', query: { redirect: safeRedirect(to.name, USER_REDIRECT_WHITELIST, 'monitor') } }
+  return { name: 'pacientes', query: { redirect: safeRedirect(to.name, USER_REDIRECT_WHITELIST, 'monitor') } }
 }
 
 /** Evita que la vista de setup se use cuando ya existe credencial. */

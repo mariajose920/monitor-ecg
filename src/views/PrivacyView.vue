@@ -56,8 +56,26 @@ async function borrarNube() {
     <p>Consentimiento expreso, informado, libre y revocable del participante, exigido para datos sensibles de salud (Ley 19.628 sobre protección de la vida privada y Ley 21.719 de protección de datos personales de Chile; Ley 20.584 como referencia de confidencialidad de datos de salud; RGPD art. 9 como buena práctica).</p>
     <p class="muted small">Control de referencia: ISO/IEC 27001:2013 A.18.1.1 (legislación aplicable) y A.18.1.4 (protección y privacidad de la información de carácter personal). Política de seguridad: <RouterLink to="/seguridad">/seguridad</RouterLink>.</p>
 
+    <h2 id="cuentas">Cuentas, pacientes y publicación de monitoreos</h2>
+    <p>
+      Puedes usar la app <strong>sin cuenta</strong> (todo queda cifrado solo en este dispositivo y no se sube nada) o <strong>con cuenta</strong>
+      (correo y contraseña, Supabase Auth). Con cuenta, tus <strong>pacientes</strong> (seudónimos «Paciente N») y tus monitoreos se guardan en la nube y
+      <strong>solo tú los ves</strong>: el administrador de la app tampoco accede a los perfiles de tus pacientes (minimización).
+    </p>
+    <p>
+      Cada monitoreo es <strong>privado</strong> por defecto. Si marcas la casilla de consentimiento puedes hacerlo <strong>público</strong>: cualquier persona con una cuenta
+      podrá verlo en solo lectura (pestaña «Comunidad»). Se publica la señal, el BPM, la actividad y la fecha (UTC), siempre como <strong>«Paciente anónimo»</strong>.
+      No se publican etiqueta, alias, nombre ni nota del monitoreo, ni tu cuenta. Los datos opcionales del paciente (rango de edad, peso, actividad habitual) solo se
+      incluyen con una segunda casilla expresa. Puedes volver a privado cuando quieras: deja de ser visible de inmediato y el cambio queda registrado.
+    </p>
+    <p>
+      <strong>Base legal de la publicación:</strong> consentimiento expreso, informado, específico y revocable (Ley 19.628 y Ley 21.719); retirarlo es tan fácil como darlo.
+      Los datos de salud publicados son <em>Confidencial-Sensible</em> aunque estén seudonimizados: publica solo con el consentimiento de la persona medida.
+      Puedes eliminar tus datos en la nube o tu cuenta completa en cualquier momento. Al cerrar sesión puedes quitar los datos de tu cuenta de este equipo.
+    </p>
+
     <h2>Dónde se guardan y quién accede</h2>
-    <p>En este navegador y equipo, cifrados con AES-GCM 256 (Web Crypto) en IndexedDB. Si el proyecto tiene la nube configurada, se replica una copia seudonimizada en Supabase (PostgreSQL con TLS, cifrado en reposo y Row Level Security: cada sesión anónima solo ve lo suyo y solo el administrador autenticado ve todo). No hay analítica ni telemetría y no se ceden datos a terceros. Supabase y Vercel actúan como proveedores en la nube (ISO/IEC 27001:2013 A.15.1).</p>
+    <p>En este navegador y equipo, cifrados con AES-GCM 256 (Web Crypto) en IndexedDB. Si el proyecto tiene la nube configurada, se replica una copia seudonimizada en Supabase (PostgreSQL con TLS, cifrado en reposo y Row Level Security: cada cuenta solo ve lo suyo —y lo que otras cuentas publican de forma anónima—; el administrador autenticado puede ver monitoreos pero no los perfiles de pacientes. Sin cuenta no se sube nada). No hay analítica ni telemetría y no se ceden datos a terceros. Supabase y Vercel actúan como proveedores en la nube (ISO/IEC 27001:2013 A.15.1).</p>
 
     <h2>Retención</h2>
     <p>Las mediciones se borran automáticamente a los <strong>{{ settings.retencionDias }} días</strong> (plazo configurable por el administrador, máximo 180).</p>

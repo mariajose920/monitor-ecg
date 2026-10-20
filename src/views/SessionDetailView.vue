@@ -7,6 +7,8 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import SaveMonitoringDialog from '@/components/monitoreos/SaveMonitoringDialog.vue'
+import VisibilityDialog from '@/components/monitoreos/VisibilityDialog.vue'
+import { visibilidadDe } from '@/services/monitoreos/visibilidad.js'
 import { getSession } from '@/services/storage/sessionRepository.js'
 import { cargarYAnalizar, datosGrafico } from '@/services/monitoreos/senal.js'
 import {
@@ -69,6 +71,21 @@ async function guardarEdicion(valores) {
     sesion.value = await getSession(sesion.value.id)
     editando.value = false
     notify('Cambios guardados.', { tipo: 'ok' })
+  } catch (e) {
+    notify(e.message, { tipo: 'error' })
+  } finally {
+    ocupado.value = false
+  }
+}
+
+const cambiandoVis = ref(false)
+async function guardarVisibilidad(valores) {
+  ocupado.value = true
+  try {
+    await monitoreos.cambiarVisibilidad(sesion.value.id, valores)
+    sesion.value = await getSession(sesion.value.id)
+    cambiandoVis.value = false
+    notify(visibilidadDe(sesion.value) === 'publico' ? 'El monitoreo ahora es público.' : 'El monitoreo ahora es privado.', { tipo: 'ok' })
   } catch (e) {
     notify(e.message, { tipo: 'error' })
   } finally {
@@ -147,6 +164,7 @@ const nombresDe = computed(() => ({ csv: 'CSV', json: 'JSON', pdf: 'informe PDF'
         <p v-if="sesion.notas" class="nota"><strong>Nota:</strong> {{ sesion.notas }}</p>
         <div class="row">
           <button class="btn" data-testid="editar-monitoreo" :disabled="estado === 'en-curso'" @click="editando = true">{{ utilizable ? 'Editar' : 'Guardar monitoreo' }}</button>
+          <button v-if="utilizable" class="btn" data-testid="cambiar-visibilidad" @click="cambiandoVis = true">Visibilidad: {{ visibilidadDe(sesion) === 'publico' ? 'Público' : 'Privado' }}</button>
           <button class="btn" data-testid="exportar-csv" @click="exportando = { tipo: 'csv' }">CSV</button>
           <button class="btn" @click="exportando = { tipo: 'json' }">JSON</button>
           <RouterLink v-if="utilizable" :to="{ path: '/comparar', query: { a: sesion.id } }" class="btn">Comparar</RouterLink>
@@ -214,6 +232,7 @@ const nombresDe = computed(() => ({ csv: 'CSV', json: 'JSON', pdf: 'informe PDF'
       </section>
     </template>
 
+    <VisibilityDialog v-if="cambiandoVis && sesion" :sesion="sesion" :ocupado="ocupado" @guardar="guardarVisibilidad" @cerrar="cambiandoVis = false" />
     <SaveMonitoringDialog v-if="editando && sesion" :sesion="sesion" :modo="utilizable ? 'editar' : 'guardar'" :ocupado="ocupado" @guardar="guardarEdicion" @descartar="descartar" @cerrar="editando = false" />
 
     <BaseDialog v-if="eliminando" titulo="Eliminar monitoreo" @cerrar="eliminando = false">

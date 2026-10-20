@@ -31,6 +31,13 @@
 | A.9.2.5 Revisión | **Cada 90 días** o al cambiar de responsable, en Administración → SGSI → "Registrar revisión" (evento `ACCESS_REVIEW_DONE`) |
 | A.9.2.6 Retirada | Al terminar el semestre o cambiar de administrador: cambiar PIN, `delete from public.administradores where user_id = …`, revocar accesos a Vercel/GitHub/Supabase |
 
+### 3.1 Cuentas de usuario y pacientes (A.9.2.1, A.9.2.2, A.9.2.6)
+
+- Las personas se registran con correo y contraseña (≥ 10 caracteres) y confirman el correo; el alta, el acceso y la baja quedan en la auditoría. La baja (`eliminar_mi_cuenta()`) borra cuenta, pacientes, monitoreos e incidentes propios.
+- Cada cuenta es dueña de sus pacientes y monitoreos (RLS por propietario). El **administrador no accede a los perfiles de pacientes**; sí puede leer monitoreos para soporte, sin identificación del paciente.
+- Un monitoreo `publico` es legible, en solo lectura, por cualquier cuenta autenticada y solo a través de la vista `monitoreos_publicos`. Nunca por anónimos.
+- Revisión de accesos: se revisan trimestralmente las cuentas con rol de administrador (`public.administradores`).
+
 ## 4. Responsabilidades del usuario (A.9.3.1)
 
 No compartir el PIN ni la contraseña; no escribirlos en el equipo del laboratorio; cerrar sesión al terminar; notificar si se sospecha que se conocen.

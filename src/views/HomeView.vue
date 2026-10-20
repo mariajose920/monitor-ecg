@@ -8,7 +8,7 @@ const caps = useCapabilities()
 const users = useUsersStore()
 
 const accesos = [
-  { to: '/usuarios', titulo: '1. Usuarios', texto: 'Crea, edita o elimina seudónimos "Usuario N" (sin contraseña) y elige el usuario activo.' },
+  { to: '/pacientes', titulo: '1. Pacientes', texto: 'Crea, edita o elimina seudónimos "Paciente N" (con tu cuenta o solo en este dispositivo) y elige el paciente activo.' },
   { to: '/monitor', titulo: '2. Monitor', texto: 'Conecta la fuente, inicia y detén el monitoreo y guárdalo con nombre, nota y actividad.' },
   { to: '/monitoreos', titulo: '3. Monitoreos', texto: 'Filtra, revisa, edita, elimina y exporta (CSV, JSON, informe PDF) tus monitoreos guardados.' },
   { to: '/comparar', titulo: '4. Comparar', texto: 'Compara dos monitoreos, o uno con una referencia, con sincronización y métricas.' },

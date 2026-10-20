@@ -144,7 +144,7 @@ async function cargarEjemplo() {
     <header class="cab">
       <h2 :id="`${idp}-titulo`">{{ canal.nombre }}</h2>
       <ConnectionStatus :estado="canal.estado" :en-sesion="enSesion" />
-      <span class="usuario chip info" :title="'Participante asignado'">👤 {{ canal.usuarioId ? users.byId(canal.usuarioId)?.etiqueta : 'Sin usuario' }}</span>
+      <span class="usuario chip info" :title="'Participante asignado'">👤 {{ canal.usuarioId ? users.byId(canal.usuarioId)?.etiqueta : 'Sin paciente' }}</span>
       <div class="acciones">
         <button class="btn small ghost" :aria-pressed="enfocado" @click="emit('enfocar')">{{ enfocado ? 'Ver todos' : 'Ampliar' }}</button>
         <button class="btn small ghost" :disabled="activo" title="Quitar canal" @click="channels.removeChannel(canal.id)">Quitar</button>

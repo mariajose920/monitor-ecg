@@ -16,20 +16,20 @@ test.describe('Monitor sin pasar por Usuarios (PC)', () => {
     // Nuevo usuario sin salir del Monitor
     await page.getByTestId('quien-se-mide').selectOption('__nuevo__')
     await page.getByTestId('crear-usuario-rapido').click()
-    await expect(page.getByTestId('usuario-activo')).toContainText('Usuario 1')
+    await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
     await expect(page.getByTestId('quien-se-mide')).toHaveValue(/.+/)
     await expect(page).toHaveURL(/\/monitor$/)
 
     // Se recuerda el último elegido en una pestaña nueva
     const otra = await page.context().newPage()
     await otra.goto('/monitor')
-    await expect(otra.getByTestId('usuario-activo')).toContainText('Usuario 1')
+    await expect(otra.getByTestId('usuario-activo')).toContainText('Paciente 1')
     await otra.close()
   })
 
   test('las rutas de monitoreos siguen pidiendo un usuario', async ({ page }) => {
     await page.goto('/monitoreos')
-    await expect(page).toHaveURL(/\/usuarios\?redirect=monitoreos/)
+    await expect(page).toHaveURL(/\/pacientes\?redirect=monitoreos/)
   })
 })
 

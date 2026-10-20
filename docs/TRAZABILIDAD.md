@@ -74,3 +74,14 @@ Rutas relativas a `monitor-ecg-vue/` salvo `supabase/` y `docs/`. Pruebas: **U**
 | Aviso de perfil incorrecto | `services/parsing/ecgCsvParser.js`, `stores/channels.js` | U `ecgCsvParser.spec.js` | A.14.2.5 |
 | Nuevos eventos de auditoría | `auditLog.js`, `supabase/schema.sql` | U `schema.spec.js` | A.12.4.1 |
 | Navegación y 375 px | `components/layout/AppHeader.vue`, `assets/styles/base.css` | E `monitoreos.spec.js`, `pwa.spec.js` | — |
+
+## 6. Cuentas, pacientes y visibilidad (oct-2026)
+
+| Requisito | Componente | Prueba | Controles |
+|---|---|---|---|
+| Iniciar sesión / crear cuenta / recuperar | `views/account/*`, `services/accounts/*`, `stores/account.js` | U `cuentas.spec.js`, E `cuentas.spec.js` | A.9.2.1, A.9.4.2, A.9.4.3 |
+| Pacientes propios por cuenta | `stores/users.js`, `cloudSync.js`, tabla `pacientes` (RLS) | U `visibilidad.spec.js` (SQL) | A.9.1.1, A.9.4.1, A.18.1.4 |
+| Vincular datos locales / limpiar al salir | `services/accounts/linkLocal.js`, `storage/index.js` | — (manual) | A.8.3.2, A.11.2.7 |
+| Visibilidad privado/público con consentimiento | `services/monitoreos/visibilidad.js`, `SaveMonitoringDialog.vue`, `VisibilityDialog.vue` | U `visibilidad.spec.js`, E `cuentas.spec.js` | A.13.2.1, A.18.1.4 |
+| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, vista `monitoreos_publicos` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
+| Auditoría de cuentas y visibilidad | `auditLog.js`, `schema.sql` | U `schema.spec.js` | A.12.4.1 |

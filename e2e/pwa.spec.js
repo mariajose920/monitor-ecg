@@ -28,7 +28,7 @@ test.describe('PWA y responsivo (375x812)', () => {
   })
 
   test('sin scroll horizontal en las pantallas principales', async ({ page }) => {
-    for (const ruta of ['/', '/usuarios', '/privacidad', '/seguridad', '/aprende']) {
+    for (const ruta of ['/', '/pacientes', '/privacidad', '/seguridad', '/aprende']) {
       await page.goto(ruta)
       const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
       expect(ancho.sw, `scroll horizontal en ${ruta}`).toBeLessThanOrEqual(ancho.cw)

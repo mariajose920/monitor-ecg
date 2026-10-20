@@ -1,4 +1,4 @@
-import { secureStorage } from './index.js'
+import { dataStorage as secureStorage } from './index.js'
 
 /**
  * Usuarios seudonimizados (RF01–RF03). Todo el registro va cifrado (SEC-28):

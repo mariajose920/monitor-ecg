@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { supabase, cloudEnabled } from './supabaseClient.js'
-import { captchaEnabled, getCaptchaToken } from './captcha.js'
 import { createRateLimiter, CLIENT_LIMITS } from '@/utils/rateLimiter.js'
+import { camposVisibilidadNube, mapearMonitoreoPublico } from '@/services/monitoreos/visibilidad.js'
 
 /**
  * Sincronización con Supabase. Lo local (IndexedDB cifrado) sigue siendo la fuente principal:
@@ -31,34 +31,29 @@ function encolar(fn) {
   return cola
 }
 
-/** Garantiza una sesión de Supabase: anónima para participantes (RF02, sin contraseña). */
+/**
+ * Hay sincronización SOLO con una cuenta real (correo + contraseña). Ya no se usan sesiones anónimas:
+ * sin cuenta no se sube nada a la nube (A.9.4.1, A.18.1.4).
+ */
+export const cloudCuenta = ref(null) // { id, email } | null
 export async function ensureCloudSession() {
   if (!cloudEnabled) return false
-  const { data } = await supabase.auth.getSession()
-  if (!data.session) {
-    // SUG-04: máximo de intentos de alta anónima por ventana y CAPTCHA opcional.
-    if (!permitir('anonSignIn')) {
-      cloudEstado.value = 'error'
+  try {
+    const { data } = await supabase.auth.getSession()
+    const user = data.session?.user
+    if (!user || user.is_anonymous) {
+      cloudEstado.value = 'desconectado'
+      cloudCuenta.value = null
       return false
     }
-    let captchaToken = null
-    if (captchaEnabled) {
-      try {
-        captchaToken = await getCaptchaToken()
-      } catch {
-        cloudEstado.value = 'error'
-        return false
-      }
-    }
-    const { error } = await supabase.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined)
-    if (error) {
-      cloudEstado.value = 'error'
-      return false
-    }
+    cloudCuenta.value = { id: user.id, email: user.email ?? '' }
+    cloudEstado.value = 'conectado'
+    await refrescarAdmin()
+    return true
+  } catch {
+    cloudEstado.value = 'error'
+    return false
   }
-  cloudEstado.value = 'conectado'
-  await refrescarAdmin()
-  return true
 }
 
 async function refrescarAdmin() {
@@ -71,15 +66,20 @@ function sinError({ error }) {
 }
 
 /** Sube/actualiza los metadatos de una sesión (participantes seudonimizados). */
-export function pushSession(meta) {
+export function pushSession(meta, forzar = false) {
   if (!cloudEnabled) return Promise.resolve()
   const nueva = !sesionesConocidas.has(meta.id)
-  if (nueva && !permitir('session')) return Promise.resolve()
+  if (nueva && !forzar && !permitir('session')) return Promise.resolve()
   sesionesConocidas.add(meta.id)
   return encolar(async () => {
     if (!(await ensureCloudSession())) return
+    const vis = camposVisibilidadNube(meta)
+    const pacienteId = meta.participantes?.[0]?.usuarioId ?? null
     sinError(await supabase.from('sesiones').upsert({
       id: meta.id,
+      paciente_id: pacienteId,
+      visibilidad: vis.visibilidad,
+      compartir_perfil: vis.compartir_perfil,
       inicio: meta.inicio,
       fin: meta.fin,
       estado: meta.estado,
@@ -91,6 +91,7 @@ export function pushSession(meta) {
         nombre: meta.nombre ?? null,
         guardado: meta.guardado !== false,
         actividadPrincipal: meta.actividadPrincipal ?? null,
+        ...(vis.perfilCompartido ? { perfilCompartido: vis.perfilCompartido } : {}),
       },
       actualizado_en: new Date().toISOString(),
     }))
@@ -133,7 +134,7 @@ export async function deleteAllMyCloudData() {
   await cola.catch(() => {})
   if (!(await ensureCloudSession())) throw new Error('No hay conexión con la nube.')
   const { data, error } = await supabase.rpc('borrar_mis_datos')
-  if (!error && data) return { sesiones: Number(data.sesiones ?? 0), incidentes: Number(data.incidentes ?? 0) }
+  if (!error && data) return { sesiones: Number(data.sesiones ?? 0), incidentes: Number(data.incidentes ?? 0), pacientes: Number(data.pacientes ?? 0) }
   const { data: u } = await supabase.auth.getUser()
   if (!u?.user?.id) throw new Error('No hay usuario de la nube.')
   const r = await supabase.from('sesiones').delete({ count: 'exact' }).eq('propietario', u.user.id)
@@ -197,12 +198,9 @@ export async function cloudAdminLogin(email, password) {
   }
 }
 
-/** Vuelve a una sesión anónima de participante. */
+/** Deja de actuar como administrador en la app (la sesión de la cuenta no se cierra aquí). */
 export async function cloudAdminLogout() {
-  if (!cloudEnabled) return
-  await supabase.auth.signOut()
   cloudAdmin.value = false
-  await ensureCloudSession()
 }
 
 /** Réplica de una notificación de incidente o debilidad (A.16.1.2 / A.16.1.3). Sin datos de salud. */
@@ -231,4 +229,117 @@ export async function fetchServerTime() {
   const { data, error } = await supabase.rpc('hora_servidor')
   if (error) return null
   return typeof data === 'string' ? data : null
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pacientes (propiedad de la cuenta, RLS: solo el propietario) y lectura de monitoreos públicos.
+// ---------------------------------------------------------------------------------------------
+
+const filaPaciente = (u) => ({
+  id: u.id,
+  etiqueta: u.etiqueta,
+  alias: u.alias ?? null,
+  perfil: u.consentimiento ? (u.perfil ?? null) : null,
+  consentimiento: u.consentimiento ?? null,
+  creado_en: u.creadoEn,
+  actualizado_en: u.actualizadoEn,
+})
+
+export function pushPaciente(u) {
+  if (!cloudEnabled) return Promise.resolve()
+  return encolar(async () => {
+    if (!(await ensureCloudSession())) return
+    sinError(await supabase.from('pacientes').upsert(filaPaciente(u)))
+  })
+}
+
+export function deletePaciente(id) {
+  if (!cloudEnabled) return Promise.resolve()
+  return encolar(async () => {
+    if (!(await ensureCloudSession())) return
+    sinError(await supabase.from('pacientes').delete().eq('id', id))
+  })
+}
+
+/** Pacientes de la cuenta (formato local). */
+export async function fetchPacientes() {
+  if (!(await ensureCloudSession())) return []
+  const { data, error } = await supabase.from('pacientes').select('*').order('creado_en')
+  if (error) throw error
+  return (data ?? []).map((f) => ({
+    id: f.id,
+    numero: Number(/(d+)$/.exec(f.etiqueta)?.[1] ?? 0),
+    etiqueta: f.etiqueta,
+    alias: f.alias,
+    perfil: f.perfil,
+    consentimiento: f.consentimiento,
+    creadoEn: f.creado_en,
+    actualizadoEn: f.actualizado_en,
+  }))
+}
+
+/** Lista de monitoreos públicos (solo lectura, vista segura). */
+export async function fetchPublicos({ limite = 60 } = {}) {
+  if (!(await ensureCloudSession())) throw new Error('Inicia sesión para ver los monitoreos de la comunidad.')
+  const { data, error } = await supabase.from('monitoreos_publicos').select('*').order('inicio', { ascending: false }).limit(limite)
+  if (error) throw error
+  return (data ?? []).map(mapearMonitoreoPublico)
+}
+
+/** Señal de un canal de un monitoreo (propio o público) desde la nube, en el formato de getChannelSignal. */
+export async function fetchSenalNube(sesionId, canal) {
+  if (!(await ensureCloudSession())) throw new Error('Inicia sesión para ver este monitoreo.')
+  const filas = []
+  for (let desde = 0; ; desde += 500) {
+    const { data, error } = await supabase.from('bloques_muestras').select('seq,t,ecg_raw,leads_off,bpm')
+      .eq('sesion_id', sesionId).eq('canal', canal).order('seq').range(desde, desde + 499)
+    if (error) throw error
+    filas.push(...(data ?? []))
+    if (!data || data.length < 500) break
+  }
+  const n = filas.reduce((a, f) => a + f.t.length, 0)
+  const t = new Float64Array(n)
+  const raw = new Float32Array(n)
+  const lo = new Uint8Array(n)
+  const bpm = new Float32Array(n)
+  let k = 0
+  for (const f of filas) {
+    for (let i = 0; i < f.t.length; i++, k++) {
+      t[k] = f.t[i]
+      raw[k] = f.ecg_raw[i]
+      lo[k] = f.leads_off[i]
+      bpm[k] = f.bpm ? f.bpm[i] : 0
+    }
+  }
+  return { t, raw, lo, bpm, n }
+}
+
+/** Elimina la cuenta y todos sus datos (RPC eliminar_mi_cuenta). Irreversible. */
+export async function eliminarMiCuenta() {
+  if (!(await ensureCloudSession())) throw new Error('No hay sesión de cuenta.')
+  await cola.catch(() => {})
+  const { error } = await supabase.rpc('eliminar_mi_cuenta')
+  if (error) throw error
+  await supabase.auth.signOut()
+  sesionesConocidas.clear()
+}
+
+/** Sube sesiones y bloques existentes con reintentos ante la cuota por minuto del servidor. */
+export async function subirBloquesConReintento(sesionId, canal, chunk, intentos = 4) {
+  for (let i = 0; i < intentos; i++) {
+    const { error } = await supabase.from('bloques_muestras').upsert({
+      sesion_id: sesionId, canal, seq: chunk.seq,
+      t: Array.from(chunk.t), ecg_raw: Array.from(chunk.raw), leads_off: Array.from(chunk.lo),
+      bpm: chunk.bpm ? Array.from(chunk.bpm) : null,
+    })
+    if (!error) return true
+    if (error.code !== 'P0001') return false
+    await new Promise((r) => setTimeout(r, 15_000))
+  }
+  return false
+}
+
+export async function subirSesionDirecta(meta) {
+  await pushSession(meta, true)
+  await cola.catch(() => {})
 }

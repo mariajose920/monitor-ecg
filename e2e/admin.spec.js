@@ -13,5 +13,5 @@ test('guard de administración: /admin/auditoria tampoco es accesible sin sesió
 
 test('rutas de participante exigen elegir usuario (RF01)', async ({ page }) => {
   await page.goto('/monitoreos')
-  await expect(page).toHaveURL(/\/usuarios\?redirect=monitoreos/)
+  await expect(page).toHaveURL(/\/pacientes\?redirect=monitoreos/)
 })

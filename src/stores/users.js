@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { loadUsers, saveUsers, nextUserNumber } from '@/services/storage/userRepository.js'
-import { deleteByUser, listSessions, getSession } from '@/services/storage/sessionRepository.js'
-import { pushSession, deleteCloudSessions, deleteCloudChunks } from '@/services/cloud/cloudSync.js'
+import { deleteByUser, listSessions, getSession, saveSession as saveSessionLocal } from '@/services/storage/sessionRepository.js'
+import { pushSession, deleteCloudSessions, deleteCloudChunks, pushPaciente, deletePaciente, fetchPacientes, cloudCuenta } from '@/services/cloud/cloudSync.js'
 import { audit } from '@/services/audit/auditService.js'
 import { newId } from '@/utils/ids.js'
 import { RANGOS_EDAD, NIVELES_ACTIVIDAD } from '@/data/activities.js'
@@ -34,6 +34,11 @@ export function consentimientoVigente(u) {
   return !!u?.consentimiento && u.consentimiento.consentVersion === CONSENT_VERSION
 }
 
+/** Los seudónimos antiguos "Usuario N" se muestran como "Paciente N". */
+function normalizarEtiqueta(u) {
+  return /^Usuario d+$/.test(u.etiqueta) ? { ...u, etiqueta: u.etiqueta.replace('Usuario', 'Paciente') } : u
+}
+
 export const useUsersStore = defineStore('users', () => {
   const users = ref([])
   const loaded = ref(false)
@@ -43,7 +48,7 @@ export const useUsersStore = defineStore('users', () => {
   const activeUser = computed(() => users.value.find((u) => u.id === activeUserId.value) || null)
 
   async function load() {
-    users.value = await loadUsers()
+    users.value = (await loadUsers()).map(normalizarEtiqueta)
     loaded.value = true
     if (activeUserId.value && !users.value.some((u) => u.id === activeUserId.value)) clearActive()
   }
@@ -64,7 +69,7 @@ export const useUsersStore = defineStore('users', () => {
 
   function labelOf(id) {
     const u = byId(id)
-    if (!u) return 'Usuario eliminado'
+    if (!u) return 'Paciente eliminado'
     return u.alias ? `${u.etiqueta} · ${u.alias}` : u.etiqueta
   }
 
@@ -78,7 +83,7 @@ export const useUsersStore = defineStore('users', () => {
     const u = {
       id: newId(),
       numero,
-      etiqueta: `Usuario ${numero}`,
+      etiqueta: `Paciente ${numero}`,
       alias: a || null,
       perfil: null,
       consentimiento: null,
@@ -87,7 +92,8 @@ export const useUsersStore = defineStore('users', () => {
     }
     users.value.push(u)
     await persist()
-    await audit('USER_CREATED', 'system', { usuario: u.etiqueta })
+    await audit(cloudCuenta.value ? 'PATIENT_CREATED' : 'USER_CREATED', 'system', { usuario: u.etiqueta })
+    pushPaciente(u)
     return u
   }
 
@@ -109,6 +115,7 @@ export const useUsersStore = defineStore('users', () => {
     u.consentimiento = { userId: u.id, consentVersion: CONSENT_VERSION, acceptedAt: new Date().toISOString(), scope: [...CONSENT_SCOPE] }
     u.actualizadoEn = new Date().toISOString()
     await persist()
+    pushPaciente(u)
     await audit('CONSENT_GIVEN', `participant:${u.etiqueta}`, { version: CONSENT_VERSION })
   }
 
@@ -120,6 +127,16 @@ export const useUsersStore = defineStore('users', () => {
     u.perfil = null
     u.actualizadoEn = new Date().toISOString()
     await persist()
+    pushPaciente(u)
+    // Retirar el consentimiento también retira los datos del paciente de los monitoreos públicos.
+    for (const sesion of await listSessions({ usuarioId: id })) {
+      if (sesion.compartirPerfil || sesion.perfilCompartido) {
+        const limpia = { ...sesion, compartirPerfil: false }
+        delete limpia.perfilCompartido
+        await saveSessionLocal(limpia)
+        pushSession(limpia)
+      }
+    }
     await audit('CONSENT_WITHDRAWN', `participant:${u.etiqueta}`)
   }
 
@@ -132,6 +149,7 @@ export const useUsersStore = defineStore('users', () => {
     u.perfil = r.perfil
     u.actualizadoEn = new Date().toISOString()
     await persist()
+    pushPaciente(u)
   }
 
   /** Edita el alias (el seudónimo "Usuario N" no cambia). El detalle de auditoría no incluye el alias. */
@@ -143,6 +161,8 @@ export const useUsersStore = defineStore('users', () => {
     u.alias = a || null
     u.actualizadoEn = new Date().toISOString()
     await persist()
+    pushPaciente(u)
+    if (cloudCuenta.value) await audit('PATIENT_UPDATED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'alias' })
     await audit('USER_UPDATED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta, campo: 'alias' })
   }
 
@@ -163,8 +183,27 @@ export const useUsersStore = defineStore('users', () => {
     }
     users.value = users.value.filter((x) => x.id !== id)
     await persist()
+    deletePaciente(id)
+    if (cloudCuenta.value) await audit('PATIENT_DELETED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta })
     await audit('USER_DATA_DELETED', actor ?? `participant:${u.etiqueta}`, { usuario: u.etiqueta })
     if (activeUserId.value === id) clearActive()
+  }
+
+/** Con cuenta: une los pacientes de la nube con los locales (gana el más reciente) y sube los locales nuevos. */
+  async function sincronizarConNube() {
+    if (!cloudCuenta.value) return
+    await ensureLoaded()
+    const nube = await fetchPacientes()
+    const porId = new Map(users.value.map((u) => [u.id, u]))
+    for (const n of nube) {
+      const l = porId.get(n.id)
+      if (!l) users.value.push(normalizarEtiqueta(n))
+      else if (n.actualizadoEn > l.actualizadoEn) Object.assign(l, normalizarEtiqueta(n))
+      else if (n.actualizadoEn < l.actualizadoEn) pushPaciente(l)
+    }
+    const idsNube = new Set(nube.map((n) => n.id))
+    for (const l of users.value) if (!idsNube.has(l.id)) pushPaciente(l)
+    await persist()
   }
 
   function reset() {
@@ -174,7 +213,7 @@ export const useUsersStore = defineStore('users', () => {
   }
 
   return {
-    users, loaded, activeUserId, activeUser, load, ensureLoaded, byId, labelOf, createUser, selectUser,
+    users, loaded, activeUserId, activeUser, load, ensureLoaded, sincronizarConNube, byId, labelOf, createUser, selectUser,
     clearActive, giveConsent, withdrawConsent, updateProfile, updateAlias, deleteUserData, reset,
   }
 })

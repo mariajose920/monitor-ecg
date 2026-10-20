@@ -8,10 +8,10 @@ test.use({
 })
 
 test('el asistente pide consentimiento, abre la cámara y muestra la calidad en vivo', async ({ page }) => {
-  await page.goto('/usuarios')
+  await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').first().click()
-  await page.getByRole('button', { name: 'Crear usuario' }).click()
-  await expect(page.getByTestId('usuario-activo')).toContainText('Usuario')
+  await page.getByRole('button', { name: 'Crear paciente' }).click()
+  await expect(page.getByTestId('usuario-activo')).toContainText('Paciente')
   await page.goto('/monitor')
   await page.getByTestId('camara-guia').click()
 

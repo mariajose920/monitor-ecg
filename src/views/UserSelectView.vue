@@ -7,6 +7,8 @@ import OptionalDataForm from '@/components/users/OptionalDataForm.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
+import LinkLocalBanner from '@/components/account/LinkLocalBanner.vue'
+import { useAccountStore } from '@/stores/account.js'
 import { useUsersStore, consentimientoVigente, ALIAS_RE } from '@/stores/users.js'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useSessionStore } from '@/stores/session.js'
@@ -18,11 +20,12 @@ import { notify } from '@/services/notifications/notifier.js'
 import { formatFecha } from '@/utils/time.js'
 
 /**
- * Mantenedor de usuarios (CRUD): crear, ver, editar y eliminar seudónimos "Usuario N".
+ * Mantenedor de pacientes (CRUD): crear, ver, editar y eliminar seudónimos "Paciente N".
  * No mezcla monitoreo: solo enlaza a las otras secciones. Editar y eliminar exigen ser el usuario
  * activo ("Elegir" = identificarse, sin contraseña) o tener sesión de administrador.
  */
 const users = useUsersStore()
+const cuenta = useAccountStore()
 const channels = useChannelsStore()
 const session = useSessionStore()
 const auth = useAuthStore()
@@ -49,7 +52,7 @@ onMounted(() => monitoreos.refrescar())
 const filas = computed(() => ordenarUsuarios(filtrarUsuarios(users.users, { texto: texto.value }), { campo: campo.value, dir: dir.value }, monitoreos.conteos))
 const objetivo = computed(() => users.byId(objetivoId.value))
 const detalle = computed(() => users.byId(verId.value))
-const aviso = computed(() => `${filas.value.length} de ${users.users.length} usuario(s)`)
+const aviso = computed(() => `${filas.value.length} de ${users.users.length} paciente(s)`)
 
 const puedeGestionar = (u) => !!u && (u.id === users.activeUserId || auth.isAdmin)
 const enUso = (u) => !!u && (channels.channels.some((c) => c.usuarioId === u.id && c.estado !== 'idle' && c.estado !== 'finished') || session.actual?.participantes.some((p) => p.usuarioId === u.id))
@@ -85,7 +88,7 @@ async function enviarAlias() {
     if (modoDialogo.value === 'crear') {
       const u = await users.createUser(a)
       users.selectUser(u.id)
-      notify(`Creado ${u.etiqueta} y elegido como usuario activo.`, { tipo: 'ok' })
+      notify(`Creado ${u.etiqueta} y elegido como paciente activo.`, { tipo: 'ok' })
       cerrarDialogo()
     } else {
       await users.updateAlias(objetivoId.value, a, auth.isAdmin && objetivoId.value !== users.activeUserId ? 'admin' : null)
@@ -103,7 +106,7 @@ function elegir(u) {
   users.selectUser(u.id)
   const destino = safeRedirect(route.query.redirect, USER_REDIRECT_WHITELIST, null)
   if (destino) router.push({ name: destino })
-  else notify(`${u.etiqueta} es ahora el usuario activo.`, { tipo: 'ok', duracionMs: 2500 })
+  else notify(`${u.etiqueta} es ahora el paciente activo.`, { tipo: 'ok', duracionMs: 2500 })
 }
 
 function ordenarPor(id) {
@@ -158,18 +161,22 @@ async function eliminar() {
 <template>
   <section>
     <div class="page-header">
-      <h1>Usuarios</h1>
-      <button class="btn primary" data-testid="nuevo-usuario" @click="abrirCrear">Nuevo usuario</button>
+      <h1>Pacientes</h1>
+      <button class="btn primary" data-testid="nuevo-usuario" @click="abrirCrear">Nuevo paciente</button>
     </div>
-    <p class="muted">
-      Identificación sin contraseña con seudónimo <strong>"Usuario N"</strong>. La correspondencia seudónimo ↔ persona, si se necesita,
-      se gestiona <strong>fuera de la app</strong>. Para medir ve a <RouterLink to="/monitor">Monitor</RouterLink>.
+    <p v-if="cuenta.iniciada" class="muted" data-testid="intro-cuenta">
+      Estos pacientes (seudónimos <strong>«Paciente N»</strong>) pertenecen a tu cuenta <strong>{{ cuenta.cuenta.email }}</strong>: solo tú los ves. La correspondencia seudónimo ↔ persona, si se necesita, se gestiona <strong>fuera de la app</strong>.
     </p>
+    <p v-else class="muted" data-testid="intro-sin-cuenta">
+      Modo <strong>sin cuenta</strong>: los seudónimos <strong>«Paciente N»</strong> viven solo en este dispositivo. <RouterLink to="/acceso">Inicia sesión</RouterLink> para administrarlos desde tu cuenta.
+      La correspondencia seudónimo ↔ persona, si se necesita, se gestiona <strong>fuera de la app</strong>.
+    </p>
+    <LinkLocalBanner />
 
     <div class="toolbar">
       <div class="field">
         <label for="u-buscar">Buscar por seudónimo o alias</label>
-        <input id="u-buscar" v-model="texto" type="search" autocomplete="off" placeholder="p. ej. Usuario 2">
+        <input id="u-buscar" v-model="texto" type="search" autocomplete="off" placeholder="p. ej. Paciente 2">
       </div>
       <div class="field">
         <label for="u-orden">Ordenar por</label>
@@ -183,19 +190,19 @@ async function eliminar() {
     </div>
     <p class="sr-only" aria-live="polite" role="status">{{ aviso }}</p>
 
-    <EmptyState v-if="!users.users.length" titulo="Aún no hay usuarios" texto="Crea el primero para poder medir y guardar monitoreos.">
-      <button class="btn primary" @click="abrirCrear">Nuevo usuario</button>
+    <EmptyState v-if="!users.users.length" titulo="Aún no hay pacientes" texto="Crea el primero para poder medir y guardar monitoreos.">
+      <button class="btn primary" @click="abrirCrear">Nuevo paciente</button>
     </EmptyState>
-    <EmptyState v-else-if="!filas.length" titulo="Sin resultados" texto="Ningún usuario coincide con la búsqueda.">
+    <EmptyState v-else-if="!filas.length" titulo="Sin resultados" texto="Ningún paciente coincide con la búsqueda.">
       <button class="btn" @click="texto = ''">Limpiar búsqueda</button>
     </EmptyState>
 
     <div v-else class="table-wrap card">
       <table data-testid="tabla-usuarios">
-        <caption class="sr-only">Usuarios registrados. {{ aviso }}</caption>
+        <caption class="sr-only">Pacientes registrados. {{ aviso }}</caption>
         <thead>
           <tr>
-            <th scope="col" :aria-sort="ariaSort('numero')"><button class="th-btn" @click="ordenarPor('numero')">Usuario</button></th>
+            <th scope="col" :aria-sort="ariaSort('numero')"><button class="th-btn" @click="ordenarPor('numero')">Paciente</button></th>
             <th scope="col" :aria-sort="ariaSort('alias')"><button class="th-btn" @click="ordenarPor('alias')">Alias</button></th>
             <th scope="col" :aria-sort="ariaSort('creado')"><button class="th-btn" @click="ordenarPor('creado')">Creado</button></th>
             <th scope="col" :aria-sort="ariaSort('monitoreos')"><button class="th-btn" @click="ordenarPor('monitoreos')">Monitoreos</button></th>
@@ -216,14 +223,14 @@ async function eliminar() {
             <td class="acciones">
               <button class="btn small" :aria-pressed="u.id === users.activeUserId" :aria-label="`Elegir ${u.etiqueta}`" @click="elegir(u)">Elegir</button>
               <button class="btn small" :aria-label="`Ver detalle de ${u.etiqueta}`" @click="verId = u.id">Ver</button>
-              <button class="btn small" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este usuario primero'" :aria-label="`Editar ${u.etiqueta}`" @click="abrirEditar(u)">Editar</button>
-              <button class="btn small danger" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este usuario primero'" :aria-label="`Eliminar ${u.etiqueta}`" @click="objetivoId = u.id; confirmarBorrado = true">Eliminar</button>
+              <button class="btn small" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este paciente primero'" :aria-label="`Editar ${u.etiqueta}`" @click="abrirEditar(u)">Editar</button>
+              <button class="btn small danger" :disabled="!puedeGestionar(u)" :title="puedeGestionar(u) ? '' : 'Elige este paciente primero'" :aria-label="`Eliminar ${u.etiqueta}`" @click="objetivoId = u.id; confirmarBorrado = true">Eliminar</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="muted small">Editar y eliminar requieren que el usuario sea el activo (usa «Elegir») o una sesión de administrador.</p>
+    <p class="muted small">Editar y eliminar requieren que el paciente sea el activo (usa «Elegir») o una sesión de administrador.</p>
 
     <section v-if="detalle" class="card detalle" aria-labelledby="detalle-titulo" data-testid="detalle-usuario">
       <div class="page-header">
@@ -238,9 +245,9 @@ async function eliminar() {
         <dt>Consentimiento</dt>
         <dd>{{ consentimientoVigente(detalle) ? `Vigente (v${detalle.consentimiento.consentVersion}, ${formatFecha(detalle.consentimiento.acceptedAt)})` : 'No otorgado' }}</dd>
       </dl>
-      <p class="small muted">Los datos opcionales (edad, peso, actividad habitual) solo se muestran y editan al editar el usuario activo.</p>
+      <p class="small muted">Los datos opcionales (edad, peso, actividad habitual) solo se muestran y editan al editar el paciente activo.</p>
       <div class="row">
-        <RouterLink to="/monitor" class="btn" @click="users.selectUser(detalle.id)">Medir con este usuario</RouterLink>
+        <RouterLink to="/monitor" class="btn" @click="users.selectUser(detalle.id)">Medir con este paciente</RouterLink>
         <RouterLink to="/monitoreos" class="btn" @click="users.selectUser(detalle.id)">Ver sus monitoreos</RouterLink>
         <button class="btn" :disabled="!puedeGestionar(detalle)" data-testid="historial-usuario" @click="historialDe = detalle.id">Descargar historial</button>
       </div>
@@ -249,12 +256,12 @@ async function eliminar() {
     <HistorialDialog v-if="historialDe" :usuario-id="historialDe" @cerrar="historialDe = null" />
 
     <!-- Crear / editar -->
-    <BaseDialog v-if="modoDialogo" :titulo="modoDialogo === 'crear' ? 'Nuevo usuario' : `Editar ${objetivo?.etiqueta}`" ancho="600px" @cerrar="cerrarDialogo">
+    <BaseDialog v-if="modoDialogo" :titulo="modoDialogo === 'crear' ? 'Nuevo paciente' : `Editar ${objetivo?.etiqueta}`" ancho="600px" @cerrar="cerrarDialogo">
       <form id="form-usuario" novalidate @submit.prevent="enviarAlias">
         <div class="field">
           <label for="alias">Alias (opcional)</label>
           <input id="alias" v-model="aliasForm" type="text" maxlength="20" autocomplete="off" placeholder="p. ej. Grupo A-2" aria-describedby="alias-ayuda">
-          <p id="alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT, correo ni otros datos identificables.</strong> El seudónimo «Usuario N» lo asigna el sistema.</p>
+          <p id="alias-ayuda" class="hint"><strong>No uses tu nombre real, RUT, correo ni otros datos identificables.</strong> El seudónimo «Paciente N» lo asigna el sistema.</p>
           <p v-if="errorAlias" class="error-text" role="alert">{{ errorAlias }}</p>
         </div>
       </form>
@@ -272,7 +279,7 @@ async function eliminar() {
       </template>
       <template #acciones>
         <button class="btn" @click="cerrarDialogo">{{ modoDialogo === 'crear' ? 'Cancelar' : 'Cerrar' }}</button>
-        <button type="submit" form="form-usuario" class="btn primary" :disabled="ocupado">{{ modoDialogo === 'crear' ? 'Crear usuario' : 'Guardar alias' }}</button>
+        <button type="submit" form="form-usuario" class="btn primary" :disabled="ocupado">{{ modoDialogo === 'crear' ? 'Crear paciente' : 'Guardar alias' }}</button>
       </template>
     </BaseDialog>
 
@@ -287,13 +294,13 @@ async function eliminar() {
     </BaseDialog>
 
     <!-- Eliminar: flujo "Eliminar mis datos" (SEC-30) -->
-    <BaseDialog v-if="confirmarBorrado && objetivo" titulo="Eliminar usuario y sus datos" @cerrar="confirmarBorrado = false">
+    <BaseDialog v-if="confirmarBorrado && objetivo" titulo="Eliminar paciente y sus datos" @cerrar="confirmarBorrado = false">
       <DataClassBadge level="sensitive" />
       <p>
         Se eliminarán <strong>definitivamente</strong> {{ objetivo.etiqueta }}, sus datos opcionales, su consentimiento y
         <strong>{{ conteo(objetivo) }}</strong> monitoreo(s), en este navegador y en la nube si está activada. No se puede deshacer.
       </p>
-      <p v-if="enUso(objetivo)" class="alert warn" role="alert">Este usuario está en un canal conectado o en un monitoreo activo. Detén el monitoreo y desconecta el canal antes de eliminar.</p>
+      <p v-if="enUso(objetivo)" class="alert warn" role="alert">Este paciente está en un canal conectado o en un monitoreo activo. Detén el monitoreo y desconecta el canal antes de eliminar.</p>
       <template #acciones>
         <button class="btn" @click="confirmarBorrado = false">Cancelar</button>
         <button class="btn danger" data-testid="confirmar-eliminar-usuario" :disabled="ocupado || enUso(objetivo)" @click="eliminar">Eliminar definitivamente</button>

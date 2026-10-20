@@ -280,6 +280,19 @@ Estas limitaciones aparecen resumidas en `/privacidad` y en el README (transpare
 | SEC-68 [S] | Comparación del reloj con `hora_servidor()` y evento `CLOCK_SKEW` | A.12.4.4 | `isms.js:34`, `src/services/cloud/cloudSync.js:222` |
 | SEC-69 [M] | Indicadores de seguridad y objetivos en el panel admin | 9.1, 6.2 | `isms.js:53` (`computeSecurityMetrics`, `evaluateObjectives`) |
 
+### 5.14b Cuentas, pacientes propios y publicación de monitoreos — A.9.2.x, A.9.4.x, A.13.2.x, A.18.1.4
+
+**Riesgo nuevo R-PUB (publicación de datos de salud).** Un usuario podría publicar un monitoreo con datos que identifiquen a una persona, o publicarlo sin su consentimiento. Valoración inherente: alta (dato de salud, divulgación irreversible en la práctica). Tratamiento: visibilidad privada por defecto; casilla de consentimiento explícita no premarcada; publicación solo anónima (vista `monitoreos_publicos`: sin etiqueta, alias, nombre, nota ni propietario); datos del paciente solo con segunda casilla y consentimiento vigente; retiro inmediato y registrado; lectura solo para cuentas autenticadas (nunca anon). Riesgo residual: medio (copia previa por terceros que ya vieron el dato).
+
+- **SEC-70 (A.9.2.1, A.9.2.2, A.9.4.2).** Cuentas con Supabase Auth, contraseña ≥ 10 con letras y números, confirmación por correo, mensajes genéricos y límite de intentos en el cliente (servidor: rate limits de Auth).
+- **SEC-71 (A.9.1.1, A.9.4.1).** Pacientes propiedad de la cuenta con RLS (`propietario = (select auth.uid())`); el administrador no tiene política sobre `pacientes` (decisión de minimización).
+- **SEC-72 (A.13.2.1, A.18.1.4).** Visibilidad `privado`/`publico` con consentimiento; la tabla `sesiones` no tiene SELECT público: lo público sale solo por la vista de columnas permitidas; `bloques_muestras` de sesiones públicas se leen mediante `sesion_es_publica()`.
+- **SEC-73 (A.18.1.4).** El perfil del paciente solo se publica con `compartir_perfil`; retirar el consentimiento lo retira de los monitoreos (trigger `tg_paciente_perfil`).
+- **SEC-74 (A.11.2.7, A.8.3.2).** Datos locales por espacio de cuenta; al cerrar sesión se ofrecen quitar los datos del equipo.
+- **SEC-75 (A.12.4.1).** Auditoría de `ACCOUNT_*`, `PATIENT_*`, `VISIBILITY_CHANGED` y `LOCAL_DATA_LINKED` (sin correos ni datos de salud) en la lista blanca de cliente y servidor.
+- **SEC-76 (A.18.1.4).** Supresión: `borrar_mis_datos()` incluye pacientes; `eliminar_mi_cuenta()` elimina cuenta y datos.
+- **Limitación.** Un monitoreo público ya visto o descargado por otra cuenta no puede "des-publicarse" en el equipo de esa persona.
+
 ### 5.15 Lista de verificación de aceptación (QA, A.14.2.9)
 
 - [ ] `/admin/*` redirige al login sin sesión; las acciones privilegiadas lanzan error sin sesión.
@@ -379,6 +392,8 @@ Leyenda. **Aplica:** Sí / Parcial (aplica con alcance reducido) / No (excluido,
 | A.9.4.3 | Sistema de gestión de contraseñas | Sí | Calidad del PIN | Implementado | `validateNewPin` (`src/services/security/pinHash.js:15`) |
 | A.9.4.4 | Uso de utilidades con privilegios del sistema | No | La SPA no usa ni ofrece utilidades privilegiadas; la clave `service_role` no se usa | N/A | — |
 | A.9.4.5 | Control de acceso al código fuente de los programas | Sí | Repositorio | Documentado | GitHub con acceso mínimo y `main` protegida (`SEC-58`) |
+
+> Actualización 2026-10-20 (cuentas): A.9.2.1/A.9.2.2/A.9.2.4 → aplicable, implementado con Supabase Auth (SEC-70); A.9.4.1 → RLS por propietario y vista pública (SEC-71/72); A.13.2.1/A.13.2.4 → publicación controlada y consentimiento (SEC-72); A.18.1.4 → SEC-73/76; A.11.2.7 → SEC-74. Ver sección 5.14b.
 
 ### A.10 Criptografía
 

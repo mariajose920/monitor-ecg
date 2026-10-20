@@ -1,12 +1,15 @@
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
+import AccountMenu from '@/components/account/AccountMenu.vue'
+import { useAccountStore } from '@/stores/account.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSessionStore } from '@/stores/session.js'
 import { setPref } from '@/utils/prefs.js'
 
 const users = useUsersStore()
+const cuenta = useAccountStore()
 const auth = useAuthStore()
 const session = useSessionStore()
 const route = useRoute()
@@ -48,7 +51,7 @@ onBeforeUnmount(() => {
 
 const enlaces = [
   { to: '/', texto: 'Inicio' },
-  { to: '/usuarios', texto: 'Usuarios' },
+  { to: '/pacientes', texto: 'Pacientes' },
   { to: '/monitor', texto: 'Monitor' },
   { to: '/monitoreos', texto: 'Monitoreos' },
   { to: '/comparar', texto: 'Comparar' },
@@ -79,10 +82,13 @@ function alternarTema() {
       <div class="status">
         <span v-if="session.activa" class="chip ok" role="status">● Grabando</span>
         <RouterLink v-else-if="session.pendiente" to="/monitor" class="chip warn" data-testid="chip-sin-guardar">◐ Monitoreo sin guardar</RouterLink>
-        <RouterLink to="/usuarios" :class="['chip', users.activeUser ? 'info' : 'neutral']" data-testid="usuario-activo" aria-live="polite">
+        <RouterLink to="/pacientes" :class="['chip', users.activeUser ? 'info' : 'neutral']" data-testid="usuario-activo" aria-live="polite">
           <span aria-hidden="true">👤</span>
-          <template v-if="users.activeUser"><span class="sr-only">Usuario activo: </span>{{ users.activeUser.etiqueta }}</template>
-          <template v-else>Sin usuario · Elegir</template>
+          <template v-if="users.activeUser"><span class="sr-only">Paciente activo: </span>{{ users.activeUser.etiqueta }}</template>
+          <template v-else>Sin paciente · Elegir</template>
+        </RouterLink>
+        <RouterLink :to="cuenta.iniciada ? '/pacientes' : '/acceso'" :class="['chip', cuenta.iniciada ? 'ok' : 'neutral']" data-testid="chip-cuenta">
+          <span aria-hidden="true">🔐</span>{{ cuenta.iniciada ? 'Con cuenta' : 'Sin cuenta' }}
         </RouterLink>
         <span v-if="auth.isAdmin" class="chip warn">🔑 Admin</span>
       </div>
@@ -101,6 +107,7 @@ function alternarTema() {
         <RouterLink v-for="e in enlaces" :key="e.to" :to="e.to" class="nav-link">{{ e.texto }}</RouterLink>
         <RouterLink :to="auth.isAdmin ? '/admin' : '/admin/acceso'" class="nav-link">Admin</RouterLink>
         <button v-if="auth.isAdmin" class="btn small" @click="auth.logout()">Cerrar sesión admin</button>
+        <AccountMenu />
         <button class="btn small ghost" @click="alternarTema">{{ etiquetaTema }}</button>
       </nav>
     </div>

@@ -1,5 +1,6 @@
 import { aplicarMetadatos, puedeEditar, puedeEliminar, validarMetadatos } from './catalog.js'
 import { shortId } from '@/utils/ids.js'
+import { validarVisibilidad, visibilidadDe, perfilPublicable } from './visibilidad.js'
 
 /**
  * Casos de uso sobre monitoreos guardados: guardar, editar, descartar y eliminar
@@ -11,6 +12,22 @@ import { shortId } from '@/utils/ids.js'
  * @param {{pushSession:Function, deleteCloudSessions:Function}} deps.cloud
  * @param {Function} deps.audit (evento, actor, detalles)
  */
+/**
+ * Aplica la elección de visibilidad (si viene en datos). Publicar exige cuenta, consentimiento explícito y,
+ * para incluir datos del paciente, una segunda casilla. Privado borra cualquier copia del perfil.
+ */
+export function aplicarVisibilidad(meta, datos, { cuenta = false, perfilDe = null } = {}) {
+  if (!datos || datos.visibilidad === undefined) return meta
+  if (datos.visibilidad === 'publico' && !cuenta) throw new Error('Para publicar un monitoreo necesitas iniciar sesión con una cuenta.')
+  const perfil = perfilDe ? perfilPublicable(perfilDe(meta)) : null
+  const v = validarVisibilidad({ ...datos, tienePerfil: perfil !== null })
+  if (!v.ok) throw new Error(Object.values(v.errores)[0])
+  const out = { ...meta, visibilidad: v.valores.visibilidad, compartirPerfil: v.valores.compartirPerfil }
+  if (v.valores.compartirPerfil) out.perfilCompartido = perfil
+  else delete out.perfilCompartido
+  return out
+}
+
 export function createMonitoreoService({ repo, cloud, audit }) {
   async function cargar(id) {
     const meta = await repo.getSession(id)
@@ -19,25 +36,41 @@ export function createMonitoreoService({ repo, cloud, audit }) {
   }
 
   /** Confirma un borrador: pide nombre, nota y actividad (validados). */
-  async function guardar(id, datos, { actor = 'system', ctx = {} } = {}) {
+  async function guardar(id, datos, { actor = 'system', ctx = {}, cuenta = false, perfilDe = null } = {}) {
     const meta = await cargar(id)
     if (meta.estado === 'activa') throw new Error('Detén el monitoreo antes de guardarlo.')
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
-    const nuevo = aplicarMetadatos(meta, datos, { guardar: true })
+    const nuevo = aplicarVisibilidad(aplicarMetadatos(meta, datos, { guardar: true }), datos, { cuenta, perfilDe })
     await repo.saveSession(nuevo)
     cloud.pushSession(nuevo)
     await audit('SESSION_SAVED', actor, { sesion: shortId(id), actividad: nuevo.actividadPrincipal ?? null })
+    if (visibilidadDe(nuevo) !== visibilidadDe(meta)) await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo) })
     return nuevo
   }
 
   /** Edita nombre, nota y actividad de un monitoreo ya guardado. */
-  async function actualizar(id, datos, { actor = 'system', ctx = {} } = {}) {
+  async function actualizar(id, datos, { actor = 'system', ctx = {}, cuenta = false, perfilDe = null } = {}) {
     const meta = await cargar(id)
     if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
-    const nuevo = aplicarMetadatos(meta, datos)
+    const nuevo = aplicarVisibilidad(aplicarMetadatos(meta, datos), datos, { cuenta, perfilDe })
     await repo.saveSession(nuevo)
     cloud.pushSession(nuevo)
     await audit('SESSION_UPDATED', actor, { sesion: shortId(id) })
+    if (visibilidadDe(nuevo) !== visibilidadDe(meta)) await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo) })
+    return nuevo
+  }
+
+  /** Cambia solo la visibilidad (detalle y lista). Volver a privado es inmediato y queda registrado. */
+  async function cambiarVisibilidad(id, datos, { actor = 'system', ctx = {}, cuenta = false, perfilDe = null } = {}) {
+    const meta = await cargar(id)
+    if (meta.estado === 'activa' || meta.guardado === false) throw new Error('Guarda el monitoreo antes de cambiar su visibilidad.')
+    if (!puedeEditar(meta, ctx)) throw new Error('No tienes acceso a este monitoreo.')
+    const nuevo = aplicarVisibilidad(meta, datos, { cuenta, perfilDe })
+    await repo.saveSession(nuevo)
+    cloud.pushSession(nuevo)
+    if (visibilidadDe(nuevo) !== visibilidadDe(meta) || nuevo.compartirPerfil !== meta.compartirPerfil) {
+      await audit('VISIBILITY_CHANGED', actor, { sesion: shortId(id), visibilidad: visibilidadDe(nuevo), perfil: nuevo.compartirPerfil === true })
+    }
     return nuevo
   }
 
@@ -78,5 +111,5 @@ export function createMonitoreoService({ repo, cloud, audit }) {
     return { eliminados, rechazados }
   }
 
-  return { guardar, actualizar, descartar, eliminar, validar: validarMetadatos }
+  return { guardar, actualizar, cambiarVisibilidad, descartar, eliminar, validar: validarMetadatos }
 }

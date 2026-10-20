@@ -4,7 +4,12 @@ import { requireAdmin, requireUser, setupOnlyOnce } from './guards.js'
 // Todas las vistas con lazy loading (SEC-04 para las de administración).
 const routes = [
   { path: '/', name: 'inicio', component: () => import('@/views/HomeView.vue'), meta: { title: 'Inicio' } },
-  { path: '/usuarios', name: 'usuarios', component: () => import('@/views/UserSelectView.vue'), meta: { title: 'Usuarios' } },
+  { path: '/pacientes', name: 'pacientes', component: () => import('@/views/UserSelectView.vue'), meta: { title: 'Pacientes' } },
+  { path: '/usuarios', redirect: (to) => ({ path: '/pacientes', query: to.query }) },
+  { path: '/acceso', name: 'acceso', component: () => import('@/views/account/LoginView.vue'), meta: { title: 'Iniciar sesión' } },
+  { path: '/registro', name: 'registro', component: () => import('@/views/account/RegisterView.vue'), meta: { title: 'Crear cuenta' } },
+  { path: '/recuperar', name: 'recuperar', component: () => import('@/views/account/RecoverView.vue'), meta: { title: 'Recuperar contraseña' } },
+  { path: '/restablecer', name: 'restablecer', component: () => import('@/views/account/ResetPasswordView.vue'), meta: { title: 'Nueva contraseña' } },
   { path: '/monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue'), meta: { title: 'Monitor' } },
   { path: '/comparar', name: 'comparar', component: () => import('@/views/CompareView.vue'), meta: { title: 'Comparar' } },
   { path: '/monitoreos', name: 'monitoreos', component: () => import('@/views/SessionsView.vue'), meta: { title: 'Monitoreos', requiresUser: true, allowAdmin: true } },

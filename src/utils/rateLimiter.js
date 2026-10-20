@@ -48,7 +48,9 @@ export function createRateLimiter({ max, windowMs, now = () => Date.now() }) {
  * Bloques: 5 canales × 1 bloque/2 s = 150/min; se deja holgura para reintentos.
  */
 export const CLIENT_LIMITS = Object.freeze({
-  anonSignIn: { max: 3, windowMs: 10 * 60_000 },
+  authLogin: { max: 5, windowMs: 10 * 60_000 },
+  authRegister: { max: 3, windowMs: 10 * 60_000 },
+  authReset: { max: 3, windowMs: 10 * 60_000 },
   audit: { max: 120, windowMs: 60 * 60_000 },
   incident: { max: 5, windowMs: 24 * 60 * 60_000 },
   session: { max: 30, windowMs: 60 * 60_000 },

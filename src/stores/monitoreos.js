@@ -6,6 +6,8 @@ import { visibles, conteoPorUsuario, esUtilizable } from '@/services/monitoreos/
 import { useUsersStore } from './users.js'
 import { useAuthStore } from './auth.js'
 import { useSessionStore } from './session.js'
+import { cloudCuenta } from '@/services/cloud/cloudSync.js'
+import { consentimientoVigente } from './users.js'
 
 /**
  * Lista compartida de monitoreos (sesiones) para Usuarios, Monitoreos, Comparar y Aprende.
@@ -48,7 +50,12 @@ export const useMonitoreosStore = defineStore('monitoreos', () => {
     return auth.isAdmin ? 'admin' : 'system'
   }
 
-  const opts = () => ({ actor: actor(), ctx: { usuarioId: users.activeUserId, esAdmin: auth.isAdmin } })
+  /** Perfil del paciente solo si su consentimiento sigue vigente. */
+  const perfilDe = (meta) => {
+    const u = users.byId(meta?.participantes?.[0]?.usuarioId)
+    return u && consentimientoVigente(u) ? u.perfil : null
+  }
+  const opts = () => ({ actor: actor(), ctx: { usuarioId: users.activeUserId, esAdmin: auth.isAdmin }, cuenta: !!cloudCuenta.value, perfilDe })
 
   async function guardar(id, datos) {
     const m = await monitoreoService.guardar(id, datos, opts())
@@ -59,6 +66,12 @@ export const useMonitoreosStore = defineStore('monitoreos', () => {
 
   async function actualizar(id, datos) {
     const m = await monitoreoService.actualizar(id, datos, opts())
+    await refrescar()
+    return m
+  }
+
+  async function cambiarVisibilidad(id, datos) {
+    const m = await monitoreoService.cambiarVisibilidad(id, datos, opts())
     await refrescar()
     return m
   }
@@ -81,5 +94,5 @@ export const useMonitoreosStore = defineStore('monitoreos', () => {
     cargado.value = false
   }
 
-  return { todos, cargando, cargado, ctx, visiblesLista, utilizables, conteos, refrescar, asegurar, guardar, actualizar, descartar, eliminar, actor, reset }
+  return { todos, cargando, cargado, ctx, visiblesLista, utilizables, conteos, refrescar, asegurar, guardar, actualizar, cambiarVisibilidad, perfilDe, descartar, eliminar, actor, reset }
 })

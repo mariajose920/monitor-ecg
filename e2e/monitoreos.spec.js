@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs'
 /** Flujo completo: usuario → monitoreo con simulador → guardar → ver → editar → exportar → comparar → aprender → eliminar. */
 
 async function crearUsuario(page) {
-  await page.goto('/usuarios')
+  await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
-  await page.getByRole('button', { name: 'Crear usuario' }).click()
-  await expect(page.getByTestId('usuario-activo')).toContainText('Usuario 1')
+  await page.getByRole('button', { name: 'Crear paciente' }).click()
+  await expect(page.getByTestId('usuario-activo')).toContainText('Paciente 1')
 }
 
 async function grabar(page, nombre, { guardar = true, segundos = 7 } = {}) {
@@ -59,10 +59,10 @@ test('crear usuario, monitorear, guardar, ver, editar, exportar, comparar, apren
   await page.getByLabel('Seleccionar todos los monitoreos mostrados').check()
   await page.getByTestId('exportar-csv-seleccion').click()
   const [csv] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Entiendo, descargar CSV' }).click()])
-  expect(csv.suggestedFilename()).toMatch(/^ecg_Usuario1_\d{4}-\d\d-\d\dT\d{4}Z\.csv$/)
+  expect(csv.suggestedFilename()).toMatch(/^ecg_Paciente1_\d{4}-\d\d-\d\dT\d{4}Z\.csv$/)
   const texto = readFileSync(await csv.path(), 'utf8')
   expect(texto.startsWith('# CLASIFICACION')).toBe(true)
-  expect(texto).toContain('"Usuario 1"')
+  expect(texto).toContain('"Paciente 1"')
 
   // Detalle, edición y PDF
   await page.getByRole('link', { name: 'Prueba A', exact: true }).click()
@@ -74,16 +74,16 @@ test('crear usuario, monitorear, guardar, ver, editar, exportar, comparar, apren
   await expect(page.getByRole('heading', { level: 1, name: 'Prueba A editada' })).toBeVisible()
   await page.getByTestId('informe-pdf').click()
   const [pdf] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Entiendo, descargar informe PDF' }).click()])
-  expect(pdf.suggestedFilename()).toMatch(/^informe_Usuario1_.*\.pdf$/)
+  expect(pdf.suggestedFilename()).toMatch(/^informe_Paciente1_.*\.pdf$/)
   const bytes = readFileSync(await pdf.path())
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-')
-  expect(bytes.toString('latin1')).toContain('Usuario 1')
+  expect(bytes.toString('latin1')).toContain('Paciente 1')
 
   // Historial del usuario (CSV)
   await page.goto('/monitoreos')
   await page.getByTestId('descargar-historial').click()
   const [hist] = await Promise.all([page.waitForEvent('download'), page.getByTestId('confirmar-historial').click()])
-  expect(hist.suggestedFilename()).toMatch(/^historial_Usuario1_.*\.csv$/)
+  expect(hist.suggestedFilename()).toMatch(/^historial_Paciente1_.*\.csv$/)
   expect(readFileSync(await hist.path(), 'utf8')).toContain('# SERIE DE BPM POR MONITOREO')
 
   // Comparar A y B con el selector guiado
@@ -98,7 +98,7 @@ test('crear usuario, monitorear, guardar, ver, editar, exportar, comparar, apren
   await expect(page.getByText('Correlación de Pearson')).toBeVisible({ timeout: 20_000 })
   await page.getByTestId('informe-comparacion-pdf').click()
   const [cmp] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Entiendo, descargar PDF' }).click()])
-  expect(cmp.suggestedFilename()).toMatch(/^comparacion_Usuario1_.*\.pdf$/)
+  expect(cmp.suggestedFilename()).toMatch(/^comparacion_Paciente1_.*\.pdf$/)
 
   // Aprende → Mis monitoreos
   await page.goto('/aprende/mis-monitoreos')
@@ -108,51 +108,51 @@ test('crear usuario, monitorear, guardar, ver, editar, exportar, comparar, apren
   await expect(page.getByTestId('exp-calidad')).toBeVisible()
 
   // Usuarios: contador y eliminación de un monitoreo
-  await page.goto('/usuarios')
+  await page.goto('/pacientes')
   await expect(page.getByTestId('conteo-1')).toHaveText('2')
   await page.goto('/monitoreos')
   await page.getByRole('button', { name: 'Eliminar Prueba B' }).click()
   await page.getByTestId('confirmar-eliminar').click()
   await expect(page.getByRole('link', { name: 'Prueba B', exact: true })).toBeHidden()
-  await page.goto('/usuarios')
+  await page.goto('/pacientes')
   await expect(page.getByTestId('conteo-1')).toHaveText('1')
 
   // Eliminar usuario (flujo "Eliminar mis datos")
-  await page.getByRole('button', { name: 'Eliminar Usuario 1' }).click()
+  await page.getByRole('button', { name: 'Eliminar Paciente 1' }).click()
   await page.getByTestId('confirmar-eliminar-usuario').click()
-  await expect(page.getByText('Aún no hay usuarios')).toBeVisible()
+  await expect(page.getByText('Aún no hay pacientes')).toBeVisible()
   expect(errores).toEqual([])
 })
 
 test('mantenedor de usuarios: crear, buscar, editar alias y estados vacíos', async ({ page }) => {
-  await page.goto('/usuarios')
-  await expect(page.getByText('Aún no hay usuarios')).toBeVisible()
+  await page.goto('/pacientes')
+  await expect(page.getByText('Aún no hay pacientes')).toBeVisible()
   for (const alias of ['Grupo A', 'Grupo B']) {
     await page.getByTestId('nuevo-usuario').click()
     await page.getByLabel('Alias (opcional)').fill(alias)
-    await page.getByRole('button', { name: 'Crear usuario' }).click()
+    await page.getByRole('button', { name: 'Crear paciente' }).click()
   }
   await page.getByLabel('Buscar por seudónimo o alias').fill('grupo a')
   await expect(page.getByTestId('tabla-usuarios').locator('tbody tr')).toHaveCount(1)
   await page.getByLabel('Buscar por seudónimo o alias').fill('zzz')
   await expect(page.getByText('Sin resultados')).toBeVisible()
   await page.getByLabel('Buscar por seudónimo o alias').fill('')
-  await page.getByRole('button', { name: 'Editar Usuario 2' }).click()
+  await page.getByRole('button', { name: 'Editar Paciente 2' }).click()
   await page.getByLabel('Alias (opcional)').fill('Renombrado')
   await page.getByRole('button', { name: 'Guardar alias' }).click()
   await expect(page.getByRole('cell', { name: 'Renombrado' })).toBeVisible()
-  // Usuario 1 no es el activo: editar y eliminar están deshabilitados hasta "Elegir"
-  await expect(page.getByRole('button', { name: 'Editar Usuario 1' })).toBeDisabled()
-  await page.getByRole('button', { name: 'Elegir Usuario 1' }).click()
-  await expect(page.getByRole('button', { name: 'Editar Usuario 1' })).toBeEnabled()
+  // Paciente 1 no es el activo: editar y eliminar están deshabilitados hasta "Elegir"
+  await expect(page.getByRole('button', { name: 'Editar Paciente 1' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Elegir Paciente 1' }).click()
+  await expect(page.getByRole('button', { name: 'Editar Paciente 1' })).toBeEnabled()
 })
 
 test('vistas principales sin desborde horizontal a 375 px', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto('/usuarios')
+  await page.goto('/pacientes')
   await page.getByTestId('nuevo-usuario').click()
-  await page.getByRole('button', { name: 'Crear usuario' }).click()
-  for (const ruta of ['/', '/usuarios', '/monitor', '/monitoreos', '/comparar', '/aprende/mis-monitoreos']) {
+  await page.getByRole('button', { name: 'Crear paciente' }).click()
+  for (const ruta of ['/', '/pacientes', '/monitor', '/monitoreos', '/comparar', '/aprende/mis-monitoreos']) {
     await page.goto(ruta)
     await page.waitForTimeout(300)
     const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }))

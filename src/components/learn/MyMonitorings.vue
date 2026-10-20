@@ -3,6 +3,8 @@ import { ref, computed, onMounted, shallowRef, markRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SignalChart from '@/components/common/SignalChart.vue'
 import MonitoreoPicker from '@/components/compare/MonitoreoPicker.vue'
+import CommunityPicker from '@/components/community/CommunityPicker.vue'
+import { useComunidadStore } from '@/stores/comunidad.js'
 import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { useSettingsStore } from '@/stores/settings.js'
@@ -26,9 +28,14 @@ const vista = shallowRef(null)
 const exportando = ref(null)
 const ocupado = ref(false)
 
-const lista = computed(() => monitoreos.utilizables)
+const comunidad = useComunidadStore()
+/** 'mios' = Mis monitoreos · 'comunidad' = monitoreos públicos de otras cuentas (solo lectura). */
+const fuente = ref('mios')
+const lista = computed(() => (fuente.value === 'comunidad' ? comunidad.lista : monitoreos.utilizables))
+const ctxActual = computed(() => (fuente.value === 'comunidad' ? { usuarioId: 'publico', esAdmin: false } : monitoreos.ctx))
+watch(fuente, () => { sesionId.value = ''; canal.value = '' })
 const sesion = computed(() => lista.value.find((s) => s.id === sesionId.value) ?? null)
-const partes = computed(() => (sesion.value ? participantesVisibles(sesion.value, monitoreos.ctx) : []))
+const partes = computed(() => (sesion.value ? participantesVisibles(sesion.value, ctxActual.value) : []))
 const series = [{ label: 'Señal (cuentas ADC)', color: '--signal' }]
 const seriesRr = [{ label: 'Intervalo RR (ms)', color: '--signal-ref' }]
 
@@ -97,7 +104,12 @@ const f = (v) => (v === null || v === undefined || !Number.isFinite(v) ? '--' : 
     <h2>Mis monitoreos <span class="chip neutral">Aprende con tus datos</span></h2>
     <p class="muted">Elige un monitoreo guardado y recórrelo paso a paso: dónde están los latidos, cómo se obtiene el BPM, cómo influye la actividad y qué tan buena fue la señal del sensor.</p>
 
-    <MonitoreoPicker id-base="aprende" titulo="Elegir medición para la guía" :lista="lista" :ctx="monitoreos.ctx" v-model:sesion-id="sesionId" v-model:canal="canal" />
+    <div class="tabs" role="group" aria-label="Origen de los monitoreos">
+      <button type="button" :class="['btn small', { primary: fuente === 'mios' }]" :aria-pressed="fuente === 'mios'" data-testid="tab-mios" @click="fuente = 'mios'">Mis monitoreos</button>
+      <button type="button" :class="['btn small', { primary: fuente === 'comunidad' }]" :aria-pressed="fuente === 'comunidad'" data-testid="tab-comunidad" @click="fuente = 'comunidad'">Comunidad (públicos)</button>
+    </div>
+    <CommunityPicker v-if="fuente === 'comunidad'" id-base="aprendec" v-model:sesion-id="sesionId" v-model:canal="canal" />
+    <MonitoreoPicker v-else id-base="aprende" titulo="Elegir medición para la guía" :lista="lista" :ctx="monitoreos.ctx" v-model:sesion-id="sesionId" v-model:canal="canal" />
 
     <p v-if="cargando" class="muted" role="status">Analizando…</p>
     <p v-if="error" class="alert danger" role="alert">{{ error }}</p>

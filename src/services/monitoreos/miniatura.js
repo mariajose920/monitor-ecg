@@ -1,4 +1,4 @@
-import { getChannelSignal } from '@/services/storage/sessionRepository.js'
+import { obtenerSenal, esComunitario } from './senalAcceso.js'
 
 const cache = new Map()
 
@@ -41,8 +41,9 @@ export async function miniaturaDe(sesionId, canal) {
   const k = `${sesionId}:${canal}`
   if (cache.has(k)) return cache.get(k)
   let d = ''
+  if (esComunitario(sesionId)) return d // evita descargar señales ajenas solo para la miniatura
   try {
-    const sig = await getChannelSignal(sesionId, canal)
+    const sig = await obtenerSenal(sesionId, canal)
     // Solo los primeros ~10 s para que sea barato y se vea el pulso.
     d = rutaMiniatura(sig.raw.subarray(0, Math.min(sig.n, 2500)), 60)
   } catch {

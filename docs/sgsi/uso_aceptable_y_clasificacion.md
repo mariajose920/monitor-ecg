@@ -32,6 +32,13 @@ Cerrar la sesión de administrador al terminar; no dejar datos opcionales visibl
 
 La insignia de la app es el componente `DataClassBadge` y su texto emergente cita los controles A.8.2.1/A.8.2.2.
 
+## 4b. Publicación de monitoreos (A.8.2.3, A.13.2.1, A.18.1.4)
+
+- Los monitoreos son **Confidencial-Sensible (datos de salud)**. Por defecto son privados. Publicarlos exige la casilla de consentimiento explícita; nunca se publica el nombre, alias, nota ni la cuenta, y los datos del paciente solo con una segunda casilla.
+- Uso aceptable: publicar únicamente datos de personas que lo consintieron; no escribir nombres, RUT ni correos en nombres o notas; no intentar reidentificar a las personas de monitoreos públicos ni descargarlos masivamente.
+- Al detectar un monitoreo público que identifique a alguien, reportarlo en `/seguridad` (incidente tipo fuga); el administrador puede volverlo privado.
+- Equipos compartidos: al cerrar sesión elegir «quitar datos del equipo».
+
 ## 5. Devolución de activos (A.8.1.4, A.11.2.5)
 
 Registro de préstamo de sensores y electrodos (fecha, responsable, estado). Al terminar el semestre se devuelven y, si un PC prestado tuvo datos, se ejecuta "Borrar todos los datos" (A.11.2.7).

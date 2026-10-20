@@ -156,7 +156,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     <SafetyBanner />
     <CapabilityNotice />
     <p class="muted">
-      Aquí solo se mide. Usuarios, historial y comparaciones están en <RouterLink to="/usuarios">Usuarios</RouterLink> y
+      Aquí solo se mide. Pacientes, historial y comparaciones están en <RouterLink to="/pacientes">Pacientes</RouterLink> y
       <RouterLink to="/monitoreos">Monitoreos</RouterLink>.
     </p>
 

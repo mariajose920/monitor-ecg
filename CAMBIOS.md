@@ -107,3 +107,13 @@ Análisis y diagramas en `../docs/ANALISIS_VISUAL.md`.
 | Pruebas | Unitarias: catálogo/filtros, servicio de monitoreos, informes y PDF, análisis, historial, importación, parser de perfil, esquema; E2E `e2e/monitoreos.spec.js` | `tests/*`, `e2e/*` |
 
 Pendiente: probar el aviso de perfil con un ESP32 + MAX30100 físico; la serie de BPM del historial usa el tramo continuo más largo (≤ 10 min) de cada monitoreo; los PDF no se firman ni cifran.
+
+## 2026-10-20 — Cuentas, pacientes propios y visibilidad de monitoreos
+
+- **Cuentas (Supabase Auth, correo + contraseña):** `/acceso`, `/registro` (contraseña ≥ 10, confirmación por correo, CAPTCHA opcional), `/recuperar`, `/restablecer`, cierre de sesión y indicador de cuenta en el encabezado (también en el menú móvil). Límite de intentos en el cliente y errores genéricos. Sesión persistente por supabase-js (la app no guarda tokens).
+- **Modo sin cuenta** intacto (local cifrado). Se eliminó `signInAnonymously`: sin cuenta no se sube nada a la nube.
+- **Pacientes:** «Usuario N» pasa a «Paciente N» (los antiguos se muestran renombrados); `/usuarios` redirige a `/pacientes`. Con cuenta se guardan en la tabla `pacientes` (RLS solo propietario; el administrador no los lee). Datos locales separados por espacio (`acct:<uid>:`), vinculación de datos locales con confirmación y opción de quitar los datos del equipo al cerrar sesión.
+- **Visibilidad:** `privado` por defecto o `publico` (casilla de consentimiento; segunda casilla para datos del paciente), editable al guardar, en el detalle y en la lista. Pestañas «Comunidad (públicos)» en Comparar y Aprende. Vista `monitoreos_publicos` (sin etiqueta/alias/nombre/nota/propietario).
+- **BD:** `supabase/migracion_cuentas_pacientes.sql` (reflejada en `schema.sql`): `pacientes`, columnas de `sesiones`, vista, política de bloques públicos, auditoría ampliada (9 eventos), `borrar_mis_datos()` con pacientes, `eliminar_mi_cuenta()`, políticas con `(select auth.uid())`.
+- **Pruebas:** `tests/cuentas.spec.js`, `tests/visibilidad.spec.js`, ampliado `schema.spec.js`; E2E `e2e/cuentas.spec.js`.
+- **Pendiente/limitaciones:** el flujo real contra Supabase (registro, confirmación, publicación) solo se puede probar tras aplicar la migración y configurar Auth; la restauración de monitoreos propios desde la nube en otro equipo aún no está implementada (sí los pacientes).

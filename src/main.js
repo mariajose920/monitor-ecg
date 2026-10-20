@@ -14,6 +14,7 @@ import { notify } from '@/services/notifications/notifier.js'
 import { purgeOlderThan } from '@/services/storage/sessionRepository.js'
 import { useSettingsStore } from '@/stores/settings.js'
 import { useUsersStore } from '@/stores/users.js'
+import { useAccountStore } from '@/stores/account.js'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -30,7 +31,13 @@ async function bootstrap() {
   const settings = useSettingsStore()
   try {
     await settings.load()
+    const cuenta = useAccountStore()
+    await cuenta.init() // fija el espacio de datos (con o sin cuenta) antes de cargar pacientes
     await useUsersStore().ensureLoaded()
+    if (cuenta.iniciada) {
+      useUsersStore().sincronizarConNube().catch(() => {})
+      cuenta.revisarVinculable()
+    }
     // SEC-32: purga automática por retención al iniciar.
     const n = await purgeOlderThan(settings.retencionDias)
     if (n > 0) await audit('RETENTION_PURGE', 'system', { sesiones: n, dias: settings.retencionDias })
