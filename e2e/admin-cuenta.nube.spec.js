@@ -217,3 +217,31 @@ test('pestaña Administradores: el error del servidor es genérico (no revela si
   await expect(page.getByText('No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.')).toBeVisible()
   await expect(page.locator('body')).not.toContainText(/no existe|no registrad/i)
 })
+
+test('con cuenta y sesión de administrador el encabezado nunca superpone textos (1280 a 1800 px)', async ({ page }) => {
+  await simularAdmin(page)
+  await entrarComoAdmin(page)
+  for (const ancho of [375, 600, 768, 899, 900, 1024, 1280, 1440, 1600, 1800]) {
+    await page.setViewportSize({ width: ancho, height: 900 })
+    await page.waitForTimeout(200)
+    const choques = await page.evaluate(() => {
+      const els = [...document.querySelectorAll('.app-header a, .app-header button, .app-header .chip, .app-header .brand')]
+        .filter((e) => e.offsetParent !== null)
+        .map((e) => ({ n: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 24), r: e.getBoundingClientRect() }))
+        .filter((x) => x.r.width > 2 && x.r.height > 2)
+      const sol = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2
+      const malos = []
+      for (let i = 0; i < els.length; i++) {
+        for (let j = i + 1; j < els.length; j++) {
+          // un elemento contenido dentro de otro (p. ej. chip dentro de enlace) no cuenta como choque
+          const a = els[i].r
+          const b = els[j].r
+          const dentro = (x, y) => x.left >= y.left - 1 && x.right <= y.right + 1 && x.top >= y.top - 1 && x.bottom <= y.bottom + 1
+          if (sol(a, b) && !dentro(a, b) && !dentro(b, a)) malos.push(`${els[i].n} × ${els[j].n}`)
+        }
+      }
+      return malos
+    })
+    expect(choques, `superposiciones a ${ancho} px`).toEqual([])
+  }
+})

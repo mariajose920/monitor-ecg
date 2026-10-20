@@ -11,7 +11,7 @@ import { setPref } from '@/utils/prefs.js'
 /**
  * Encabezado adaptable en 3 niveles (solo CSS, sin JS de medición, sin parpadeos):
  *  1) >= 1360 px: una fila con ícono + texto.
- *  2) 600–1359 px: compacto en dos filas (rejilla horizontal de 2 filas) con ícono + texto pequeño.
+ *  2) 900–1759 px: compacto en dos filas (rejilla horizontal de 2 filas) con ícono + texto pequeño.
  *  3) < 600 px: solo íconos (nombre accesible = texto) y un último botón "Menú" con un desplegable corto.
  * Cada vínculo existe una sola vez en el árbol de accesibilidad: lo que no cabe en la fila pasa al desplegable
  * y el resto del nivel queda con display:none (nunca hay duplicados visibles).
@@ -272,12 +272,13 @@ function alternarTema() {
   display: none;
 }
 
-/* ---------- Nivel 1: una fila, ícono + texto (>= 1360 px) ---------- */
-@media (min-width: 1360px) {
+/* ---------- Nivel 1: una fila, ícono + texto (>= 1760 px) ---------- */
+@media (min-width: 1760px) {
   .bar {
     display: flex;
+    flex-wrap: wrap; /* red de seguridad: si algo no cabe pasa a otra línea en vez de superponerse */
     align-items: center;
-    gap: 10px;
+    gap: 4px 10px;
     min-height: 56px;
   }
 
@@ -288,6 +289,7 @@ function alternarTema() {
   .nav {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 2px;
     margin-left: auto;
     min-width: 0;
@@ -317,8 +319,8 @@ function alternarTema() {
   }
 }
 
-/* ---------- Nivel 2: compacto en dos filas (600–1359 px) ---------- */
-@media (min-width: 600px) and (max-width: 1359px) {
+/* ---------- Nivel 2: compacto en dos filas (600–1759 px) ---------- */
+@media (min-width: 900px) and (max-width: 1759px) {
   .bar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -395,8 +397,8 @@ function alternarTema() {
   }
 }
 
-/* ---------- Nivel 3: solo íconos en una fila (< 600 px) ---------- */
-@media (max-width: 599px) {
+/* ---------- Nivel 3: solo íconos en una fila (< 900 px) ---------- */
+@media (max-width: 899px) {
   .bar {
     display: flex;
     flex-wrap: nowrap;

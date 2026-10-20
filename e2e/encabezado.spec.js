@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * Encabezado adaptable en 3 niveles (solo CSS): fila con ícono + texto (>= 1360 px), dos filas compactas
+ * Encabezado adaptable en 3 niveles (solo CSS): fila con ícono + texto (>= 1760 px), dos filas compactas
  * (600–1359 px) y solo íconos con desplegable (< 600 px). Sin desbordes horizontales en ningún ancho.
  */
-const ANCHOS = [375, 600, 768, 1024, 1280, 1440]
+const ANCHOS = [375, 600, 768, 899, 900, 1024, 1280, 1440, 1800]
 
 async function medir(page) {
   return page.evaluate(() => {
@@ -30,22 +30,26 @@ for (const ancho of ANCHOS) {
   })
 }
 
-test('nivel 1 (1440 px): una fila con ícono y texto visibles', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 800 })
+test('nivel 1 (1800 px): una fila con ícono y texto visibles', async ({ page }) => {
+  await page.setViewportSize({ width: 1800, height: 900 })
   await page.goto('/')
   const m = await medir(page)
-  expect(m.alto).toBeLessThan(70)
-  const enlace = page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Monitoreos', exact: true })
+  expect(m.alto).toBeLessThan(80)
+  const nav1 = page.getByRole('navigation', { name: 'Principal' })
+  const [p1, p2] = [await nav1.getByRole('link', { name: 'Inicio', exact: true }).boundingBox(), await nav1.getByRole('link', { name: 'Aprende', exact: true }).boundingBox()]
+  expect(Math.abs(p1.y - p2.y), 'una sola fila').toBeLessThan(4)
+  const enlace = nav1.getByRole('link', { name: 'Monitoreos', exact: true })
   const box = await enlace.boundingBox()
   expect(box.width).toBeGreaterThan(90) // texto visible, no solo ícono
   await expect(enlace.locator('svg')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Menú' })).toBeHidden()
 })
 
-test('nivel 2 (600–1280 px): dos filas compactas con ícono y texto pequeño', async ({ page }) => {
-  for (const ancho of [600, 768, 1024, 1280]) {
+test('nivel 2 (900–1440 px): dos filas compactas con ícono y texto pequeño', async ({ page }) => {
+  for (const ancho of [900, 1024, 1280, 1440]) {
     await page.setViewportSize({ width: ancho, height: 800 })
     await page.goto('/')
+    await page.waitForSelector('.app-header')
     const m = await medir(page)
     expect(m.alto, `alto a ${ancho}`).toBeGreaterThan(80)
     expect(m.alto, `alto a ${ancho}`).toBeLessThan(120)
@@ -109,7 +113,7 @@ test('nivel 3 (375 px): solo íconos, objetivos >= 44 px, nombre accesible y des
   await expect(page.getByRole('link', { name: 'Monitoreos', exact: true })).toBeVisible()
 })
 
-test('el encabezado se oculta al bajar y reaparece al subir (< 1360 px)', async ({ page }) => {
+test('el encabezado se oculta al bajar y reaparece al subir (< 1760 px)', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 600 })
   await page.goto('/')
   await page.evaluate(() => { document.body.style.minHeight = '3000px' })
