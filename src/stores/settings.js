@@ -98,7 +98,7 @@ export const useSettingsStore = defineStore('settings', () => {
     parametros.value = clone(nuevo)
     await saveParametros(clone(nuevo))
     await auditarCambios(antes, nuevo, 'parametros')
-    await publicarEnNube()
+    return { publicado: await publicarEnNube() }
   }
 
   async function setSincronizacion(nuevo) {
@@ -109,7 +109,7 @@ export const useSettingsStore = defineStore('settings', () => {
     sincronizacion.value = clone(nuevo)
     await saveSincronizacion(clone(nuevo))
     await auditarCambios(antes, nuevo, 'sincronizacion')
-    await publicarEnNube()
+    return { publicado: await publicarEnNube() }
   }
 
   async function setRetencion(dias) {

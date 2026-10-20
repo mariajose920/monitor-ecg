@@ -134,4 +134,17 @@ Pendiente: probar el aviso de perfil con un ESP32 + MAX30100 físico; la serie d
 - **Revisión de derechos.** SGSI → Revisión lista los administradores desde el servidor y registra `ACCESS_REVIEW_DONE`.
 - **Documentación.** `docs/sgsi/recuperacion_acceso_admin.md` (concesión, retiro, recuperación con regla de dos personas), SoA A.9.2.3–A.9.2.6 y A.9.4.2, SEC-77..82, riesgo R27, `control_acceso.md`, roles, incidentes, trazabilidad y pendientes manuales.
 - **Pruebas.** `tests/adminMfa.spec.js`; E2E `e2e/admin-cuenta.nube.spec.js` (segunda copia construida con nube y toda la red a Supabase simulada con `page.route`) y ampliación de `e2e/admin.spec.js`.
-- **Limitaciones.** El servidor valida el `aal` del token vigente (hasta su expiración); no hay UI para conceder/retirar el rol (SQL del dueño del proyecto); el flujo real de TOTP solo se prueba tras aplicar la migración y habilitar MFA en Supabase.
+- **Limitaciones.** El servidor valida el `aal` del token vigente (hasta su expiración); el rol se concede y retira desde Administración → Administradores (el SQL del dueño queda como contingencia); el flujo real de TOTP solo se prueba tras aplicar la migración y habilitar MFA en Supabase.
+
+## 2026-10-20 — Gestión de administradores desde la app y encabezado adaptable
+
+| Ámbito | Cambio | Archivos |
+|---|---|---|
+| SQL (A.9.2.3, A.9.2.5, A.9.2.6) | `admin_listar_administradores()` devuelve `user_id, email, creado_en`; nuevas `admin_conceder_rol(correo)` (normaliza, cuenta confirmada, máx. 5, mensaje genérico, `ADMIN_ROLE_GRANTED` sin correos) y `admin_retirar_rol(id)` (no a uno mismo, mínimo 1, `ADMIN_ROLE_REVOKED`); sin escritura directa en `administradores` | `../supabase/migracion_admin_roles.sql`, `../supabase/schema.sql` |
+| UI | Pestaña **Administradores** (lista con "tú", formulario con aviso, TOTP nuevo al conceder y retirar, confirmación explícita al retirar, límite 5 visible, "Registrar revisión") | `src/components/admin/AdminRolesPanel.vue`, `src/views/admin/AdminView.vue`, `src/stores/admin.js`, `src/services/security/adminMfa.js` |
+| Parámetros | Antes de publicar se vuelve a consultar `es_admin()` (el aal2 puede haber cambiado) y el aviso dice si se publicó en la nube; la pestaña Nube ya no depende de un estado desactualizado | `src/services/cloud/cloudSync.js`, `src/stores/settings.js`, `src/components/admin/*Form.vue`, `CloudSettings.vue` |
+| Encabezado (RNF01/RNF04) | 3 niveles solo con CSS: ≥ 1360 px una fila con ícono + texto; 600–1359 px dos filas compactas (rejilla); < 600 px solo íconos (≥ 44 px, nombre accesible = texto, `title`), chips de paciente/cuenta como íconos con estado y un último "Menú" con desplegable (sin scroll horizontal) | `src/components/layout/AppHeader.vue` |
+| Pruebas | `tests/adminRoles.spec.js`; E2E `e2e/admin-cuenta.nube.spec.js` (3 nuevas, red simulada) y `e2e/encabezado.spec.js` (viewports) | `tests/`, `e2e/` |
+| Documentación | control_acceso, recuperacion_acceso_admin, roles_responsabilidades, ISO27001_controles (SEC-83/84, SoA A.9.2.2/3/5/6), TRAZABILIDAD, PENDIENTES_MANUALES | `../docs/` |
+
+Pendiente (humano): aplicar `supabase/migracion_admin_roles.sql` en el SQL Editor; probar con dos cuentas reales (conceder y retirar).

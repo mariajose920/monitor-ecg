@@ -173,7 +173,9 @@ export async function fetchCloudParametros() {
 }
 
 export async function pushCloudParametros({ parametros, sincronizacion }) {
-  if (!cloudEnabled || !cloudAdmin.value) return false
+  if (!cloudEnabled) return false
+  // El nivel aal2 puede haber cambiado desde la última consulta (acaba de verificarse el TOTP): se vuelve a preguntar al servidor.
+  if (!(await ensureCloudSession()) || !cloudAdmin.value) return false
   const { data } = await supabase.auth.getUser()
   const fila = { id: 1, actualizado_en: new Date().toISOString(), actualizado_por: data.user?.id }
   if (parametros) fila.parametros = parametros

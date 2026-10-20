@@ -11,6 +11,8 @@ import { wipeAllData } from '@/services/storage/wipe.js'
 import { listSessions } from '@/services/storage/sessionRepository.js'
 import { deleteCloudSessions } from '@/services/cloud/cloudSync.js'
 import { stampUtc } from '@/utils/time.js'
+import { concederRol as srvConceder, retirarRol as srvRetirar, puedeRetirarRol } from '@/services/security/adminMfa.js'
+import { cloudCuenta } from '@/services/cloud/cloudSync.js'
 
 /**
  * Acciones privilegiadas (SEC-03): todas llaman a assertAdmin(); las destructivas exigen
@@ -71,5 +73,34 @@ export const useAdminStore = defineStore('admin', () => {
     await useUsersStore().deleteUserData(id, 'admin')
   }
 
-  return { readAudit, verifyAudit, exportAudit, exportAll, wipeAll, deleteUser }
+  async function reautenticar(codigo) {
+    const auth = useAuthStore()
+    if (!(await auth.reauth(codigo))) {
+      const e = new Error(auth.metodoReauth === 'totp' ? 'Código incorrecto o vencido' : 'PIN incorrecto')
+      e.reauth = true // el diálogo sigue abierto para reintentar
+      throw e
+    }
+  }
+
+  /** A.9.2.3: concede el rol de administrador a una cuenta registrada (exige aal2 + código TOTP nuevo). */
+  async function concederRol(correo, codigo) {
+    useAuthStore().assertAdmin()
+    await reautenticar(codigo)
+    const fila = await srvConceder(correo)
+    await audit('ADMIN_ROLE_GRANTED', 'admin', { objetivo: fila.user_id })
+    return fila
+  }
+
+  /** A.9.2.6: retira el rol a otro administrador (confirmación + código TOTP nuevo). */
+  async function retirarRol(userId, codigo, total) {
+    useAuthStore().assertAdmin()
+    const regla = puedeRetirarRol({ total, objetivoId: userId, yoId: cloudCuenta.value?.id })
+    if (!regla.ok) throw new Error(regla.motivo)
+    await reautenticar(codigo)
+    const ok = await srvRetirar(userId)
+    if (ok) await audit('ADMIN_ROLE_REVOKED', 'admin', { objetivo: userId })
+    return ok
+  }
+
+  return { concederRol, retirarRol, readAudit, verifyAudit, exportAudit, exportAll, wipeAll, deleteUser }
 })

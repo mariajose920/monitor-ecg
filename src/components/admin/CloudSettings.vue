@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import { cloudEnabled, cloudEstado, cloudAdmin } from '@/services/cloud/cloudSync.js'
+import { ref, onMounted } from 'vue'
+import { cloudEnabled, cloudEstado, cloudAdmin, ensureCloudSession } from '@/services/cloud/cloudSync.js'
 import { useSettingsStore } from '@/stores/settings.js'
 import { useAccountStore } from '@/stores/account.js'
 import { notify } from '@/services/notifications/notifier.js'
@@ -12,6 +12,8 @@ import { notify } from '@/services/notifications/notifier.js'
 const settings = useSettingsStore()
 const cuenta = useAccountStore()
 const ocupado = ref(false)
+// Vuelve a consultar al servidor el nivel aal2 (puede haber cambiado tras verificar el TOTP).
+onMounted(() => { ensureCloudSession() })
 
 async function publicar() {
   ocupado.value = true

@@ -5,6 +5,7 @@ import SyncSettingsForm from '@/components/admin/SyncSettingsForm.vue'
 import UserAdminTable from '@/components/admin/UserAdminTable.vue'
 import DataManagement from '@/components/admin/DataManagement.vue'
 import CloudSettings from '@/components/admin/CloudSettings.vue'
+import AdminRolesPanel from '@/components/admin/AdminRolesPanel.vue'
 import IsmsPanel from '@/components/admin/IsmsPanel.vue'
 import { useIsmsStore } from '@/stores/isms.js'
 import { useAuthStore } from '@/stores/auth.js'
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'usuarios', texto: 'Participantes' },
   { id: 'datos', texto: 'Datos y seguridad' },
   { id: 'nube', texto: 'Nube' },
+  ...(auth.nube ? [{ id: 'administradores', texto: 'Administradores' }] : []),
   { id: 'sgsi', texto: 'SGSI (ISO 27001)' },
 ]
 // A.7.2.2: si la política vigente no está aceptada, se abre directamente la pestaña SGSI.
@@ -50,6 +52,7 @@ const restante = computed(() => {
     <SyncSettingsForm v-else-if="tab === 'sincronizacion'" />
     <UserAdminTable v-else-if="tab === 'usuarios'" />
     <CloudSettings v-else-if="tab === 'nube'" />
+    <AdminRolesPanel v-else-if="tab === 'administradores'" />
     <IsmsPanel v-else-if="tab === 'sgsi'" />
     <DataManagement v-else />
   </section>

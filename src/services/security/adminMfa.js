@@ -101,10 +101,70 @@ export async function verificarCodigo(factorId, codigo) {
   return { ok: !error }
 }
 
-/** Lista de administradores (id y fecha) para la revisión A.9.2.5. Solo con privilegios efectivos. */
+// ---------- Gestión de administradores desde la app (A.9.2.3, A.9.2.5, A.9.2.6) ----------
+/** Máximo de administradores simultáneos (coincide con admin_conceder_rol en el servidor). */
+export const MAX_ADMINISTRADORES = 5
+export const MSG_ROL_GENERICO = 'No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.'
+export const MSG_ROL_LIMITE = `Ya hay ${MAX_ADMINISTRADORES} administradores (máximo). Retira uno antes de añadir otro.`
+
+/** Normaliza el correo como el servidor: recorta y pasa a minúsculas. */
+export function normalizarCorreo(correo) {
+  return String(correo ?? '').trim().toLowerCase()
+}
+
+/** @returns {string|null} mensaje de error o null si el correo tiene formato válido (≤254). */
+export function validarCorreoAdmin(correo) {
+  const c = normalizarCorreo(correo)
+  if (!c) return 'Escribe el correo de la cuenta.'
+  if (c.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)) return 'Escribe un correo válido.'
+  return null
+}
+
+/** ¿Se puede añadir otro administrador? (el límite se vuelve a exigir en el servidor) */
+export function puedeConcederRol(totalActual) {
+  return Number(totalActual) < MAX_ADMINISTRADORES
+}
+
+/** Reglas de retiro (A.9.2.6): no a uno mismo y nunca dejar el sistema sin administradores. */
+export function puedeRetirarRol({ total, objetivoId, yoId }) {
+  if (objetivoId && objetivoId === yoId) return { ok: false, motivo: 'No puedes retirarte el rol a ti mismo; pídeselo a otro administrador.' }
+  if (Number(total) <= 1) return { ok: false, motivo: 'Debe quedar al menos un administrador.' }
+  return { ok: true, motivo: '' }
+}
+
+/** Traduce el error del servidor a un mensaje claro pero genérico (no revela si un correo existe). */
+export function mensajeErrorRol(error) {
+  const m = String(error?.message ?? '')
+  if (m.includes('limite_administradores')) return MSG_ROL_LIMITE
+  if (m.includes('no_puede_retirarse_a_si_mismo')) return 'No puedes retirarte el rol a ti mismo; pídeselo a otro administrador.'
+  if (m.includes('minimo_un_administrador')) return 'Debe quedar al menos un administrador.'
+  return MSG_ROL_GENERICO
+}
+
+/** Lista de administradores (id, correo y fecha) para la revisión A.9.2.5. Solo con privilegios efectivos. */
 export async function listarAdministradores() {
   if (!cloudEnabled) return []
   const { data, error } = await supabase.rpc('admin_listar_administradores')
   if (error) throw new Error('No se pudo obtener la lista (se requieren privilegios de administrador).')
   return data ?? []
+}
+
+/** Concede el rol a una cuenta ya registrada y confirmada. @returns {Promise<{user_id:string, creado_en:string}>} */
+export async function concederRol(correo) {
+  const err = validarCorreoAdmin(correo)
+  if (err) throw new Error(err)
+  if (!cloudEnabled) throw new Error(MSG_ROL_GENERICO)
+  const { data, error } = await supabase.rpc('admin_conceder_rol', { p_correo: normalizarCorreo(correo) })
+  if (error) throw new Error(mensajeErrorRol(error))
+  const fila = Array.isArray(data) ? data[0] : data
+  if (!fila?.user_id) throw new Error(MSG_ROL_GENERICO)
+  return fila
+}
+
+/** Retira el rol a otro administrador. @returns {Promise<boolean>} */
+export async function retirarRol(userId) {
+  if (!cloudEnabled) throw new Error(MSG_ROL_GENERICO)
+  const { data, error } = await supabase.rpc('admin_retirar_rol', { p_user_id: userId })
+  if (error) throw new Error(mensajeErrorRol(error))
+  return data === true
 }

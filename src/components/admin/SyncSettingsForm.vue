@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings.js'
 import { SYNC_METODOS, SYNC_NOMBRES, validarSincronizacion } from '@/data/defaultSettings.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { mensajeGuardado } from './mensajesGuardado.js'
 
 /** RF27: método de sincronización por defecto (enum cerrado, SEC-36). Auditado. */
 const settings = useSettingsStore()
@@ -20,8 +21,8 @@ async function guardar() {
   const e = validarSincronizacion(form.value)
   if (e) return (error.value = e)
   try {
-    await settings.setSincronizacion(form.value)
-    notify('Configuración de sincronización guardada y auditada.', { tipo: 'ok' })
+    const r = await settings.setSincronizacion(form.value)
+    notify(mensajeGuardado('Configuración de sincronización guardada y auditada', r), { tipo: 'ok' })
   } catch (err) {
     error.value = err.message
   }

@@ -57,7 +57,7 @@ onMounted(cargarAdministradores)
 const cuentas = computed(() => [
   ...(cloudEnabled
     ? administradores.value.map((a) => ({
-        cuenta: `Administrador ${a.user_id.slice(0, 8)}… (alta ${formatFecha(a.creado_en)})`,
+        cuenta: `${a.email || `Administrador ${a.user_id.slice(0, 8)}…`} (alta ${formatFecha(a.creado_en)})`,
         rol: 'admin',
         estado: 'Rol asignado; privilegios solo con TOTP (aal2)',
         privilegios: 'Lectura global (RLS es_admin), parámetros globales, incidentes',
@@ -161,7 +161,7 @@ async function aceptarPolitica() {
           <tbody><tr v-for="c in cuentas" :key="c.cuenta"><td>{{ c.cuenta }}</td><td class="mono small">{{ c.rol }}</td><td class="small">{{ c.estado }}</td><td class="small">{{ c.privilegios }}</td></tr></tbody>
         </table>
       </div>
-      <label class="check"><input v-model="confirmaRevision" type="checkbox"> Revisé las cuentas y los privilegios son los adecuados (el retiro del rol lo hace el dueño del proyecto: docs/sgsi/recuperacion_acceso_admin.md)</label>
+      <label class="check"><input v-model="confirmaRevision" type="checkbox"> Revisé las cuentas y los privilegios son los adecuados (conceder o retirar roles: pestaña Administradores; contingencia del dueño: docs/sgsi/recuperacion_acceso_admin.md)</label>
       <button class="btn" :disabled="!confirmaRevision" @click="registrarRevision">Registrar revisión</button>
     </section>
 

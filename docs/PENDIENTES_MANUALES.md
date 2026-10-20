@@ -20,10 +20,10 @@
 
 ## 2a. Administrador con cuenta + TOTP (R27, A.9.2.3, A.9.4.2) — hacer antes de usar el panel
 
-1. Supabase → SQL Editor: ejecutar `supabase/migracion_admin_mfa.sql` (o `schema.sql` completo). Verificar: `select public.es_admin_registrado();` no falla y la lista blanca incluye `ADMIN_MFA_VERIFIED`.
+1. Supabase → SQL Editor: ejecutar `supabase/migracion_admin_mfa.sql` y luego **`supabase/migracion_admin_roles.sql`** (gestión de administradores desde la app; o `schema.sql` completo). Probar: con tu sesión aal2, `select * from public.admin_listar_administradores();` devuelve correo y fecha. Verificar: `select public.es_admin_registrado();` no falla y la lista blanca incluye `ADMIN_MFA_VERIFIED`.
 2. Authentication → Sign In / Providers (o Multi-Factor): **habilitar MFA TOTP** (Enroll y Verify) si no lo está.
 3. Mantener *JWT expiry* en 3600 s o menos (Project Settings → JWT).
-4. Conceder el rol **solo a cuentas que ya existan y tengan correo confirmado** (nunca a una cuenta de uso compartido):
+4. Conceder el rol **solo a cuentas que ya existan y tengan correo confirmado** (nunca a una cuenta de uso compartido). Vía normal: Administración → Administradores → "Dar rol de administrador" (pide código TOTP). Solo la primera vez (o si no queda ningún administrador) usar SQL:
    `insert into public.administradores (user_id) select id from auth.users where email = 'correo@ejemplo.cl' on conflict (user_id) do nothing;`
 5. Cada administrador entra en `/acceso`, pulsa **Admin** e inscribe su aplicación de autenticación en `/admin/mfa`.
 6. **Crear el segundo administrador** (mínimo dos) y probar que cada uno puede entrar. Guardar el respaldo del TOTP según `sgsi/recuperacion_acceso_admin.md` §6.

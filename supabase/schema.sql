@@ -50,13 +50,14 @@ $$;
 revoke all on function public.es_admin() from public, anon;
 grant execute on function public.es_admin() to authenticated;
 
--- La tabla de roles NO se modifica desde la app: ni insert, update ni delete para anon/authenticated.
--- Conceder/retirar el rol lo hace solo el dueño del proyecto desde el SQL Editor.
+-- La tabla de roles NO se modifica directamente desde la app: los cambios pasan por
+-- admin_conceder_rol / admin_retirar_rol (ver migracion_admin_roles.sql). Contingencia: SQL Editor del dueño.
 revoke insert, update, delete on public.administradores from anon, authenticated;
 
--- ---------- Revisión de administradores (A.9.2.5): solo id y fecha, solo con privilegios efectivos ----------
-create or replace function public.admin_listar_administradores()
-returns table (user_id uuid, creado_en timestamptz)
+-- ---------- Revisión (A.9.2.5): incluye el correo (solo visible para es_admin) ----------
+drop function if exists public.admin_listar_administradores();
+create function public.admin_listar_administradores()
+returns table (user_id uuid, email text, creado_en timestamptz)
 language plpgsql
 stable
 security definer
@@ -66,11 +67,108 @@ begin
   if not public.es_admin() then
     raise exception 'Privilegios insuficientes' using errcode = '42501';
   end if;
-  return query select a.user_id, a.creado_en from public.administradores a order by a.creado_en;
+  return query
+    select a.user_id, u.email::text, a.creado_en
+    from public.administradores a
+    left join auth.users u on u.id = a.user_id
+    order by a.creado_en;
 end;
 $$;
 revoke all on function public.admin_listar_administradores() from public, anon;
 grant execute on function public.admin_listar_administradores() to authenticated;
+
+-- ---------- Conceder el rol (A.9.2.3) ----------
+drop function if exists public.admin_conceder_rol(text);
+create function public.admin_conceder_rol(p_correo text)
+returns table (user_id uuid, creado_en timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_correo text := lower(btrim(coalesce(p_correo, '')));
+  v_objetivo uuid;
+  v_yo uuid := auth.uid();
+  v_creado timestamptz;
+begin
+  if not public.es_admin() then
+    raise exception 'Privilegios insuficientes' using errcode = '42501';
+  end if;
+  if char_length(v_correo) = 0 or char_length(v_correo) > 254
+     or v_correo !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'No se pudo conceder el rol' using errcode = 'P0001';
+  end if;
+
+  -- Serializa altas/bajas para que el límite no se salte con peticiones simultáneas.
+  lock table public.administradores in share row exclusive mode;
+
+  select u.id into v_objetivo
+  from auth.users u
+  where lower(u.email) = v_correo and u.email_confirmed_at is not null
+  limit 1;
+  if v_objetivo is null then
+    -- Mensaje genérico: no revela si el correo existe o no está confirmado.
+    raise exception 'No se pudo conceder el rol' using errcode = 'P0001';
+  end if;
+
+  if (select count(*) from public.administradores) >= 5
+     and not exists (select 1 from public.administradores a where a.user_id = v_objetivo) then
+    raise exception 'limite_administradores' using errcode = 'P0001';
+  end if;
+
+  insert into public.administradores (user_id) values (v_objetivo) on conflict (user_id) do nothing;
+  select a.creado_en into v_creado from public.administradores a where a.user_id = v_objetivo;
+
+  -- El trigger de auditoría fija usuario (auth.uid()) y hora, y aplica la cuota. Sin correos.
+  insert into public.auditoria (tipo, actor, detalle)
+  values ('ADMIN_ROLE_GRANTED', 'admin', jsonb_build_object('objetivo', v_objetivo, 'por', v_yo));
+
+  return query select v_objetivo, v_creado;
+end;
+$$;
+revoke all on function public.admin_conceder_rol(text) from public, anon;
+grant execute on function public.admin_conceder_rol(text) to authenticated;
+
+-- ---------- Retirar el rol (A.9.2.6) ----------
+drop function if exists public.admin_retirar_rol(uuid);
+create function public.admin_retirar_rol(p_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_yo uuid := auth.uid();
+  v_borradas int;
+begin
+  if not public.es_admin() then
+    raise exception 'Privilegios insuficientes' using errcode = '42501';
+  end if;
+  if p_user_id is null or p_user_id = v_yo then
+    raise exception 'no_puede_retirarse_a_si_mismo' using errcode = 'P0001';
+  end if;
+
+  lock table public.administradores in share row exclusive mode;
+
+  if (select count(*) from public.administradores) <= 1 then
+    raise exception 'minimo_un_administrador' using errcode = 'P0001';
+  end if;
+
+  delete from public.administradores a where a.user_id = p_user_id;
+  get diagnostics v_borradas = row_count;
+  if v_borradas = 0 then
+    return false;
+  end if;
+
+  insert into public.auditoria (tipo, actor, detalle)
+  values ('ADMIN_ROLE_REVOKED', 'admin', jsonb_build_object('objetivo', p_user_id, 'por', v_yo));
+  return true;
+end;
+$$;
+revoke all on function public.admin_retirar_rol(uuid) from public, anon;
+grant execute on function public.admin_retirar_rol(uuid) to authenticated;
+
 
 drop policy if exists "admin ve administradores" on public.administradores;
 create policy "admin ve administradores" on public.administradores

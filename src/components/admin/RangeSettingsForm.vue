@@ -4,6 +4,7 @@ import { useSettingsStore } from '@/stores/settings.js'
 import { ACTIVIDADES } from '@/data/activities.js'
 import { validarParametros, BPM_LIMITE_MIN, BPM_LIMITE_MAX } from '@/data/defaultSettings.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { mensajeGuardado } from './mensajesGuardado.js'
 
 /** RF15/RF26: mín./máx. global y por actividad + parámetros de alertas y adquisición. Auditado. */
 const settings = useSettingsStore()
@@ -36,8 +37,8 @@ async function guardar() {
     return
   }
   try {
-    await settings.setParametros(p)
-    notify('Parámetros guardados y auditados.', { tipo: 'ok' })
+    const r = await settings.setParametros(p)
+    notify(mensajeGuardado('Parámetros guardados y auditados', r), { tipo: 'ok' })
   } catch (err) {
     error.value = err.message
   }

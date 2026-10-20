@@ -11,34 +11,41 @@ El administrador es **una cuenta normal** (correo + contraseña) con un **rol as
 
 | Acción | Quién | Dónde |
 |---|---|---|
-| Conceder / retirar el rol | **Solo el dueño del proyecto Supabase** (responsable del proyecto) | SQL Editor del panel de Supabase |
+| Conceder / retirar el rol | **Otro administrador** (sesión `aal2` + código TOTP nuevo en cada acción); **contingencia:** el dueño del proyecto Supabase con SQL | App: Administración → Administradores · SQL Editor (contingencia) |
 | Restablecer contraseña o eliminar el factor TOTP de otra persona | **Solo el dueño del proyecto** | Authentication → Users → (usuario) → contraseña / MFA |
 | Aprobar una recuperación | Otro administrador **o** el docente responsable (regla de dos personas) | Fuera de la app, por escrito |
-| Autoconcederse el rol | **Nadie**: la app no tiene UI ni permisos de escritura sobre `administradores` (`revoke insert, update, delete`) | — |
+| Autoconcederse el rol | **Nadie**: `administradores` no admite escritura directa (`revoke insert, update, delete`); las funciones del servidor exigen `es_admin()` y la app no ofrece retirarse el propio rol | — |
+| Dar el rol a una cuenta inexistente o sin correo confirmado | **Nadie**: el servidor responde con un mensaje genérico (no revela si el correo existe) | — |
+| Superar 5 administradores | **Nadie** desde la app (límite en el servidor) | — |
 
 ## 3. Concesión del rol (A.9.2.3)
 
 1. La persona crea su cuenta en `/registro` y confirma su correo.
 2. El responsable verifica su identidad y registra la solicitud (ticket o acta con fecha, motivo y aprobador).
-3. El dueño del proyecto ejecuta en el SQL Editor:
+3. **Vía normal (en la app):** un administrador abre Administración → **Administradores**, escribe el correo de la cuenta ya registrada y confirmada, pulsa "Dar rol de administrador" y confirma con un código TOTP nuevo. El servidor (`admin_conceder_rol`) registra `ADMIN_ROLE_GRANTED` con los identificadores (nunca correos).
+   **Contingencia (no hay otro administrador disponible):** el dueño del proyecto ejecuta en el SQL Editor:
    ```sql
    insert into public.administradores (user_id)
    select id from auth.users where email = 'correo-del-admin@ejemplo.cl'
    on conflict (user_id) do nothing;
    ```
 4. La persona inicia sesión en `/acceso`; aparece el botón **Admin**; en `/admin/mfa` inscribe su aplicación de autenticación (primer ingreso).
-5. Registrar el hecho: evento `ADMIN_ROLE_GRANTED` (anotar en el acta; el evento se emite al registrar la concesión en el registro de incidentes/cambios del SGSI) y revisión en SGSI → Revisión de derechos.
+5. Registrar el hecho: con la vía normal el evento `ADMIN_ROLE_GRANTED` se emite solo (servidor y registro local); con la contingencia SQL, anotarlo en el acta. Después, "Registrar revisión" en Administradores o SGSI.
 
 ## 4. Retiro o reasignación (A.9.2.6)
 
 Al terminar el semestre, cambiar de responsable o ante sospecha de compromiso:
+
+**Vía normal (en la app):** otro administrador abre Administración → **Administradores**, pulsa **Retirar rol** en la fila de la persona, confirma el aviso y un código TOTP nuevo. No se puede retirar a uno mismo ni dejar el sistema sin administradores. Evento `ADMIN_ROLE_REVOKED`.
+
+**Contingencia (dueño del proyecto, SQL Editor):**
 
 ```sql
 delete from public.administradores
 where user_id = (select id from auth.users where email = 'correo-a-retirar@ejemplo.cl');
 ```
 
-Después: eliminar su factor TOTP (Authentication → Users → MFA) si deja el proyecto, revocar accesos a Vercel/GitHub/Supabase, y anotar `ADMIN_ROLE_REVOKED` en el acta. Los privilegios desaparecen en el servidor de inmediato (`es_admin()` consulta la tabla en cada petición); la sesión abierta del ex administrador deja de poder leer o escribir datos privilegiados.
+Después: eliminar su factor TOTP (Authentication → Users → MFA) si deja el proyecto, revocar accesos a Vercel/GitHub/Supabase, y, si se usó SQL, anotar `ADMIN_ROLE_REVOKED` en el acta. Los privilegios desaparecen en el servidor de inmediato (`es_admin()` consulta la tabla en cada petición); la sesión abierta del ex administrador deja de poder leer o escribir datos privilegiados.
 
 ## 5. Recuperación de acceso perdido (A.9.2.4)
 
