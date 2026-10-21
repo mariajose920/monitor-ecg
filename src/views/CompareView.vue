@@ -26,8 +26,10 @@ import { obtenerSenal } from '@/services/monitoreos/senalAcceso.js'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
 import { prepareSignal, computeLag, computeMetrics, trimValidSegment } from '@/services/compare/compareSignals.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { PATOLOGIAS_PHYSIONET, MAPA_PATOLOGIAS } from '@/data/physionetDatabases.js'
+import { generarSenalPatologia } from '@/data/physionetSignals.js'
 
-/** RF11–RF14: comparación de la señal experimental con una referencia. */
+/** RF11–RF14: comparación de la señal experimental con una referencia clínica (PhysioNet). */
 const settings = useSettingsStore()
 const users = useUsersStore()
 const auth = useAuthStore()
@@ -38,12 +40,14 @@ const FS = 250
 const MAX_S = 30
 
 // ---- Referencia (RF11)
-const refTipo = ref('sintetica')
+const refTipo = ref('physionet')
+const refPatologia = ref('nsr')
 const refBpm = ref(72)
 const refCsv = shallowRef(null) // { values, t, fs, nombre, comentarios }
 
 // ---- Experimental
 const expTipo = ref('simulada')
+const expPatologia = ref('afib')
 const expCsv = shallowRef(null)
 const sesionSel = ref('')
 const participanteSel = ref('')
@@ -53,6 +57,10 @@ const sesiones = computed(() => monitoreos.utilizables)
 const comunidad = useComunidadStore()
 const exportandoInforme = ref(null)
 const canalSel = ref('')
+
+// Información reactiva de patologías seleccionadas
+const patologiaRefInfo = computed(() => MAPA_PATOLOGIAS[refPatologia.value] ?? MAPA_PATOLOGIAS.nsr)
+const patologiaExpInfo = computed(() => MAPA_PATOLOGIAS[expPatologia.value] ?? MAPA_PATOLOGIAS.afib)
 
 // ---- Sincronización (RF14)
 const metodo = ref(settings.sincronizacion.metodoPorDefecto)
@@ -120,6 +128,16 @@ async function cargarEjemploRef() {
 
 /** Obtiene la señal experimental cruda (≤ 30 s, solo tramo sin leads-off). */
 async function obtenerExperimental() {
+  if (expTipo.value === 'physionet') {
+    const s = generarSenalPatologia(expPatologia.value, MAX_S, FS)
+    return {
+      values: s.values,
+      fs: FS,
+      nombre: s.nombre,
+      usuario: 'PhysioNet',
+      comentarios: s.comentarios,
+    }
+  }
   if (expTipo.value === 'simulada') {
     // Señal "de sensor" simulada con ruido, deriva y un desfase conocido de 180 ms (demostración RF14).
     const gen = new PqrstGenerator({ fs: FS, bpm: refBpm.value, ruido: 0.05, deriva: 0.15, variabilidad: 0.005, red50: 0.03, seed: 11 })
@@ -173,6 +191,16 @@ function recortar(d) {
 }
 
 async function obtenerReferencia(duracionS) {
+  if (refTipo.value === 'physionet') {
+    const s = generarSenalPatologia(refPatologia.value, duracionS, FS)
+    return {
+      values: s.values,
+      fs: FS,
+      nombre: s.nombre,
+      usuario: 'PhysioNet',
+      comentarios: s.comentarios,
+    }
+  }
   if (refTipo.value === 'sintetica') {
     const r = generateReferenceEcg({ fs: FS, durationS: duracionS, bpm: refBpm.value })
     return { values: r.valores, fs: FS, nombre: `Sintética interna ${refBpm.value} BPM (didáctica)` }
@@ -295,7 +323,7 @@ const series = computed(() => [
 </script>
 
 <template>
-  <section>
+  <section class="compare-view">
     <div class="page-header">
       <h1>Comparar señales</h1>
     </div>
@@ -304,6 +332,30 @@ const series = computed(() => [
       ({{ settings.sincronizacion.normalizacion }}) → sincronización → métricas. Se comparan como máximo {{ MAX_S }} s
       continuos sin electrodos desconectados.
     </p>
+
+    <!-- BANNER EXPLICATIVO PHYSIONET -->
+    <div class="physionet-hero-banner card">
+      <div class="banner-icon-col">
+        <div class="physionet-logo-badge">
+          <AppIcon name="pulse" :size="26" />
+        </div>
+      </div>
+      <div class="banner-text-col">
+        <div class="banner-tags">
+          <span class="tag-physionet">PHYSIONET.ORG</span>
+          <span class="tag-academic">PATRONES CLÍNICOS VALIDADOS</span>
+        </div>
+        <h3 class="banner-title">Base de Datos Electrocardiográfica PhysioNet</h3>
+        <p class="banner-desc">
+          <a href="https://physionet.org/" target="_blank" rel="noopener noreferrer" class="link-physionet">
+            PhysioNet.org <span aria-hidden="true">↗</span>
+          </a>
+          es el repositorio abierto estándar de investigación biomédica del MIT y Harvard apoyado por el NIH.
+          Permite contrastar tus capturas del ESP32 con trazados fisiológicos reales y patologías cardíacas validadas
+          (Fibrilación Auricular, Extrasístoles Ventriculares, Taquicardias e Isquemia ST) para sustentar tus informes de laboratorio.
+        </p>
+      </div>
+    </div>
 
     <div class="grid cols-2">
       <!-- Tarjeta Señal A: Referencia -->
@@ -316,7 +368,62 @@ const series = computed(() => [
           <span class="panel-tag">RF11</span>
         </div>
 
-        <label class="check"><input v-model="refTipo" type="radio" value="sintetica"> Sintética interna PQRST (didáctica)</label>
+        <!-- Opción destacada: Base de datos PhysioNet -->
+        <label class="check primary-check">
+          <input v-model="refTipo" type="radio" value="physionet">
+          <span><strong>Base de datos clínica PhysioNet (Arritmias y Patologías)</strong></span>
+        </label>
+
+        <!-- Selector interactivo de patologías PhysioNet -->
+        <div v-if="refTipo === 'physionet'" class="physionet-selector-box">
+          <label for="ref-patologia-select" class="selector-label">Seleccionar patología o arritmia:</label>
+          <select id="ref-patologia-select" v-model="refPatologia" class="patologia-select">
+            <option v-for="p in PATOLOGIAS_PHYSIONET" :key="p.id" :value="p.id">
+              {{ p.sigla }} — {{ p.nombre }} ({{ p.bpmNominal }} BPM)
+            </option>
+          </select>
+
+          <!-- Tarjeta clínica de la patología seleccionada -->
+          <div v-if="patologiaRefInfo" class="patologia-card">
+            <div class="pat-header">
+              <div class="pat-title-row">
+                <span class="pat-badge" :style="{ backgroundColor: patologiaRefInfo.colorCategoria + '15', color: patologiaRefInfo.colorCategoria, borderColor: patologiaRefInfo.colorCategoria }">
+                  {{ patologiaRefInfo.categoria }}
+                </span>
+                <span class="pat-bpm-pill">
+                  <AppIcon name="heart" :size="13" filled />
+                  {{ patologiaRefInfo.bpmNominal }} BPM nominal
+                </span>
+              </div>
+              <h4 class="pat-name">{{ patologiaRefInfo.nombre }}</h4>
+              <p class="pat-db">
+                <span class="muted">Fuente:</span> <strong>{{ patologiaRefInfo.baseDatos }}</strong>
+              </p>
+            </div>
+
+            <p class="pat-desc">{{ patologiaRefInfo.descripcion }}</p>
+
+            <div class="pat-criterios">
+              <span class="criterios-title">Criterios electrocardiográficos clave:</span>
+              <ul>
+                <li v-for="(crit, idx) in patologiaRefInfo.criterios" :key="idx">{{ crit }}</li>
+              </ul>
+            </div>
+
+            <div class="pat-footer">
+              <a :href="patologiaRefInfo.enlacePhysioNet" target="_blank" rel="noopener noreferrer" class="physionet-link">
+                <span>Ver en PhysioNet.org</span>
+                <span aria-hidden="true">↗</span>
+              </a>
+              <a :href="`/referencias/physionet_${patologiaRefInfo.id}.csv`" download class="physionet-csv-download">
+                <AppIcon name="download" :size="14" />
+                <span>Descargar CSV</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <label class="check"><input v-model="refTipo" type="radio" value="sintetica"> Sintética interna PQRST (didáctica simple)</label>
         <div v-if="refTipo === 'sintetica'" class="field sub-field">
           <label for="ref-bpm">BPM de la referencia</label>
           <input id="ref-bpm" v-model.number="refBpm" type="number" min="40" max="180">
@@ -326,7 +433,7 @@ const series = computed(() => [
         <MonitoreoPicker v-if="refTipo === 'monitoreo'" id-base="ref" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
         <label class="check"><input v-model="refTipo" type="radio" value="comunidad"> Comunidad (públicos)</label>
         <CommunityPicker v-if="refTipo === 'comunidad'" id-base="refc" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
-        <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet)</label>
+        <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet descargado)</label>
 
         <!-- Control moderno para cargar CSV de referencia -->
         <div v-if="refTipo === 'csv'" class="csv-upload-box">
@@ -342,11 +449,9 @@ const series = computed(() => [
             </span>
             <span v-else class="csv-empty-note">Ningún archivo cargado (.csv)</span>
           </div>
-          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o un CSV exportado por esta app (máx. 5 MB).</p>
+          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o un CSV exportado por esta app o PhysioNet (máx. 5 MB).</p>
           <p v-if="refCsv?.comentarios?.length" class="small muted">{{ refCsv.comentarios[0] }}</p>
         </div>
-
-        <p class="alert info small ref-alert">La referencia sintética es didáctica, no un registro clínico validado. Para una validación real, carga un registro certificado y cita su origen.</p>
       </div>
 
       <!-- Tarjeta Señal B: Experimental -->
@@ -371,6 +476,27 @@ const series = computed(() => [
             <option v-for="c in canalesVivos" :key="c.id" :value="c.id">{{ c.nombre }}</option>
           </select>
         </div>
+
+        <!-- Opción PhysioNet en Señal B para contrastar dos arritmias entre sí -->
+        <label class="check">
+          <input v-model="expTipo" type="radio" value="physionet">
+          <span>Patología clínica PhysioNet (comparar arritmias)</span>
+        </label>
+        <div v-if="expTipo === 'physionet'" class="physionet-selector-box">
+          <label for="exp-patologia-select" class="selector-label">Seleccionar patología experimental:</label>
+          <select id="exp-patologia-select" v-model="expPatologia" class="patologia-select">
+            <option v-for="p in PATOLOGIAS_PHYSIONET" :key="p.id" :value="p.id">
+              {{ p.sigla }} — {{ p.nombre }} ({{ p.bpmNominal }} BPM)
+            </option>
+          </select>
+          <div v-if="patologiaExpInfo" class="patologia-card-mini">
+            <span class="pat-badge" :style="{ backgroundColor: patologiaExpInfo.colorCategoria + '15', color: patologiaExpInfo.colorCategoria, borderColor: patologiaExpInfo.colorCategoria }">
+              {{ patologiaExpInfo.categoria }}
+            </span>
+            <p class="pat-desc-mini">{{ patologiaExpInfo.descripcion }}</p>
+          </div>
+        </div>
+
         <label class="check"><input v-model="expTipo" type="radio" value="csv"> Cargar CSV</label>
 
         <!-- Control moderno para cargar CSV experimental -->
@@ -401,23 +527,35 @@ const series = computed(() => [
       @auto="autoAlinear(true)"
     />
 
-    <div class="row">
-      <button class="btn primary" :disabled="calculando" @click="comparar">{{ calculando ? 'Calculando…' : 'Comparar' }}</button>
+    <div class="row compare-action-row">
+      <button class="btn primary btn-compare-main" :disabled="calculando" @click="comparar">
+        <AppIcon name="activity" :size="18" />
+        <span>{{ calculando ? 'Procesando comparación…' : 'Comparar señales' }}</span>
+      </button>
     </div>
     <p v-if="error" class="alert danger" role="alert">{{ error }}</p>
 
     <template v-if="resultado">
       <CompareMetrics :m="resultado.metricas" :metodo="metodo" class="res" />
-      <div class="card">
-        <h2>Señales superpuestas (RF13)</h2>
-        <SignalChart :data="resultado.data" :series="series" :height="300" y-label="z-score" />
+      <div class="card chart-card">
+        <div class="chart-header">
+          <h2>Señales superpuestas (RF13)</h2>
+          <span class="chart-hint">Normalizadas z-score para comparación de morfología</span>
+        </div>
+        <SignalChart :data="resultado.data" :series="series" :height="320" y-label="z-score" />
       </div>
-      <div class="card">
-        <h2>Informe de la comparación</h2>
-        <p class="muted small">Seudonimizado: solo Usuario N, métricas y parámetros. <DataClassBadge level="sensitive" /></p>
+      <div class="card report-card">
+        <h2>Informe académico de la comparación</h2>
+        <p class="muted small">Seudonimizado: incluye correlación de Pearson, RMSE, citas de fuentes PhysioNet y parámetros de sincronización. <DataClassBadge level="sensitive" /></p>
         <div class="row">
-          <button class="btn" data-testid="informe-comparacion-pdf" @click="exportandoInforme = 'pdf'">Descargar PDF</button>
-          <button class="btn" data-testid="informe-comparacion-csv" @click="exportandoInforme = 'csv'">Descargar CSV</button>
+          <button class="btn" data-testid="informe-comparacion-pdf" @click="exportandoInforme = 'pdf'">
+            <AppIcon name="download" :size="16" />
+            <span>Descargar informe PDF</span>
+          </button>
+          <button class="btn secondary" data-testid="informe-comparacion-csv" @click="exportandoInforme = 'csv'">
+            <AppIcon name="download" :size="16" />
+            <span>Descargar datos CSV</span>
+          </button>
         </div>
       </div>
     </template>
@@ -433,6 +571,89 @@ const series = computed(() => [
 </template>
 
 <style scoped>
+.compare-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Banner de PhysioNet */
+.physionet-hero-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #f0f7fc 0%, #e6f2fa 100%);
+  border: 1px solid rgba(2, 132, 199, 0.2);
+  border-radius: var(--radius);
+}
+
+.banner-icon-col {
+  flex-shrink: 0;
+}
+
+.physionet-logo-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #ffffff;
+  color: var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.15);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+}
+
+.banner-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tag-physionet {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--info);
+  color: #ffffff;
+}
+
+.tag-academic {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--info);
+}
+
+.banner-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 0 6px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.banner-desc {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+}
+
+.link-physionet {
+  font-weight: 800;
+  color: var(--info);
+  text-decoration: underline;
+}
+
+/* Tarjetas de señal */
 .compare-card {
   padding: 24px 28px;
   height: 100%;
@@ -490,13 +711,183 @@ const series = computed(() => [
   color: var(--text-muted);
 }
 
-.sub-field {
-  margin: 10px 0 16px 28px;
+.primary-check {
+  margin-bottom: 10px;
 }
 
-.ref-alert {
-  margin-top: auto;
-  margin-bottom: 0;
+/* Caja selectora de PhysioNet */
+.physionet-selector-box {
+  margin: 8px 0 16px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.selector-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.patologia-select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.patologia-select:focus {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+/* Tarjeta clínica de la patología */
+.patologia-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pat-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pat-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+}
+
+.pat-bpm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-elev-2);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.pat-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 0 0 3px;
+  color: var(--text);
+}
+
+.pat-db {
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.pat-desc {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.pat-criterios {
+  background: var(--bg-elev-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.criterios-title {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.pat-criterios ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.pat-criterios li {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.pat-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+}
+
+.physionet-link {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--info);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.physionet-csv-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  text-decoration: none;
+}
+
+.physionet-csv-download:hover {
+  background: var(--border);
+}
+
+/* Mini tarjeta para Señal B */
+.patologia-card-mini {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pat-desc-mini {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.sub-field {
+  margin: 10px 0 16px 28px;
 }
 
 /* Caja de carga de CSV */
@@ -550,11 +941,41 @@ const series = computed(() => [
   color: var(--text-muted);
 }
 
+.compare-action-row {
+  margin: 4px 0;
+}
+
+.btn-compare-main {
+  font-size: 1rem;
+  padding: 12px 28px;
+}
+
+.chart-card {
+  padding: 24px;
+}
+
+.chart-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.chart-hint {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.report-card {
+  padding: 24px;
+}
+
 .sync {
-  margin: var(--gap) 0;
+  margin: var(--gap) 0 4px;
 }
 
 .res {
-  margin: var(--gap) 0;
+  margin: var(--gap) 0 4px;
 }
 </style>
