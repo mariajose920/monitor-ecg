@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { useAccountStore } from '@/stores/account.js'
 import { notify } from '@/services/notifications/notifier.js'
 
@@ -29,7 +30,10 @@ async function salir(borrar) {
 <template>
   <div class="cuenta" data-testid="menu-cuenta">
     <template v-if="cuenta.iniciada">
-      <span class="chip info correo" :title="cuenta.cuenta.email"><span aria-hidden="true">🔐</span><span class="sr-only">Cuenta: </span>{{ cuenta.cuenta.email }}</span>
+      <span class="chip info correo" :title="cuenta.cuenta.email">
+        <AppIcon name="lock" :size="13" />
+        <span class="sr-only">Cuenta: </span>{{ cuenta.cuenta.email }}
+      </span>
       <RouterLink class="btn small ghost" to="/cuenta" data-testid="enlace-mi-cuenta">Mi cuenta</RouterLink>
       <button class="btn small ghost" data-testid="cerrar-sesion-cuenta" @click="cuenta.equipoCompartido ? salir(true) : (saliendo = true)">Cerrar sesión</button>
     </template>
@@ -49,6 +53,9 @@ async function salir(borrar) {
 </template>
 
 <style scoped>
-.cuenta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.correo { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.cuenta {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
 </style>

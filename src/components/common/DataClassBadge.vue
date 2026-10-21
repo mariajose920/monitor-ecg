@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 /** Etiqueta de clasificación visible (SEC-22, A.8.2.2 etiquetado de la información). */
 const props = defineProps({
@@ -19,5 +20,8 @@ const etiqueta = computed(() => [props.texto || n.value.defecto, n.value.nombre]
 </script>
 
 <template>
-  <span :class="['chip', n.clase]" :title="`Clasificación (ISO 27001:2013 A.8.2.1/A.8.2.2): ${n.nombre}`">🔒 {{ etiqueta }}</span>
+  <span :class="['chip', n.clase]" :title="`Clasificación (ISO 27001:2013 A.8.2.1/A.8.2.2): ${n.nombre}`">
+    <AppIcon name="lock" :size="13" />
+    <span>{{ etiqueta }}</span>
+  </span>
 </template>

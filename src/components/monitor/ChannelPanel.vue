@@ -19,10 +19,14 @@ import { SOURCE_KINDS } from '@/services/sources/sourceFactory.js'
 import { DEVICE_PROFILES } from '@/data/deviceProfiles.js'
 import { readSignalFile } from '@/services/export/csvImporter.js'
 import { notify } from '@/services/notifications/notifier.js'
+import { generarCaptura } from '@/services/report/snapshotService.js'
+import CapturePreviewDialog from './CapturePreviewDialog.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 /**
  * Un canal (RF07): fuente, perfil y usuario propios; gráfico, BPM, rango y estado.
  * SEC-05: solo muestra el seudónimo del usuario (nunca edad, peso ni datos opcionales).
+ * Soporta pausar/congelar la visualización y capturar imágenes PNG en cualquier momento.
  */
 const props = defineProps({ canal: { type: Object, required: true }, enfocado: { type: Boolean, default: false } })
 const emit = defineEmits(['conectar', 'enfocar'])
@@ -39,6 +43,43 @@ const movil = prefiereCamara()
 const modoCamaraMovil = computed(() => movil && props.canal.fuente === 'camera')
 
 const finalizando = ref(false)
+const congelado = ref(false)
+const capturaActual = ref(null)
+const tomandoCaptura = ref(false)
+
+function alternarPausa() {
+  congelado.value = !congelado.value
+  notify(
+    congelado.value
+      ? 'Visualización pausada (pantalla congelada).'
+      : 'Visualización reanudada en tiempo real.',
+    { tipo: 'info', duracionMs: 2500 },
+  )
+}
+
+async function tomarCaptura() {
+  tomandoCaptura.value = true
+  try {
+    const u = props.canal.usuarioId ? users.byId(props.canal.usuarioId)?.etiqueta : 'Participante'
+    const res = await generarCaptura({
+      canal: props.canal,
+      usuarioEtiqueta: u,
+      ventanaSeg: ventana.value,
+    })
+    capturaActual.value = res
+    if (session.activa) {
+      session.addEvent(props.canal.id, 'captura', {
+        bpm: props.canal.bpmCalculado,
+        actividad: props.canal.actividad,
+      })
+    }
+    notify('¡Captura de frecuencia cardíaca generada!', { tipo: 'ok' })
+  } catch (err) {
+    notify(err.message || 'No se pudo generar la captura.', { tipo: 'error' })
+  } finally {
+    tomandoCaptura.value = false
+  }
+}
 
 /**
  * Finalizar: apaga la fuente y siempre explica qué pasó con el monitoreo.
@@ -48,6 +89,7 @@ const finalizando = ref(false)
  */
 async function finalizar() {
   finalizando.value = true
+  congelado.value = false
   try {
     if (session.activa && enSesion.value) {
       await session.detener()
@@ -76,6 +118,7 @@ const descripcionGrafico = computed(() => {
   if (c.leadsOff) partes.push('electrodos desconectados')
   if (c.rango && c.rango !== 'sin-dato') partes.push(`${c.rango} del rango`)
   if (c.enAlerta) partes.push('en alerta')
+  if (congelado.value) partes.push('pantalla pausada')
   return partes.join(', ')
 })
 const fuentes = SOURCE_KINDS.map((f) => ({ ...f, ok: f.soportado() }))
@@ -144,7 +187,10 @@ async function cargarEjemplo() {
     <header class="cab">
       <h2 :id="`${idp}-titulo`">{{ canal.nombre }}</h2>
       <ConnectionStatus :estado="canal.estado" :en-sesion="enSesion" />
-      <span class="usuario chip info" :title="'Participante asignado'">👤 {{ canal.usuarioId ? users.byId(canal.usuarioId)?.etiqueta : 'Sin paciente' }}</span>
+      <span class="usuario chip info" :title="'Participante asignado'">
+        <AppIcon name="user" :size="13" />
+        <span>{{ canal.usuarioId ? users.byId(canal.usuarioId)?.etiqueta : 'Sin paciente' }}</span>
+      </span>
       <div class="acciones">
         <button class="btn small ghost" :aria-pressed="enfocado" @click="emit('enfocar')">{{ enfocado ? 'Ver todos' : 'Ampliar' }}</button>
         <button class="btn small ghost" :disabled="activo" title="Quitar canal" @click="channels.removeChannel(canal.id)">Quitar</button>
@@ -204,19 +250,47 @@ async function cargarEjemplo() {
 
     <div class="row botones">
       <button v-if="!activo && canal.fuente === 'camera'" class="btn primary" data-testid="camara-guia" @click="guiaCamara = true">Medir con la cámara</button>
-      <button v-else-if="!activo" class="btn primary" @click="emit('conectar', canal)">
+      <button v-else-if="!activo" class="btn cardio" @click="emit('conectar', canal)">
         {{ canal.fuente === 'serial' ? 'Conectar puerto serie' : 'Iniciar fuente' }}
       </button>
       <template v-else>
-        <button v-if="session.pendiente" class="btn primary" type="button" data-testid="canal-guardar" @click="session.pedirGuardar()">💾 Guardar monitoreo</button>
-        <ChannelActions :canal="canal" />
+        <button v-if="session.pendiente" class="btn primary" type="button" data-testid="canal-guardar" @click="session.pedirGuardar()">
+          <AppIcon name="save" :size="16" />
+          <span>Guardar monitoreo</span>
+        </button>
+        <button
+          class="btn secondary"
+          type="button"
+          :title="congelado ? 'Reanudar gráfica en tiempo real' : 'Pausar/congelar gráfica en pantalla'"
+          @click="alternarPausa"
+        >
+          <AppIcon :name="congelado ? 'play' : 'pause'" :size="16" />
+          <span>{{ congelado ? 'Reanudar' : 'Pausar' }}</span>
+        </button>
+        <button
+          class="btn secondary"
+          type="button"
+          :disabled="tomandoCaptura"
+          title="Tomar captura de la señal y frecuencia cardíaca actual"
+          @click="tomarCaptura"
+        >
+          <AppIcon name="camera" :size="16" />
+          <span>{{ tomandoCaptura ? 'Generando...' : 'Capturar' }}</span>
+        </button>
+        <ChannelActions :canal="canal" :congelado="congelado" @capturar="tomarCaptura" @alternar-pausa="alternarPausa" />
         <button class="btn danger" type="button" :disabled="finalizando" data-testid="canal-finalizar" @click="finalizar">Finalizar</button>
       </template>
     </div>
 
     <template v-if="activo">
       <LeadsOffAlert v-if="canal.leadsOff" />
-      <EcgChart :channel-id="canal.id" :window-sec="ventana" :descripcion="descripcionGrafico" />
+
+      <EcgChart
+        :channel-id="canal.id"
+        :window-sec="ventana"
+        :descripcion="descripcionGrafico"
+        :congelado="congelado"
+      />
       <div class="metricas">
         <BpmDisplay :calculado="canal.bpmCalculado" :dispositivo="canal.bpmDispositivo" :mostrar-dispositivo="canal.fuente !== 'simulator'" />
         <RangeIndicator :estado="canal.rango" :rango="rango" :en-alerta="canal.enAlerta" />
@@ -230,10 +304,20 @@ async function cargarEjemplo() {
     <QuickUserDialog v-if="nuevoUsuario" @creado="usuarioCreado" @cerrar="nuevoUsuario = false" />
     <CameraWizard v-if="guiaCamara" :canal="canal" @cerrar="guiaCamara = false" />
     <SimulatorControls v-if="canal.fuente === 'simulator'" :canal="canal" :conectado="activo" />
+    <CapturePreviewDialog v-if="capturaActual" :captura="capturaActual" @cerrar="capturaActual = null" />
   </article>
 </template>
 
 <style scoped>
+.canal {
+  border-radius: var(--radius);
+  padding: 24px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
 .canal.alerta {
   border-color: var(--danger);
   box-shadow: 0 0 0 2px var(--danger);
@@ -243,8 +327,8 @@ async function cargarEjemplo() {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .cab h2 {
@@ -259,6 +343,10 @@ async function cargarEjemplo() {
 
 .botones {
   margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .metricas {

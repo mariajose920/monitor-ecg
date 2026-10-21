@@ -16,7 +16,8 @@ const route = useRoute()
 const inactividad = useInactividad()
 
 // Tema guardado (preferencia no sensible)
-document.documentElement.dataset.theme = getPref('tema', 'dark')
+// Modo claro exclusivo inspirado en diseño Aeline
+document.documentElement.dataset.theme = 'light'
 
 // SEC-10: al expirar la sesión de admin se limpia el estado y se redirige a '/'.
 watch(

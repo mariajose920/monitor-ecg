@@ -6,6 +6,7 @@ import CommunityPicker from '@/components/community/CommunityPicker.vue'
 import { useComunidadStore } from '@/stores/comunidad.js'
 import ExportWarningDialog from '@/components/common/ExportWarningDialog.vue'
 import DataClassBadge from '@/components/common/DataClassBadge.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { useMonitoreosStore } from '@/stores/monitoreos.js'
 import { nombreMonitoreo, participantesVisibles } from '@/services/monitoreos/catalog.js'
 import { informeComparacionPdf, informeComparacionCsv } from '@/services/report/informes.js'
@@ -138,25 +139,32 @@ async function obtenerExperimental() {
     const n = rt.ring.size
     const t = new Float64Array(n)
     const v = new Float32Array(n)
-    const lo = new Uint8Array(n)
-    rt.ring.toLinear(t, v, lo)
-    return recortar({ values: v, t, leadsOff: lo, fs: rt.profile.fs, nombre: `Canal ${canalSel.value} (congelado)` })
+    rt.ring.toArray(t, v)
+    if (n < FS * 3) throw new Error('Se necesitan al menos 3 s de señal viva')
+    const nombre = channels.channels.find((c) => c.id === Number(canalSel.value))?.nombre ?? 'Canal'
+    return recortar({ values: v, t, fs: FS, nombre: `En vivo: ${nombre}` })
   }
-  return cargarMonitoreo(sesionSel.value, participanteSel.value) // 'sesion' y 'comunidad'
+  if (expTipo.value === 'sesion' || expTipo.value === 'comunidad') return cargarMonitoreo(sesionSel.value, participanteSel.value)
+  throw new Error('Tipo experimental no válido')
 }
 
-/** Señal de un monitoreo guardado (tramo continuo ≤ 30 s sin leads-off). */
-async function cargarMonitoreo(sesionId, canal) {
-  const propio = sesiones.value.find((x) => x.id === sesionId)
-  const s = propio ?? comunidad.lista.find((x) => x.id === sesionId)
-  if (!s || canal === '') throw new Error('Elige un monitoreo y un paciente/canal')
-  const ctxS = propio ? ctxAcceso.value : { usuarioId: 'publico', esAdmin: false }
-  const p = participantesVisibles(s, ctxS).find((x) => x.canalIndex === Number(canal))
-  if (!p) throw new Error('No tienes acceso a ese canal del monitoreo')
-  const sig = await obtenerSenal(s.id, Number(canal))
+async function cargarMonitoreo(id, canalIndex) {
+  if (!id) throw new Error('Elige un monitoreo')
+  const s = sesiones.value.find((x) => x.id === id) ?? (await comunidad.obtenerPorId(id))
+  if (!s) throw new Error('No se encontró el monitoreo')
+  const p = s.participantes.find((x) => x.canalIndex === Number(canalIndex)) ?? s.participantes[0]
+  if (!p) throw new Error('El monitoreo no tiene datos de canal')
+  const d = await obtenerSenal(s, p.canalIndex)
+  const maxMuestras = MAX_S * (p.fs || FS)
+  const v = d.valores.length > maxMuestras ? d.valores.subarray(0, maxMuestras) : d.valores
+  const t = d.t?.length > maxMuestras ? d.t.subarray(0, maxMuestras) : d.t
   return recortar({
-    values: sig.raw, t: sig.t, leadsOff: sig.lo, fs: p.fs || FS,
-    nombre: nombreMonitoreo(s), usuario: propio ? users.byId(p.usuarioId)?.etiqueta ?? 'Paciente eliminado' : 'Paciente anónimo (comunidad)', monitoreo: true,
+    values: v,
+    t,
+    leadsOff: d.leadsOff,
+    fs: p.fs || FS,
+    nombre: `${nombreMonitoreo(s)} · Canal ${p.canalIndex + 1}`,
+    usuario: p.usuarioEtiqueta,
   })
 }
 
@@ -258,15 +266,18 @@ async function descargarInforme() {
         const [x, a, b] = r.data
         grafico = renderizarGraficoJpeg({
           series: [
-            { x, y: a, color: '#1f6fd1', etiqueta: 'Señal A (referencia)' },
-            { x, y: b, color: '#0b7a4c', etiqueta: 'Señal B (experimental)' },
+            { valores: a, color: '#0284c7', etiqueta: 'Referencia' },
+            { valores: b, color: '#e11d48', etiqueta: 'Experimental' },
           ],
-          etiquetaY: 'z-score',
+          ancho: 800,
+          alto: 260,
+          fs: FS,
         })
       } catch {
-        grafico = null
+        // Sin canvas: el PDF se genera sin gráfico.
       }
-      downloadBytes(informeComparacionPdf({ ...base, grafico }), exportFilename(etiqueta, generadoEn, { prefijo: 'comparacion', ext: 'pdf' }))
+      const bytes = await informeComparacionPdf({ ...base, graficoBase64: grafico, etiquetaUsuario: etiqueta })
+      downloadBytes(bytes, exportFilename(etiqueta, generadoEn, { prefijo: 'comparacion', ext: 'pdf' }), 'application/pdf')
     } else {
       const [x, a, b] = r.data
       downloadText(informeComparacionCsv({ ...base, datos: { x, a, b } }), exportFilename(etiqueta, generadoEn, { prefijo: 'comparacion', ext: 'csv' }))
@@ -295,10 +306,18 @@ const series = computed(() => [
     </p>
 
     <div class="grid cols-2">
-      <fieldset class="card">
-        <legend>Señal A: referencia (RF11)</legend>
+      <!-- Tarjeta Señal A: Referencia -->
+      <div class="card compare-card">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-badge-dot a"></span>
+            <h2 class="panel-title">Señal A: Referencia</h2>
+          </div>
+          <span class="panel-tag">RF11</span>
+        </div>
+
         <label class="check"><input v-model="refTipo" type="radio" value="sintetica"> Sintética interna PQRST (didáctica)</label>
-        <div v-if="refTipo === 'sintetica'" class="field">
+        <div v-if="refTipo === 'sintetica'" class="field sub-field">
           <label for="ref-bpm">BPM de la referencia</label>
           <input id="ref-bpm" v-model.number="refBpm" type="number" min="40" max="180">
         </div>
@@ -307,35 +326,70 @@ const series = computed(() => [
         <MonitoreoPicker v-if="refTipo === 'monitoreo'" id-base="ref" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
         <label class="check"><input v-model="refTipo" type="radio" value="comunidad"> Comunidad (públicos)</label>
         <CommunityPicker v-if="refTipo === 'comunidad'" id-base="refc" v-model:sesion-id="refSesion" v-model:canal="refCanal" />
-        <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet convertido)</label>
-        <div v-if="refTipo === 'csv'" class="field">
-          <input id="ref-csv" type="file" accept=".csv,text/csv" aria-label="CSV de referencia" @change="cargarCsv($event, 'ref')">
-          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o <span class="mono">t_ms,ecg_raw,leads_off,bpm</span>, o un CSV exportado por esta app (monitoreo o historial). Máx. 5 MB. Las líneas "#" son metadatos de origen.</p>
-          <p v-if="refCsv" class="small">Cargado: {{ refCsv.nombre }} · {{ refCsv.filas }} filas<template v-if="refCsv.comentarios?.length"> · {{ refCsv.comentarios[0] }}</template></p>
-        </div>
-        <p class="alert info small">La referencia sintética es didáctica, no un registro clínico validado. Para una validación real, carga un registro certificado y cita su origen.</p>
-      </fieldset>
+        <label class="check"><input v-model="refTipo" type="radio" value="csv"> Cargar CSV validado (p. ej. PhysioNet)</label>
 
-      <fieldset class="card">
-        <legend>Señal B: experimental</legend>
+        <!-- Control moderno para cargar CSV de referencia -->
+        <div v-if="refTipo === 'csv'" class="csv-upload-box">
+          <input id="ref-csv" type="file" accept=".csv,text/csv" class="sr-only" aria-label="CSV de referencia" @change="cargarCsv($event, 'ref')">
+          <div class="csv-upload-row">
+            <label for="ref-csv" class="btn secondary csv-btn">
+              <AppIcon name="upload" :size="16" />
+              <span>{{ refCsv ? 'Cambiar archivo CSV' : 'Elegir archivo CSV' }}</span>
+            </label>
+            <span v-if="refCsv" class="csv-chip ok">
+              <AppIcon name="check" :size="14" />
+              <strong>{{ refCsv.nombre }}</strong> · {{ refCsv.filas }} filas
+            </span>
+            <span v-else class="csv-empty-note">Ningún archivo cargado (.csv)</span>
+          </div>
+          <p class="hint">Formatos: <span class="mono">t_ms,valor</span> o un CSV exportado por esta app (máx. 5 MB).</p>
+          <p v-if="refCsv?.comentarios?.length" class="small muted">{{ refCsv.comentarios[0] }}</p>
+        </div>
+
+        <p class="alert info small ref-alert">La referencia sintética es didáctica, no un registro clínico validado. Para una validación real, carga un registro certificado y cita su origen.</p>
+      </div>
+
+      <!-- Tarjeta Señal B: Experimental -->
+      <div class="card compare-card">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-badge-dot b"></span>
+            <h2 class="panel-title">Señal B: Experimental</h2>
+          </div>
+          <span class="panel-tag">Entrada</span>
+        </div>
+
         <label class="check"><input v-model="expTipo" type="radio" value="simulada"> Sensor simulado (con ruido y desfase conocido)</label>
         <label class="check"><input v-model="expTipo" type="radio" value="sesion"> Monitoreo guardado</label>
         <MonitoreoPicker v-if="expTipo === 'sesion'" id-base="exp" :lista="sesiones" :ctx="ctxAcceso" v-model:sesion-id="sesionSel" v-model:canal="participanteSel" />
         <label class="check"><input v-model="expTipo" type="radio" value="comunidad"> Comunidad (públicos)</label>
         <CommunityPicker v-if="expTipo === 'comunidad'" id-base="expc" v-model:sesion-id="sesionSel" v-model:canal="participanteSel" />
         <label class="check"><input v-model="expTipo" type="radio" value="vivo"> Congelar un canal en vivo</label>
-        <div v-if="expTipo === 'vivo'" class="field">
+        <div v-if="expTipo === 'vivo'" class="field sub-field">
           <select id="exp-canal" v-model="canalSel" aria-label="Canal en vivo">
             <option value="">—</option>
             <option v-for="c in canalesVivos" :key="c.id" :value="c.id">{{ c.nombre }}</option>
           </select>
         </div>
         <label class="check"><input v-model="expTipo" type="radio" value="csv"> Cargar CSV</label>
-        <div v-if="expTipo === 'csv'" class="field">
-          <input type="file" accept=".csv,text/csv" aria-label="CSV experimental" @change="cargarCsv($event, 'exp')">
-          <p v-if="expCsv" class="small">Cargado: {{ expCsv.nombre }}</p>
+
+        <!-- Control moderno para cargar CSV experimental -->
+        <div v-if="expTipo === 'csv'" class="csv-upload-box">
+          <input id="exp-csv" type="file" accept=".csv,text/csv" class="sr-only" aria-label="CSV experimental" @change="cargarCsv($event, 'exp')">
+          <div class="csv-upload-row">
+            <label for="exp-csv" class="btn secondary csv-btn">
+              <AppIcon name="upload" :size="16" />
+              <span>{{ expCsv ? 'Cambiar archivo CSV' : 'Elegir archivo CSV' }}</span>
+            </label>
+            <span v-if="expCsv" class="csv-chip ok">
+              <AppIcon name="check" :size="14" />
+              <strong>{{ expCsv.nombre }}</strong> · {{ expCsv.filas }} filas
+            </span>
+            <span v-else class="csv-empty-note">Ningún archivo cargado (.csv)</span>
+          </div>
+          <p class="hint">Adquisición experimental del sensor PPG o ECG para contrastar con la referencia.</p>
         </div>
-      </fieldset>
+      </div>
     </div>
 
     <SyncControls
@@ -367,7 +421,8 @@ const series = computed(() => [
         </div>
       </div>
     </template>
-  <ExportWarningDialog
+
+    <ExportWarningDialog
       v-if="exportandoInforme"
       :boton="exportandoInforme === 'pdf' ? 'Entiendo, descargar PDF' : 'Entiendo, descargar CSV'"
       detalle="El informe contiene métricas y parámetros de la comparación, sin alias ni datos opcionales."
@@ -378,13 +433,121 @@ const series = computed(() => [
 </template>
 
 <style scoped>
-fieldset.card {
-  border: 1px solid var(--border);
+.compare-card {
+  padding: 24px 28px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-legend {
-  font-weight: 700;
-  padding: 0 6px;
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.panel-badge-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.panel-badge-dot.a {
+  background: var(--signal-ref);
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.45);
+}
+
+.panel-badge-dot.b {
+  background: var(--signal);
+  box-shadow: 0 0 8px rgba(225, 29, 72, 0.45);
+}
+
+.panel-tag {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev-2);
+  color: var(--text-muted);
+}
+
+.sub-field {
+  margin: 10px 0 16px 28px;
+}
+
+.ref-alert {
+  margin-top: auto;
+  margin-bottom: 0;
+}
+
+/* Caja de carga de CSV */
+.csv-upload-box {
+  margin: 10px 0 14px 28px;
+  padding: 14px 18px;
+  background: var(--bg-elev-2);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.18s ease;
+}
+
+.csv-upload-box:hover {
+  border-color: var(--accent);
+}
+
+.csv-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.csv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.csv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: #f0f9ff;
+  color: var(--info);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.csv-empty-note {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .sync {

@@ -9,6 +9,7 @@ import HistorialDialog from '@/components/monitoreos/HistorialDialog.vue'
 import SaveMonitoringDialog from '@/components/monitoreos/SaveMonitoringDialog.vue'
 import VisibilityDialog from '@/components/monitoreos/VisibilityDialog.vue'
 import AccesosAdminAviso from '@/components/account/AccesosAdminAviso.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { visibilidadDe } from '@/services/monitoreos/visibilidad.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
@@ -284,7 +285,10 @@ const textoEliminar = computed(() => {
                 <div v-if="s.motivoFin && s.motivoFin !== 'usuario'" class="muted small">motivo: {{ s.motivoFin }}</div>
               </td>
               <td>
-                <button v-if="esUtilizable(s)" class="btn small ghost" :aria-label="`Cambiar visibilidad de ${nombreMonitoreo(s)}`" @click="cambiandoVis = s">{{ visibilidadDe(s) === 'publico' ? '🌐 Público' : '🔒 Privado' }}</button>
+                <button v-if="esUtilizable(s)" class="btn small ghost" :aria-label="`Cambiar visibilidad de ${nombreMonitoreo(s)}`" @click="cambiandoVis = s">
+                  <AppIcon :name="visibilidadDe(s) === 'publico' ? 'globe' : 'lock'" :size="13" />
+                  <span>{{ visibilidadDe(s) === 'publico' ? 'Público' : 'Privado' }}</span>
+                </button>
                 <span v-else class="muted small">—</span>
               </td>
               <td class="acciones">

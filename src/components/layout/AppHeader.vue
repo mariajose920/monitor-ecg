@@ -2,27 +2,19 @@
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import AccountMenu from '@/components/account/AccountMenu.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { useAccountStore } from '@/stores/account.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSessionStore } from '@/stores/session.js'
-import { setPref } from '@/utils/prefs.js'
 
-/**
- * Encabezado adaptable en 3 niveles (solo CSS, sin JS de medición, sin parpadeos):
- *  1) >= 1360 px: una fila con ícono + texto.
- *  2) 900–1759 px: compacto en dos filas (rejilla horizontal de 2 filas) con ícono + texto pequeño.
- *  3) < 600 px: solo íconos (nombre accesible = texto) y un último botón "Menú" con un desplegable corto.
- * Cada vínculo existe una sola vez en el árbol de accesibilidad: lo que no cabe en la fila pasa al desplegable
- * y el resto del nivel queda con display:none (nunca hay duplicados visibles).
- */
 const users = useUsersStore()
 const cuenta = useAccountStore()
 const auth = useAuthStore()
 const session = useSessionStore()
 const route = useRoute()
-const abierto = ref(false)
 
+const abierto = ref(false)
 const oculto = ref(false)
 const botonMenu = ref(null)
 const raiz = ref(null)
@@ -64,554 +56,353 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', cerrarAlPulsarFuera)
 })
 
-/** Íconos de trazo (24x24, currentColor). Rutas SVG fijas: no se usa v-html. */
-const ICONOS = {
-  inicio: ['M3 11l9-8 9 8', 'M5 10v10h5v-6h4v6h5V10'],
-  pacientes: ['M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 20v-2a4 4 0 0 0-3-3.9', 'M16 3.1a4 4 0 0 1 0 7.8'],
-  monitor: ['M22 12h-4l-3 9L9 3l-3 9H2'],
-  monitoreos: ['M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2', 'M9 2h6v4H9z', 'M9 12h6', 'M9 16h6'],
-  comparar: ['M8 3L4 7l4 4', 'M4 7h16', 'M16 21l4-4-4-4', 'M20 17H4'],
-  aprende: ['M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z', 'M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z'],
-  admin: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
-  mas: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
-}
-
-/**
- * fila: en qué anchos (nivel 3) el vínculo va en la fila de íconos: 'no' | 'siempre' | '375' | '480'.
- * pop: en qué anchos (nivel 3) está en el desplegable: null | 'siempre' | '375' | '480' (complementario de fila).
- */
 const enlaces = [
-  { to: '/', texto: 'Inicio', icono: 'inicio', fila: 'no', pop: 'siempre' },
-  { to: '/pacientes', texto: 'Pacientes', icono: 'pacientes', fila: 'no', pop: 'siempre' },
-  { to: '/monitor', texto: 'Monitor', icono: 'monitor', fila: 'siempre', pop: null },
-  { to: '/monitoreos', texto: 'Monitoreos', icono: 'monitoreos', fila: '375', pop: '375' },
-  { to: '/comparar', texto: 'Comparar', icono: 'comparar', fila: '480', pop: '480' },
-  { to: '/aprende', texto: 'Aprende', icono: 'aprende', fila: '480', pop: '480' },
+  { to: '/', texto: 'Inicio' },
+  { to: '/pacientes', texto: 'Pacientes' },
+  { to: '/monitor', texto: 'Monitor' },
+  { to: '/monitoreos', texto: 'Monitoreos' },
+  { to: '/comparar', texto: 'Comparar' },
+  { to: '/aprende', texto: 'Aprende' },
 ]
-const enPopover = enlaces.filter((e) => e.pop)
 
 const destinoAdmin = computed(() => (auth.isAdmin ? '/admin' : auth.requiereMfa ? '/admin/mfa' : '/admin/acceso'))
-
-const temaOscuro = ref(document.documentElement.dataset.theme !== 'light')
-const etiquetaTema = computed(() => (temaOscuro.value ? 'Tema claro' : 'Tema oscuro'))
-
-function alternarTema() {
-  temaOscuro.value = !temaOscuro.value
-  const t = temaOscuro.value ? 'dark' : 'light'
-  document.documentElement.dataset.theme = t
-  setPref('tema', t)
-}
 </script>
 
 <template>
-  <header ref="raiz" :class="['app-header', { oculto }]" @focusin="oculto = false">
-    <div class="container bar">
-      <RouterLink to="/" class="brand" aria-label="Monitor ECG, inicio" title="Monitor ECG, inicio">
-        <svg viewBox="0 0 64 32" width="40" height="20" aria-hidden="true">
-          <path d="M2 18h12l3-6 5 14 6-24 5 16h29" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
-        </svg>
-        <span class="brand-txt">Monitor ECG</span>
+  <header ref="raiz" :class="['aeline-header', { oculto }]" @focusin="oculto = false">
+    <div class="header-inner">
+      <!-- Marca estilo Aeline (Izquierda): Ícono orgánico + Logotipo -->
+      <RouterLink to="/" class="aeline-brand" aria-label="Cardio Monitor, inicio">
+        <div class="brand-heart-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            <path d="M7 12h2.5l1.5-3 2 6 1.5-3H17" stroke="#ffffff" stroke-width="2" />
+          </svg>
+        </div>
+        <span class="brand-title">Cardio<span class="brand-accent">Monitor</span></span>
       </RouterLink>
 
-      <div class="status">
-        <span v-if="session.activa" class="chip ok chip-rec" role="status"><span class="chip-ico" aria-hidden="true">●</span><span class="chip-txt">Grabando</span></span>
-        <RouterLink v-else-if="session.pendiente" to="/monitor" class="chip warn chip-rec" data-testid="chip-sin-guardar"><span class="chip-ico" aria-hidden="true">◐</span><span class="chip-txt">Monitoreo sin guardar</span></RouterLink>
-        <RouterLink to="/pacientes" :class="['chip', 'chip-usuario', users.activeUser ? 'info' : 'neutral']" data-testid="usuario-activo" aria-live="polite">
-          <span class="chip-ico" aria-hidden="true">👤</span>
-          <span class="punto" aria-hidden="true">{{ users.activeUser ? '●' : '○' }}</span>
-          <span class="chip-txt">
-            <template v-if="users.activeUser"><span class="sr-only">Paciente activo: </span>{{ users.activeUser.etiqueta }}</template>
-            <template v-else>Sin paciente · Elegir</template>
-          </span>
+      <!-- Menú central estilo Aeline: enlaces limpios y orgánicos -->
+      <nav class="aeline-nav" aria-label="Navegación principal">
+        <RouterLink
+          v-for="e in enlaces"
+          :key="e.to"
+          :to="e.to"
+          class="aeline-link"
+        >
+          {{ e.texto }}
         </RouterLink>
-        <RouterLink :to="cuenta.iniciada ? '/cuenta' : '/acceso'" :class="['chip', 'chip-cuenta', cuenta.iniciada ? 'ok' : 'neutral']" data-testid="chip-cuenta">
-          <span class="chip-ico" aria-hidden="true">🔐</span>
-          <span class="punto" aria-hidden="true">{{ cuenta.iniciada ? '●' : '○' }}</span>
-          <span class="chip-txt">{{ cuenta.iniciada ? 'Con cuenta' : 'Sin cuenta' }}</span>
+        <RouterLink
+          v-if="auth.mostrarBotonAdmin"
+          :to="destinoAdmin"
+          class="aeline-link nav-admin"
+          :class="{ 'admin-activo': auth.isAdmin }"
+          data-testid="enlace-admin"
+        >
+          Admin
         </RouterLink>
-        <span v-if="auth.isAdmin" class="chip warn chip-admin"><span class="chip-ico" aria-hidden="true">🔑</span><span class="chip-txt">Admin</span></span>
-      </div>
+      </nav>
 
-      <nav id="nav-principal" class="nav" aria-label="Principal">
-        <RouterLink v-for="e in enlaces" :key="e.to" :to="e.to" :class="['nav-link', `f-${e.fila}`]" :title="e.texto">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path v-for="d in ICONOS[e.icono]" :key="d" :d="d" /></svg>
-          <span class="txt">{{ e.texto }}</span>
-        </RouterLink>
-        <RouterLink v-if="auth.mostrarBotonAdmin" :to="destinoAdmin" :class="['nav-link', 'f-siempre', 'nav-admin', { 'admin-activo': auth.isAdmin }]" data-testid="enlace-admin" title="Admin">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path v-for="d in ICONOS.admin" :key="d" :d="d" /></svg>
-          <span class="txt">Admin<span v-if="auth.isAdmin" class="sr-only"> (sesión de administrador activa)</span></span>
+      <!-- Bloque derecho: Botón CTA tipo píldora verde lima (como "Get Involved") + Cuenta -->
+      <div class="aeline-right">
+        <!-- Indicador de grabación en vivo si está activa -->
+        <span v-if="session.activa" class="live-pill" role="status" title="Monitoreo activo">
+          <span class="live-pulse"></span>
+          <span class="live-text">Grabando</span>
+        </span>
+
+        <!-- Botón de acción principal estilo Aeline ("Get Involved") -->
+        <RouterLink to="/monitor" class="btn-cta-aeline" data-testid="nav-cta-monitoreo">
+          <span>Medir pulso</span>
         </RouterLink>
 
+        <!-- Menú de cuenta / usuario -->
+        <div class="account-wrap">
+          <AccountMenu />
+        </div>
+
+        <!-- Botón menú móvil -->
         <button
           ref="botonMenu"
           type="button"
-          class="mas-btn"
+          class="mobile-toggle-btn"
           :aria-expanded="abierto"
-          aria-controls="panel-mas"
-          aria-label="Menú"
-          title="Menú: más opciones"
+          aria-label="Abrir menú"
           @click="abierto = !abierto"
         >
-          <svg class="ico ico-mas" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path v-for="d in ICONOS.mas" :key="d" :d="d" /></svg>
+          <AppIcon :name="abierto ? 'x' : 'sliders'" :size="20" />
         </button>
+      </div>
+    </div>
 
-        <div id="panel-mas" :class="['mas', { abierto }]">
-          <div class="mas-links">
-            <RouterLink v-for="e in enPopover" :key="e.to" :to="e.to" :class="['mas-link', `p-${e.pop}`]">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path v-for="d in ICONOS[e.icono]" :key="d" :d="d" /></svg>
-              <span>{{ e.texto }}</span>
-            </RouterLink>
-          </div>
-          <AccountMenu />
-          <button v-if="auth.isAdmin" type="button" class="btn small" @click="auth.logout()">Cerrar sesión admin</button>
-          <button type="button" class="btn small ghost" @click="alternarTema">{{ etiquetaTema }}</button>
-        </div>
+    <!-- Menú móvil desplegable -->
+    <div v-if="abierto" class="mobile-menu" role="dialog" aria-label="Menú móvil">
+      <nav class="mobile-nav">
+        <RouterLink
+          v-for="e in enlaces"
+          :key="e.to"
+          :to="e.to"
+          class="mobile-link"
+          @click="abierto = false"
+        >
+          {{ e.texto }}
+        </RouterLink>
+        <RouterLink
+          v-if="auth.mostrarBotonAdmin"
+          :to="destinoAdmin"
+          class="mobile-link"
+          @click="abierto = false"
+        >
+          Admin
+        </RouterLink>
       </nav>
+      <div class="mobile-action">
+        <RouterLink to="/monitor" class="btn primary" @click="abierto = false">
+          Medir pulso
+        </RouterLink>
+      </div>
     </div>
   </header>
 </template>
 
 <style scoped>
-.app-header {
-  background: var(--bg-elev);
-  border-bottom: 1px solid var(--border);
+.aeline-header {
   position: sticky;
   top: 0;
-  z-index: 20;
-  transition: transform 0.2s ease;
+  z-index: 50;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  transition: transform 0.25s ease;
 }
 
-.app-header.oculto {
+.aeline-header.oculto {
   transform: translateY(-100%);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-header {
-    transition: none;
+.header-inner {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 28px;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+/* Marca estilo Aeline */
+.aeline-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.brand-heart-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);
+}
+
+.brand-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.brand-accent {
+  color: var(--accent);
+}
+
+/* Enlaces centrales estilo Aeline */
+.aeline-nav {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+@media (max-width: 1024px) {
+  .aeline-nav {
+    display: none;
   }
 }
 
-.bar {
-  position: relative;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--accent);
-  font-weight: 800;
+.aeline-link {
+  color: #475569;
   text-decoration: none;
-  font-size: 1.1rem;
-  white-space: nowrap;
-}
-
-.ico {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ico-mas {
-  stroke-width: 3.5;
-}
-
-.status {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.status a.chip {
-  text-decoration: none;
-}
-
-.chip-txt {
-  white-space: nowrap;
-}
-
-.punto {
-  display: none;
-}
-
-.nav-link {
-  color: var(--text-muted);
-  text-decoration: none;
+  font-size: 0.94rem;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  border-radius: var(--radius-sm);
+  padding: 8px 4px;
+  position: relative;
+  transition: color 0.18s ease;
   white-space: nowrap;
 }
 
-.nav-link.router-link-exact-active,
-.nav-link.router-link-active:not([href="/"]),
-.nav-link:hover {
+.aeline-link:hover {
   color: var(--text);
-  background: var(--bg-elev-2);
+}
+
+.aeline-link.router-link-exact-active,
+.aeline-link.router-link-active:not([href="/"]) {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.aeline-link.router-link-exact-active::after,
+.aeline-link.router-link-active:not([href="/"])::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px;
 }
 
 .nav-admin.admin-activo {
   color: var(--warn);
 }
 
-.mas-btn {
+/* Bloque derecho */
+.aeline-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* Botón CTA píldora estilo Aeline / Cardio Monitor */
+.btn-cta-aeline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  box-shadow: 0 4px 18px rgba(225, 29, 72, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  white-space: nowrap;
+}
+
+.btn-cta-aeline:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow: 0 6px 24px rgba(225, 29, 72, 0.42);
+}
+
+.btn-cta-aeline:active {
+  transform: translateY(0);
+}
+
+/* Chip de grabación en vivo */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: #fff1f2;
+  border: 1px solid rgba(225, 29, 72, 0.25);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.live-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(225, 29, 72, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+}
+
+.account-wrap {
+  display: flex;
+  align-items: center;
+}
+
+/* Botón menú móvil */
+.mobile-toggle-btn {
   display: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
-.mas {
-  display: contents; /* niveles 1 y 2: los controles extra son celdas de la propia rejilla/fila */
-}
-
-.mas-links {
-  display: none;
-}
-
-/* ---------- Nivel 1: una fila, ícono + texto (>= 1760 px) ---------- */
-@media (min-width: 1760px) {
-  .bar {
+@media (max-width: 1024px) {
+  .mobile-toggle-btn {
     display: flex;
-    flex-wrap: wrap; /* red de seguridad: si algo no cabe pasa a otra línea en vez de superponerse */
-    align-items: center;
-    gap: 4px 10px;
-    min-height: 56px;
-  }
-
-  .status {
-    order: 3;
-  }
-
-  .nav {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 2px;
-    margin-left: auto;
-    min-width: 0;
-  }
-
-  .nav-link {
-    gap: 6px;
-    padding: 8px 10px;
-    min-height: var(--touch);
-  }
-
-  .nav :deep(.cuenta) {
-    flex-wrap: nowrap;
-    margin-left: 6px;
-  }
-
-  .nav :deep(.btn) {
-    white-space: nowrap;
-  }
-
-  .nav :deep(.correo) {
-    max-width: 150px;
-  }
-
-  .app-header.oculto {
-    transform: none;
   }
 }
 
-/* ---------- Nivel 2: compacto en dos filas (600–1759 px) ---------- */
-@media (min-width: 900px) and (max-width: 1759px) {
-  .bar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      'brand nav'
-      'status nav';
-    align-items: center;
-    column-gap: 14px;
-    row-gap: 4px;
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-
-  .brand {
-    grid-area: brand;
-    font-size: 1rem;
-  }
-
-  .status {
-    grid-area: status;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .status .chip {
-    font-size: 0.75rem;
-    padding: 1px 8px;
-  }
-
-  .nav {
-    grid-area: nav;
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(2, minmax(40px, auto));
-    grid-auto-columns: minmax(0, auto);
-    align-items: stretch;
-    justify-items: stretch;
-    gap: 2px 4px;
-  }
-
-  .nav-link {
-    flex-direction: column;
-    justify-content: center;
-    gap: 1px;
-    padding: 3px 8px;
-    font-size: 0.75rem;
-    line-height: 1.15;
-  }
-
-  .nav-link .ico {
-    width: 17px;
-    height: 17px;
-  }
-
-  .nav :deep(.cuenta) {
-    justify-content: center;
-    align-self: center;
-  }
-
-  .nav :deep(.correo) {
-    display: none;
-  }
-
-  .nav :deep(.btn.small) {
-    min-height: 36px;
-    padding: 3px 8px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    width: 100%;
-  }
-
-  .app-header.oculto {
-    transform: translateY(-100%);
-  }
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-hover);
 }
 
-/* ---------- Nivel 3: solo íconos en una fila (< 900 px) ---------- */
-@media (max-width: 899px) {
-  .bar {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0;
-    min-height: 52px;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .brand {
-    flex: 0 0 44px;
-    min-width: 44px;
-    min-height: 44px;
-    justify-content: center;
-  }
-
-  .brand svg {
-    width: 36px;
-  }
-
-  .brand-txt,
-  .nav-link .txt,
-  .chip-txt {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .status {
-    flex: none;
-    gap: 0;
-  }
-
-  .status .chip {
-    position: relative;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    font-size: 1.15rem;
-  }
-
-  .status .chip-admin {
-    display: none; /* el vínculo Admin de la fila ya muestra el estado */
-  }
-
-  .status .chip.router-link-exact-active {
-    background: var(--bg-elev-2);
-  }
-
-  .punto {
-    display: block;
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    font-size: 0.6rem;
-    line-height: 1;
-  }
-
-  .nav {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-  }
-
-  .nav-link {
-    flex: 1 1 44px;
-    min-width: 44px;
-    min-height: 44px;
-    justify-content: center;
-    padding: 0;
-    position: relative;
-  }
-
-  .nav-link .ico {
-    width: 24px;
-    height: 24px;
-  }
-
-  .nav-link.router-link-exact-active::after,
-  .nav-link.router-link-active:not([href="/"])::after {
-    content: '';
-    position: absolute;
-    left: 20%;
-    right: 20%;
-    bottom: 2px;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--accent);
-  }
-
-  .f-no,
-  .f-375,
-  .f-480 {
-    display: none;
-  }
-
-  .mas-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 1 1 44px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-  }
-
-  .mas-btn[aria-expanded='true'] {
-    background: var(--bg-elev-2);
-    color: var(--text);
-  }
-
-  .mas {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 8px;
-    z-index: 30;
-    width: min(300px, calc(100vw - 16px));
-    max-height: calc(100dvh - 70px);
-    overflow-y: auto;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px;
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-  }
-
-  .mas.abierto {
-    display: flex;
-  }
-
-  .mas-links {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .mas-link {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 44px;
-    padding: 0 10px;
-    color: var(--text);
-    text-decoration: none;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-  }
-
-  .mas-link:hover,
-  .mas-link.router-link-exact-active {
-    background: var(--bg-elev-2);
-  }
-
-  .mas-link.router-link-exact-active {
-    box-shadow: inset 3px 0 0 var(--accent);
-  }
-
-  .p-375,
-  .p-480 {
-    display: flex;
-  }
-
-  .mas :deep(.cuenta) {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .mas :deep(.correo) {
-    max-width: 100%;
-  }
-
-  .mas :deep(.btn) {
-    justify-content: center;
-    min-height: 44px;
-  }
+.mobile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-@media (min-width: 375px) and (max-width: 599px) {
-  .f-375 {
-    display: flex;
-  }
-
-  .p-375 {
-    display: none;
-  }
+.mobile-link {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
 }
 
-@media (min-width: 480px) and (max-width: 599px) {
-  .f-480 {
-    display: flex;
-  }
+.mobile-link:hover,
+.mobile-link.router-link-exact-active {
+  background: var(--bg-elev-2);
+  color: var(--accent);
+}
 
-  .p-480 {
-    display: none;
-  }
+.mobile-action {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 </style>

@@ -63,7 +63,7 @@ function enviar() {
       <div class="field">
         <label for="mon-actividad">Actividad principal</label>
         <select id="mon-actividad" v-model="form.actividad">
-          <option v-for="a in ACTIVIDADES" :key="a.id" :value="a.id">{{ a.icono }} {{ a.nombre }}</option>
+          <option v-for="a in ACTIVIDADES" :key="a.id" :value="a.id">{{ a.nombre }}</option>
         </select>
         <p v-if="errores.actividad" class="error-text" role="alert">{{ errores.actividad }}</p>
       </div>
@@ -102,8 +102,8 @@ function enviar() {
       <template v-if="modo === 'guardar'">
         <template v-if="!confirmandoDescarte">
           <button type="button" class="btn ghost" @click="emit('cerrar')">Decidir después</button>
-          <button type="button" class="btn danger" :disabled="ocupado" @click="confirmandoDescarte = true">Descartar</button>
-          <button type="submit" form="form-monitoreo" class="btn primary" :disabled="ocupado">Guardar monitoreo</button>
+          <button type="button" class="btn btn-descartar" :disabled="ocupado" @click="confirmandoDescarte = true">Descartar</button>
+          <button type="submit" form="form-monitoreo" class="btn btn-guardar" :disabled="ocupado">Guardar monitoreo</button>
         </template>
         <template v-else>
           <button type="button" class="btn" @click="confirmandoDescarte = false">No, volver</button>
@@ -112,7 +112,7 @@ function enviar() {
       </template>
       <template v-else>
         <button type="button" class="btn" @click="emit('cerrar')">Cancelar</button>
-        <button type="submit" form="form-monitoreo" class="btn primary" :disabled="ocupado">Guardar cambios</button>
+        <button type="submit" form="form-monitoreo" class="btn btn-guardar" :disabled="ocupado">Guardar cambios</button>
       </template>
     </template>
   </BaseDialog>
@@ -122,4 +122,35 @@ function enviar() {
 .vis-box { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
 .radio, .check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
 .radio input, .check input { margin-top: 4px; flex: none; }
+
+/* Botón Guardar Monitoreo: Azul médico clínico seguro y destacado */
+.btn-guardar {
+  background: var(--info);
+  color: #ffffff;
+  border: none;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.3);
+}
+
+.btn-guardar:hover:not(:disabled) {
+  background: #0369a1;
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.42);
+  transform: translateY(-2px);
+}
+
+/* Botón Descartar: Tono suave rojizo de advertencia, claramente diferenciado */
+.btn-descartar {
+  background: #fff1f2;
+  color: var(--danger);
+  border: 1.5px solid rgba(225, 29, 72, 0.35);
+  font-weight: 700;
+}
+
+.btn-descartar:hover:not(:disabled) {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.25);
+  transform: translateY(-2px);
+}
 </style>

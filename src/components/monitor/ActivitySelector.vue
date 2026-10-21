@@ -10,7 +10,7 @@ const emit = defineEmits(['update:modelValue'])
   <div class="field">
     <label :for="id">Actividad</label>
     <select :id="id" :value="modelValue" @change="emit('update:modelValue', $event.target.value)">
-      <option v-for="a in ACTIVIDADES" :key="a.id" :value="a.id">{{ a.icono }} {{ a.nombre }}</option>
+      <option v-for="a in ACTIVIDADES" :key="a.id" :value="a.id">{{ a.nombre }}</option>
     </select>
   </div>
 </template>
