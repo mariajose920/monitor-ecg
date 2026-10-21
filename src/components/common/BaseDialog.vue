@@ -66,7 +66,9 @@ const idTitulo = `dlg-${Math.random().toString(36).slice(2, 8)}`
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 0.6);
+  background: rgba(3, 6, 12, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;

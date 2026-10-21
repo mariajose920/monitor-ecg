@@ -5,6 +5,7 @@ import { useChannelsStore } from '@/stores/channels.js'
 import { useAlertsStore } from '@/stores/alerts.js'
 import { notify } from '@/services/notifications/notifier.js'
 import { formatDuracion } from '@/utils/time.js'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 /** Flujo: elegir usuario → conectar fuente → iniciar → detener → guardar (RF08/RF09). */
 const session = useSessionStore()
@@ -73,7 +74,7 @@ function marcar() {
 
     <div class="row">
       <strong>Monitoreo:</strong>
-      <span :class="['chip', session.activa ? 'ok' : session.pendiente ? 'warn' : 'neutral']" role="status">
+      <span :class="['chip', session.activa ? 'danger' : session.pendiente ? 'warn' : 'neutral']" role="status">
         {{ session.activa ? '● Grabando' : session.pendiente ? '◐ Sin guardar' : '○ Sin monitoreo' }}
       </span>
       <span class="mono" aria-label="Duración">{{ duracion }}</span>
@@ -87,7 +88,8 @@ function marcar() {
       </template>
       <button v-if="session.pendiente" class="btn primary" data-testid="guardar-monitoreo" @click="emit('guardar')">Guardar monitoreo</button>
       <button class="btn ghost" :aria-pressed="alerts.silenciado" @click="alerts.toggleSilencio()">
-        {{ alerts.silenciado ? '🔕 Sonido silenciado' : '🔔 Sonido de alertas' }}
+        <AppIcon :name="alerts.silenciado ? 'bell-off' : 'bell'" :size="16" />
+        <span>{{ alerts.silenciado ? 'Sonido silenciado' : 'Sonido de alertas' }}</span>
       </button>
     </div>
     <p v-if="session.pendiente" class="muted small">Guarda o descarta el monitoreo anterior para poder iniciar otro.</p>
@@ -115,17 +117,19 @@ function marcar() {
 .pasos li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-muted);
   font-weight: 600;
+  font-size: 0.92rem;
 }
 
 .pasos li.hecho {
-  color: var(--ok);
+  color: #0284c7;
 }
 
 .pasos li.actual {
   color: var(--text);
+  font-weight: 700;
 }
 
 .num {
@@ -137,11 +141,20 @@ function marcar() {
   border-radius: 50%;
   border: 2px solid currentColor;
   font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.pasos li.hecho .num {
+  background: #f0f9ff;
+  border-color: #0284c7;
+  color: #0284c7;
+  font-weight: 800;
 }
 
 .pasos li.actual .num {
   background: var(--accent);
   color: var(--accent-contrast);
   border-color: var(--accent);
+  font-weight: 800;
 }
 </style>

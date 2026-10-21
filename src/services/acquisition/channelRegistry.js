@@ -18,7 +18,7 @@ export function createRuntime(channelId, { source, profile, windowSec = 8, alert
     source,
     profile,
     windowSec,
-    ring: new RingBuffer(Math.ceil(fs * 10) + fs), // 10 s + margen (SEC-60)
+    ring: new RingBuffer(Math.ceil(fs * 120) + fs), // 120 s (2 min) para permitir retroceder en la señal en vivo
     detector: source.createDetector ? source.createDetector() : new RPeakDetector({ fs }),
     evaluator: createRangeEvaluator(alertas),
     recorder: null,

@@ -1,6 +1,7 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import uPlot from 'uplot'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { getRuntime } from '@/services/acquisition/channelRegistry.js'
 import { registerChart, unregisterChart } from '@/services/acquisition/renderScheduler.js'
 
@@ -8,12 +9,14 @@ import { registerChart, unregisterChart } from '@/services/acquisition/renderSch
  * Gráfico en vivo de un canal (RF05). La instancia de uPlot y los arrays de visualización son
  * variables locales (nunca reactivas). Se redibuja desde el renderScheduler (rAF), no por muestra.
  * Leads-off se dibuja como HUECO (null), nunca como un valor inventado (bug 10).
+ * Soporta congelar/pausar la pantalla en tiempo real.
  */
 const props = defineProps({
   channelId: { type: Number, required: true },
   windowSec: { type: Number, default: 8 },
   /** Alternativa textual (WCAG 1.1.1): resumen de BPM y estado que acompaña al gráfico. */
   descripcion: { type: String, default: '' },
+  congelado: { type: Boolean, default: false },
 })
 
 const box = ref(null)
@@ -45,8 +48,9 @@ function ensureBuffers(n) {
   tmpLo = new Uint8Array(cap)
 }
 
-function draw() {
+function draw(forzar = false) {
   if (!plot) return
+  if (props.congelado && !forzar) return
   const rt = getRuntime(props.channelId)
   if (!rt) {
     plot.setData([[], []])
@@ -63,10 +67,53 @@ function draw() {
   plot.setData([xs.subarray(0, n), ys])
 }
 
+/**
+ * Devuelve las muestras exactas actualmente renderizadas en pantalla en uPlot.
+ * Si la pantalla está congelada/pausada, devuelve exactamente el cuadro congelado.
+ */
+function obtenerDatosVisibles() {
+  if (!plot) return null
+  const data = plot.data
+  if (!data || !data[0] || data[0].length === 0) return null
+  const xArr = data[0]
+  const yArr = data[1]
+  const n = xArr.length
+  const xMax = xArr[n - 1]
+  const xMin = Math.max(0, xMax - props.windowSec)
+  const samples = []
+  for (let i = 0; i < n; i++) {
+    const x = xArr[i]
+    if (x >= xMin && x <= xMax) {
+      samples.push({
+        tRel: x - xMin,
+        v: yArr[i],
+        lo: yArr[i] == null,
+      })
+    }
+  }
+  return {
+    samples,
+    ventanaSeg: props.windowSec,
+    tMax: xMax,
+    yRange: yDefault,
+  }
+}
+
+defineExpose({
+  obtenerDatosVisibles,
+})
+
+watch(
+  () => props.congelado,
+  (nuevo) => {
+    if (!nuevo) draw(true)
+  },
+)
+
 onMounted(() => {
   const muted = cssVar('--text-muted', '#9fb0c8')
   const grid = cssVar('--grid', '#1d2a44')
-  const ancho = box.value.clientWidth || 600
+  const ancho = box.value?.clientWidth || 600
   const opts = {
     width: ancho,
     height: alturaPara(ancho),
@@ -111,5 +158,47 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="box" class="chart-box" role="img" :aria-label="`Señal ECG en vivo del canal ${channelId}${descripcion ? '. ' + descripcion : ''}`" />
+  <div class="chart-wrapper">
+    <div ref="box" class="chart-box" role="img" :aria-label="`Señal ECG en vivo del canal ${channelId}${descripcion ? '. ' + descripcion : ''}`" />
+    <span v-if="congelado" class="badge-pausa">
+      <AppIcon name="pause" :size="12" />
+      <span>Pantalla congelada</span>
+    </span>
+  </div>
 </template>
+
+<style scoped>
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.chart-box {
+  width: 100%;
+}
+
+.badge-pausa {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: pulso 2s infinite ease-in-out;
+}
+
+@keyframes pulso {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.7; }
+}
+</style>

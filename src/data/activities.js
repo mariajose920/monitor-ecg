@@ -4,11 +4,11 @@
  * con 'ejercicio' del documento de arquitectura.
  */
 export const ACTIVIDADES = Object.freeze([
-  { id: 'reposo', nombre: 'Reposo', icono: '🛋' },
-  { id: 'caminata', nombre: 'Caminata', icono: '🚶' },
-  { id: 'movimiento', nombre: 'Movimiento', icono: '↔' },
-  { id: 'ejercicio', nombre: 'Ejercicio', icono: '🏃' },
-  { id: 'post-ejercicio', nombre: 'Post-ejercicio (recuperación)', icono: '↘' },
+  { id: 'reposo', nombre: 'Reposo', icono: '' },
+  { id: 'caminata', nombre: 'Caminata', icono: '' },
+  { id: 'movimiento', nombre: 'Movimiento', icono: '' },
+  { id: 'ejercicio', nombre: 'Ejercicio', icono: '' },
+  { id: 'post-ejercicio', nombre: 'Post-ejercicio (recuperación)', icono: '' },
 ])
 
 export const ACTIVIDAD_IDS = ACTIVIDADES.map((a) => a.id)

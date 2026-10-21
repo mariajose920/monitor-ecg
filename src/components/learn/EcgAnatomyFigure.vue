@@ -44,15 +44,26 @@ const etiquetas = computed(() =>
 
 <style scoped>
 .figura {
-  margin: 12px 0;
+  margin: 24px auto;
+  max-width: 860px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 svg {
   width: 100%;
   height: auto;
-  background: var(--bg);
+  background: #f8fafc;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+figcaption {
+  margin-top: 10px;
+  text-align: center;
 }
 
 .traza {

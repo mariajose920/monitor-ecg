@@ -10,6 +10,7 @@ import PendingMonitoringPanel from '@/components/monitoreos/PendingMonitoringPan
 import QuickUserDialog from '@/components/users/QuickUserDialog.vue'
 import { getPref, setPref } from '@/utils/prefs.js'
 import ChannelGrid from '@/components/monitor/ChannelGrid.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { useChannelsStore } from '@/stores/channels.js'
 import { useUsersStore } from '@/stores/users.js'
 import { useSessionStore } from '@/stores/session.js'
@@ -176,7 +177,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     <PendingMonitoringPanel v-if="session.pendiente" :id="session.pendiente.id" :key="session.pendiente.id" ref="panel" />
 
     <div class="row barra">
-      <button class="btn" :disabled="!channels.puedeAgregar" @click="agregar">+ Agregar canal</button>
+      <button class="btn primary small" :disabled="!channels.puedeAgregar" @click="agregar">
+        <AppIcon name="plus" :size="14" />
+        <span>Agregar canal</span>
+      </button>
       <span class="muted small">{{ channels.channels.length }}/{{ MAX_CHANNELS }} canales · {{ channels.conectados }} conectado(s)</span>
     </div>
 

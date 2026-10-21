@@ -1,15 +1,21 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import { useSessionStore } from '@/stores/session.js'
 import { useExportMonitoreos } from '@/composables/useExportMonitoreos.js'
 import { getSession } from '@/services/storage/sessionRepository.js'
 import { notify } from '@/services/notifications/notifier.js'
 
 /**
- * Menú de acciones del monitoreo dentro del canal: iniciar, marcar, detener y guardar,
+ * Menú de acciones del monitoreo dentro del canal: iniciar, marcar, captura, pausar,
  * guardar, descargar, descartar y finalizar. Los datos siguen seudonimizados (SEC-43).
  */
-defineProps({ canal: { type: Object, required: true } })
+defineProps({
+  canal: { type: Object, required: true },
+  congelado: { type: Boolean, default: false },
+})
+
+const emit = defineEmits(['capturar', 'alternarPausa'])
 
 const session = useSessionStore()
 const exportar = useExportMonitoreos()
@@ -46,62 +52,90 @@ function teclas(e) {
     e.preventDefault()
   }
 }
+
 onMounted(() => {
-  document.addEventListener('click', fueraClick)
+  document.addEventListener('pointerdown', fueraClick)
   document.addEventListener('keydown', teclas)
 })
 onBeforeUnmount(() => {
-  document.removeEventListener('click', fueraClick)
+  document.removeEventListener('pointerdown', fueraClick)
   document.removeEventListener('keydown', teclas)
 })
 
-async function ejecutar(fn, { ok = null } = {}) {
+function marcar() {
   cerrar()
+  session.addEvent(session.actual?.canales?.[0] || 'canal', 'nota', { texto: 'Marca manual' })
+  notify('Evento marcado.', { tipo: 'info' })
+}
+
+function guardar() {
+  cerrar()
+  session.pedirGuardar()
+}
+
+async function descargar() {
+  cerrar()
+  if (!session.pendiente) return
   ocupado.value = true
   try {
-    await fn()
-    if (ok) notify(ok, { tipo: 'ok' })
+    const s = await getSession(session.pendiente.id)
+    if (s) await exportar.exportarCSV([s])
   } catch (e) {
-    notify(e.message || 'No se pudo completar la acción.', { tipo: 'error' })
+    notify(e.message, { tipo: 'error' })
   } finally {
     ocupado.value = false
   }
 }
-
-const marcar = () => ejecutar(async () => session.addEvent(null, 'marca'), { ok: 'Marca registrada en el monitoreo.' })
-const guardar = () => {
-  cerrar()
-  session.pedirGuardar()
-}
-const descargar = () =>
-  ejecutar(async () => {
-    const s = await getSession(session.pendiente.id)
-    if (!s) throw new Error('No se encontró el monitoreo.')
-    await exportar.csv([s])
-  }, { ok: 'Descarga lista (CSV).' })
 </script>
 
 <template>
   <div v-if="hayAcciones" ref="raiz" class="acciones">
     <button
       ref="boton"
-      class="btn"
+      class="btn small ghost btn-acciones"
       type="button"
-      aria-haspopup="menu"
       :aria-expanded="abierto"
-      :disabled="ocupado"
-      data-testid="canal-acciones"
-      @click.stop="alternar"
+      aria-haspopup="menu"
+      data-testid="boton-acciones-monitoreo"
+      @click="alternar"
     >
-      <span aria-hidden="true">⋯</span> Acciones
+      <AppIcon name="sliders" :size="14" />
+      <span>Acciones</span>
     </button>
     <ul v-if="abierto" class="menu" role="menu" aria-label="Acciones del monitoreo">
       <template v-if="session.activa">
-        <li role="none"><button role="menuitem" type="button" @click="marcar">⚑ Marcar evento</button></li>
+        <li role="none">
+          <button role="menuitem" type="button" @click="cerrar(); emit('capturar')">
+            <AppIcon name="camera" :size="14" />
+            <span>Tomar captura (PNG)</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="menuitem" type="button" @click="cerrar(); emit('alternarPausa')">
+            <AppIcon :name="congelado ? 'play' : 'pause'" :size="14" />
+            <span>{{ congelado ? 'Reanudar visualización' : 'Pausar / congelar' }}</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="menuitem" type="button" @click="marcar">
+            <AppIcon name="flag" :size="14" />
+            <span>Marcar evento</span>
+          </button>
+        </li>
       </template>
       <template v-if="hayPendiente">
-        <li role="none"><button role="menuitem" type="button" data-testid="accion-guardar" @click="guardar">💾 Guardar monitoreo</button></li>
-        <li role="none"><button role="menuitem" type="button" data-testid="accion-descargar" @click="descargar">⬇ Descargar CSV</button></li>
+        <li role="none">
+          <button role="menuitem" type="button" data-testid="accion-guardar" @click="guardar">
+            <AppIcon name="save" :size="14" />
+            <span>Guardar monitoreo</span>
+          </button>
+        </li>
+        <li role="none">
+          <button role="menuitem" type="button" data-testid="accion-descargar" @click="descargar">
+            <AppIcon name="download" :size="14" />
+            <span>Descargar CSV</span>
+          </button>
+        </li>
       </template>
     </ul>
   </div>
@@ -113,43 +147,46 @@ const descargar = () =>
   display: inline-block;
 }
 
+.btn-acciones {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .menu {
   position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 240px;
-  margin: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  min-width: 210px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 6px;
+  margin: 0;
   list-style: none;
-  background: var(--surface-2, var(--card-bg, #1b2335));
-  border: 1px solid var(--border, #33405a);
-  border-radius: 12px;
-  box-shadow: 0 10px 28px rgb(0 0 0 / 0.45);
+  box-shadow: var(--shadow);
 }
 
 .menu button {
-  display: block;
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
   text-align: left;
-  font: inherit;
-  color: inherit;
-  background: transparent;
+  background: none;
   border: 0;
-  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .menu button:hover,
 .menu button:focus-visible {
-  background: rgb(255 255 255 / 0.08);
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.menu .peligro {
-  color: var(--danger);
+  background: var(--bg-elev-2);
 }
 </style>

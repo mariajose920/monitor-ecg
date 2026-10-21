@@ -13,8 +13,14 @@ const emit = defineEmits(['update:metodo', 'update:manualMs', 'auto'])
 </script>
 
 <template>
-  <fieldset class="card sync">
-    <legend>Sincronización</legend>
+  <div class="card sync-panel">
+    <div class="panel-header">
+      <div class="panel-title-wrap">
+        <h3 class="panel-title">Sincronización</h3>
+      </div>
+      <span class="panel-tag">Ajuste Temporal</span>
+    </div>
+
     <div class="row metodos" role="radiogroup" aria-label="Método de sincronización">
       <label v-for="mt in SYNC_METODOS" :key="mt" class="check">
         <input type="radio" name="metodo-sync" :value="mt" :checked="metodo === mt" :disabled="bloqueado && metodo !== mt" @change="emit('update:metodo', mt)">
@@ -40,20 +46,49 @@ const emit = defineEmits(['update:metodo', 'update:manualMs', 'auto'])
         <button class="btn small" :disabled="bloqueado && metodo === 'manual'" @click="emit('auto')">Auto-alinear y ajustar a mano</button>
       </div>
     </div>
-  </fieldset>
+  </div>
 </template>
 
 <style scoped>
-.sync {
+.sync-panel {
   border: 1px solid var(--border);
+  padding: 24px 28px;
 }
 
-legend {
-  font-weight: 700;
-  padding: 0 6px;
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.panel-tag {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev-2);
+  color: var(--text-muted);
 }
 
 .metodos {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 </style>
