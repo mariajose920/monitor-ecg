@@ -48,7 +48,7 @@ async function copiar() {
           <AppIcon name="user" :size="14" />
           <strong>{{ captura.usuario || 'Participante' }}</strong>
         </span>
-        <span class="chip ok">
+        <span class="chip cardio">
           <AppIcon name="heart" :size="14" filled />
           <strong>{{ captura.bpm != null ? `${captura.bpm} BPM` : '-- BPM' }}</strong>
         </span>
@@ -94,7 +94,7 @@ async function copiar() {
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
-  background: #000;
+  background: #ffffff;
   box-shadow: var(--shadow);
 }
 

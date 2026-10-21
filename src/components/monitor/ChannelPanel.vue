@@ -46,6 +46,7 @@ const finalizando = ref(false)
 const congelado = ref(false)
 const capturaActual = ref(null)
 const tomandoCaptura = ref(false)
+const chartRef = ref(null)
 
 function alternarPausa() {
   congelado.value = !congelado.value
@@ -61,10 +62,12 @@ async function tomarCaptura() {
   tomandoCaptura.value = true
   try {
     const u = props.canal.usuarioId ? users.byId(props.canal.usuarioId)?.etiqueta : 'Participante'
+    const datosVisibles = chartRef.value?.obtenerDatosVisibles?.()
     const res = await generarCaptura({
       canal: props.canal,
       usuarioEtiqueta: u,
       ventanaSeg: ventana.value,
+      datosVisibles,
     })
     capturaActual.value = res
     if (session.activa) {
@@ -286,6 +289,7 @@ async function cargarEjemplo() {
       <LeadsOffAlert v-if="canal.leadsOff" />
 
       <EcgChart
+        ref="chartRef"
         :channel-id="canal.id"
         :window-sec="ventana"
         :descripcion="descripcionGrafico"

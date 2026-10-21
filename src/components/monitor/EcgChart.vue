@@ -67,6 +67,42 @@ function draw(forzar = false) {
   plot.setData([xs.subarray(0, n), ys])
 }
 
+/**
+ * Devuelve las muestras exactas actualmente renderizadas en pantalla en uPlot.
+ * Si la pantalla está congelada/pausada, devuelve exactamente el cuadro congelado.
+ */
+function obtenerDatosVisibles() {
+  if (!plot) return null
+  const data = plot.data
+  if (!data || !data[0] || data[0].length === 0) return null
+  const xArr = data[0]
+  const yArr = data[1]
+  const n = xArr.length
+  const xMax = xArr[n - 1]
+  const xMin = Math.max(0, xMax - props.windowSec)
+  const samples = []
+  for (let i = 0; i < n; i++) {
+    const x = xArr[i]
+    if (x >= xMin && x <= xMax) {
+      samples.push({
+        tRel: x - xMin,
+        v: yArr[i],
+        lo: yArr[i] == null,
+      })
+    }
+  }
+  return {
+    samples,
+    ventanaSeg: props.windowSec,
+    tMax: xMax,
+    yRange: yDefault,
+  }
+}
+
+defineExpose({
+  obtenerDatosVisibles,
+})
+
 watch(
   () => props.congelado,
   (nuevo) => {

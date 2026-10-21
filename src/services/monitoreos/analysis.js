@@ -190,59 +190,55 @@ export function explicarMonitoreo(an, { actividad = null, rango = null } = {}) {
   const act = actividad ? nombreActividad(actividad).toLowerCase() : null
   out.push({
     id: 'picos',
-    titulo: 'Los picos marcados',
+    titulo: 'Detección de complejos sistólicos y picos',
     texto: an.picos.length
-      ? `Se marcaron ${an.picos.length} picos en un tramo de ${an.segmento.duracionS.toFixed(0)} s. Cada pico es un latido: en un ECG corresponde a la onda R (la despolarización de los ventrículos) y en un sensor PPG (luz sobre el dedo) al máximo de la onda de pulso, cuando llega más sangre al dedo. El programa los busca donde la señal sube más rápido.`
-      : 'No se pudieron marcar picos fiables. Sin latidos claros no es posible calcular el ritmo.',
+      ? `Se identificaron ${an.picos.length} complejos sistólicos en un tramo continuo de ${an.segmento.duracionS.toFixed(0)} s. En registros de ECG corresponden a la deflexión de la onda R (despolarización ventricular sincrónica), y en fotopletismografía (PPG) al pico sistólico de perfusión tisular arterial. El algoritmo detecta los puntos de máxima derivada positiva.`
+      : 'No se identificaron complejos con suficiente relación señal-ruido. Sin una detección consistente de ondas sistólicas no es posible determinar el ritmo cardíaco.',
   })
   out.push({
     id: 'rr',
-    titulo: 'Intervalos RR',
+    titulo: 'Dinámica de intervalos interlatido (RR)',
     texto: an.rr.length
-      ? `El intervalo RR es el tiempo entre dos picos consecutivos. Aquí el promedio es ${f0(an.rrStats.medioMs)} ms. Si el corazón late más rápido, los intervalos se acortan; si late más lento, se alargan.`
-      : 'No hay intervalos válidos que mostrar.',
+      ? `El intervalo RR cuantifica el tiempo transcurrido entre dos despolarizaciones cardíacas consecutivas. El promedio registrado en este segmento es de ${f0(an.rrStats.medioMs)} ms. La duración de los intervalos varía de forma inversamente proporcional a la frecuencia cardíaca.`
+      : 'No se registraron intervalos interlatido fisiológicamente válidos en este segmento de análisis.',
   })
   out.push({
     id: 'bpm',
-    titulo: 'Latidos por minuto (BPM)',
+    titulo: 'Frecuencia cardíaca estimada (BPM)',
     texto: an.bpm.medio === null
-      ? 'No se pudo calcular un BPM confiable.'
-      : `BPM = 60 000 / RR. El valor típico (mediana) fue ${f0(an.bpm.medio)} BPM, con un mínimo de ${f0(an.bpm.min)} y un máximo de ${f0(an.bpm.max)}. Se usa la mediana porque un pico falso aislado no la desvía.`,
+      ? 'No fue posible determinar una frecuencia cardíaca confiable debido a la calidad del registro o ausencia de picos definidos.'
+      : `BPM = 60 000 / RR. El valor representativo (mediana estadística) fue de ${f0(an.bpm.medio)} BPM, con un rango observado de ${f0(an.bpm.min)} a ${f0(an.bpm.max)} BPM. Se adopta la mediana para mitigar distorsiones por artefactos o falsos positivos aislados.`,
   })
   if (an.bpm.medio !== null && rango && act) {
     const dentro = an.bpm.medio >= rango.min && an.bpm.medio <= rango.max
     out.push({
       id: 'actividad',
-      titulo: 'Cómo afecta la actividad',
-      texto: `Durante ${act} el rango orientativo configurado es ${rango.min}–${rango.max} BPM y este monitoreo quedó ${dentro ? 'dentro' : 'fuera'} de él. El ejercicio y el movimiento aceleran el corazón porque los músculos necesitan más oxígeno; en reposo y al recuperarse baja. Otros factores como el café, el estrés, el sueño o la temperatura también influyen. Es un rango educativo, no un criterio médico.`,
+      titulo: 'Modulación autonómica según la actividad',
+      texto: `Para la condición de ${act}, el intervalo de referencia configurado es de ${rango.min}–${rango.max} BPM; el monitoreo se situó ${dentro ? 'dentro' : 'fuera'} de este rango. El ejercicio y el movimiento aceleran el corazón por mayor demanda metabólica; en reposo y durante la recuperación el tono parasimpático favorece su descenso.`,
     })
   } else if (act) {
     out.push({
       id: 'actividad',
-      titulo: 'Cómo afecta la actividad',
-      texto: `La actividad registrada fue ${act}. El ejercicio y el movimiento aceleran el corazón; en reposo y durante la recuperación baja. Compara monitoreos de distintas actividades para verlo.`,
+      titulo: 'Modulación autonómica según la actividad',
+      texto: `La actividad registrada corresponde a ${act}. La demanda hemodinámica modula la frecuencia cardíaca según el estado funcional del participante.`,
     })
   }
   if (an.rrStats.sdnnMs !== null) {
     out.push({
       id: 'variabilidad',
-      titulo: 'Variabilidad entre latidos',
-      texto: `Los latidos nunca son perfectamente regulares. La desviación de los intervalos (SDNN) fue ${f0(an.rrStats.sdnnMs)} ms y la variación entre latidos vecinos (RMSSD) ${f0(an.rrStats.rmssdMs)} ms. En un tramo corto y con ruido estos números cambian mucho; sirven para aprender, no para evaluar la salud.`,
+      titulo: 'Variabilidad de la frecuencia cardíaca (HRV)',
+      texto: `Los intervalos interlatido exhiben variaciones fisiológicas continuas mediadas por el sistema nervioso autónomo. La desviación estándar de intervalos (SDNN) fue de ${f0(an.rrStats.sdnnMs)} ms y la raíz cuadrática media de diferencias sucesivas (RMSSD) fue de ${f0(an.rrStats.rmssdMs)} ms.`,
     })
   }
   const c = an.calidad
   out.push({
     id: 'calidad',
-    titulo: `Calidad de la señal PPG: ${c.nivel}`,
-    texto: `${c.motivos.join(' ')} Para mejorar la señal: apoya el dedo sin apretar demasiado, mantenlo quieto, evita luz directa y manos frías, y confirma que el perfil del dispositivo sea ESP32 (12 bits).`,
+    titulo: `Evaluación técnica de adquisición (${c.nivel.toUpperCase()})`,
+    texto: `${c.motivos.join(' ')} Recomendaciones técnicas: asegurar contacto firme sin sobrepresión, mantener reposo postural, evitar iluminación ambiental directa y verificar la calibración analógica del ESP32 (12 bits).`,
   })
   return out
 }
 
-/**
- * Serie de BPM en el tiempo (un valor por latido, promediado en cubetas hasta maxPuntos).
- * @returns {{tS:number,bpm:number}[]}
- */
 export function serieBpm(an, maxPuntos = 120) {
   const pts = []
   for (let k = 1; k < an.picos.length; k++) {

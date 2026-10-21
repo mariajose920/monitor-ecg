@@ -348,6 +348,33 @@ table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 th { color: var(--text-muted); font-weight: 700; background: var(--bg-elev-2); font-size: 0.85rem; }
 
+/* Scrollbars modernas y elegantes para toda la aplicación */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.7);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Pestañas */
 .tabs {
   display: flex;
@@ -355,7 +382,31 @@ th { color: var(--text-muted); font-weight: 700; background: var(--bg-elev-2); f
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
   margin-bottom: var(--gap);
-  padding-bottom: 4px;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(225, 29, 72, 0.35) rgba(241, 245, 249, 0.85);
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tabs::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.85);
+  border-radius: 999px;
+  margin: 0 4px;
+}
+
+.tabs::-webkit-scrollbar-thumb {
+  background: rgba(225, 29, 72, 0.35);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.tabs::-webkit-scrollbar-thumb:hover,
+.tabs::-webkit-scrollbar-thumb:active {
+  background: var(--accent);
 }
 
 .tabs a, .tabs button {
@@ -373,11 +424,16 @@ th { color: var(--text-muted); font-weight: 700; background: var(--bg-elev-2); f
   transition: all 0.15s ease;
 }
 
-.tabs .active, .tabs .router-link-active {
+.tabs a:hover, .tabs button:hover {
   color: var(--text);
+  background: rgba(225, 29, 72, 0.04);
+}
+
+.tabs .active, .tabs .router-link-active {
+  color: var(--accent);
   background: var(--bg-elev);
-  border-color: var(--border);
-  box-shadow: var(--shadow-sm);
+  border-color: rgba(225, 29, 72, 0.25);
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
 }
 
 /* Herramientas */
