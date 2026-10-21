@@ -686,3 +686,93 @@ Se tomó cada tabla y función de `schema.sql` y se razonó el ataque contra el 
 | A.16 Incidentes | Funcionalidad incompleta (H-07) |
 | A.17 Continuidad | Sin prueba de restauración (H-21) |
 | A.18 Cumplimiento | Aviso y consentimiento no corresponden al tratamiento real; Ley 21.719 inminente (H-01, H-15, H-16) |
+
+
+---
+
+## Estado de implementación (actualizado 2026-10-20, tras las TANDAS 1 y 2)
+
+> Esta sección se añade al final; el cuerpo anterior (Partes A a G) **no se reescribió** y describe el estado **al momento de la auditoría**. Fuentes de lo hecho: `docs/CAMBIOS_TANDA1.md` y `docs/CAMBIOS_TANDA2.md`. Cada fila se contrastó con el código (`supabase/schema.sql`, `monitor-ecg-vue/src/`, `vercel.json`, `public/sw.js`, `.github/`).
+>
+> **Leyenda.** **Resuelto**: el cambio existe en el código/SQL del repositorio y tiene pruebas. **Parcial**: parte hecha, parte diferida o pendiente. **Diferido**: decidido no hacerlo todavía (motivo indicado). **Manual**: depende de una acción de la responsable en un panel externo o en una reunión (ver `docs/PENDIENTES_MANUALES.md`).
+>
+> **Límites de lo verificado (importante).** Las pruebas son 343 unitarias (Vitest, 28 archivos) y 75 E2E (Playwright, 16 archivos) con Supabase **simulado**; `npm audit --omit=dev` da 0 vulnerabilidades. El SQL se probó en PGlite (PostgreSQL embebido con stubs de `auth.uid()`/`auth.jwt()`), no en Supabase real; `supabase/pruebas_rls.sql` (101 casos) da 0 fallos **en PGlite**. Las migraciones ya se aplicaron al proyecto real, pero **no** se ejecutó `pruebas_rls.sql` con dos cuentas reales ni se comprobó el claim `amr` con un JWT real. Por eso "Resuelto" significa "implementado y probado en entorno simulado", no "demostrado en producción".
+
+### Resumen
+
+| Estado | Hallazgos (H) | Cambios (C) |
+|---|---|---|
+| Resuelto | 8 | 11 |
+| Parcial | 15 | 10 |
+| Diferido | 3 | 3 |
+| Manual | 4 | 5 |
+| **Total** | **30** | **29** |
+
+### Hallazgos H-01 a H-30
+
+| ID | Hallazgo (resumen) | Estado | Evidencia y por qué |
+|---|---|---|---|
+| H-01 | Nube sin opt-in; consentimiento falso | Resuelto | Nube apagada por defecto por cuenta (`src/services/cloud/nubeOptIn.js`), borradores no se suben (`subidaMonitoreo.js`), consentimiento v2.0 (`src/services/privacidad/consentimiento.js:8`), textos en `PrivacyView.vue`/`ConsentDialog.vue`; `tests/privacy.spec.js`, `tests/nubeOptIn.spec.js`, `e2e/privacidad.nube.spec.js`. Falta la revisión legal/docente de los textos (Manual). |
+| H-02 | "Público" = cualquiera; extracción en bloque | Parcial | Política pública de `bloques_muestras` eliminada; solo `senal_publica` (máx. 60 bloques), `listar_monitoreos_publicos` y `monitoreo_publico` sin cuentas anónimas y con fecha truncada (`supabase/schema.sql:1268-1368`); reporte y retiro (`:1387-1503`); consentimiento de publicación 2.0 exigido por el servidor (`tg_sesion_paciente`, `:1807`). Pendiente: desactivar inicios anónimos (Manual), CAPTCHA (H-10), validación completa de `datos` (H-19), prueba real con dos cuentas. |
+| H-03 | Privilegio admin no caduca en servidor | Parcial | `es_admin()` = rol + `aal2` + `totp_reciente(900)` y `es_admin_reciente(300)` (`schema.sql:623-672`); renovación de TOTP en el cliente (`adminRenovacion.js`, `TotpRenovarDialog.vue`); `signOut({scope:'others'})` al cambiar contraseña. **No verificado** con un JWT real que `amr[].timestamp` se renueve tras `challengeAndVerify` (caso 0 de `pruebas_rls.sql`); las escrituras de `parametros` siguen con `es_admin()` (ventana de 15 min). |
+| H-04 | Admin lee y borra todo | Resuelto | Sin `OR es_admin()` en SELECT de `sesiones`/`bloques_muestras` ni en DELETE; `admin_leer_sesion(p_id, p_motivo)` con motivo 10-300 y auditoría previa (`schema.sql:1522`), `mis_accesos_admin()` (`:1556`) y aviso al titular (`AccesosAdminAviso.vue`); `SoportePanel.vue`. Decisión: no se crearon `admin_resumen_cuentas()` ni `admin_borrar_sesion()`. |
+| H-05 | Sesiones sin expiración; token en claro | Parcial | Token en `sessionStorage` en equipo compartido, cierre por inactividad de 15 min con aviso (`almacenSesion.js`, `inactividad.js`, `App.vue`), borrado de tokens al cerrar sesión. Pendiente (Manual): *time-box* e *inactivity timeout* de Supabase (dependen del plan) y JWT expiry ≤ 3600 s. En equipo personal el token sigue en `localStorage` (decisión). |
+| H-06 | Auditoría de nube falsificable y no consultada | Resuelto | `tipos_evento` como única lista blanca, `registrar_evento` con actor en servidor, INSERT directo revocado, hash encadenado, `verificar_cadena_auditoria()`, `admin_leer_auditoria()`, purga a 2 años (`schema.sql:758-967`, `:1702`); cola persistente (`auditOutbox.js`); pestaña "Nube" en `/admin/auditoria`. La cadena es verificable pero no está anclada fuera de la base (ver H-20). |
+| H-07 | Incidentes sin ciclo completo | Resuelto | Políticas, trigger de privacidad y `admin_actualizar_incidente` (`schema.sql:1590-1660`); lectura fusionada local/nube y "Mis notificaciones" (`MisIncidentes.vue`); `tests/incidentesNube.spec.js`. Sin aviso automático al responsable ni plantilla de notificación a la Agencia (ver C-28). |
+| H-08 | Cláusulas 9 y 10 sin evidencia; aprobaciones en blanco | Manual | La app permite registrar que se hizo una auditoría o revisión (`evidencias.js`, evento `ISMS_EVIDENCE_RECORDED`), pero **no hay actas ejecutadas ni firmadas**. Las plantillas están en `docs/sgsi/auditoria_interna_y_revision.md`, marcadas "pendiente de ejecución". |
+| H-09 | Cuotas y retención manipulables | Resuelto | `creado_en` fijado por trigger (`schema.sql:984`), CHECK de coherencia de `inicio`, topes por bloque/sesión/cuenta en `cuota()` (`:576`), `uso_cuenta` (`:1028`), error `ECG01`. No se probó concurrencia real (el motor de prueba tiene una sola conexión). |
+| H-10 | Sin anti-automatización | Manual | El cliente envía `captchaToken` solo en el **registro** (`authService.js:56-71`) y solo si hay `VITE_CAPTCHA_*`; el inicio de sesión y la recuperación no lo envían. CAPTCHA, SMTP propio y límites de tasa de Auth son configuración del panel (no verificada). |
+| H-11 | Sin reautenticación; contraseñas | Parcial | `reautenticar` con contraseña actual y ventana de 5 min en cliente (`reauth.js`, `ReauthDialog.vue`); política ≥ 10, letras y números, sin correo ni contraseñas comunes (`validation.js`). **El servidor no impone la reautenticación** (diferido) y la protección de contraseñas filtradas es manual. |
+| H-12 | Alcance del cifrado local | Parcial | Texto corregido en UI, `PrivacyView.vue` y `src/data/privacidad.js`. **Diferido:** bóveda con frase y clave AES por espacio (cambiaría la clave de los datos existentes sin migración segura): `createKeyProvider` sigue con `aes-gcm-v1` único (`secureStorage.js:20`). |
+| H-13 | Espacio sin cuenta / vincular | Resuelto | `linkLocal.js`: solo el espacio sin cuenta, selección por paciente, confirmación, quitar copia con segunda confirmación, "No ofrecer en este equipo"; `LinkLocalBanner.vue`. |
+| H-14 | Retención y supresión incompletas | Parcial | Local 30 d configurable, nube 365 d (`purga-ecg`), auditoría 2 años (`purga-auditoria`), purga local al abrir el espacio. Diferido: `exportar_mis_datos()`, tareas `pg_cron` de incidentes y cuentas inactivas (24 meses sigue siendo procedimiento manual), borrar la auditoría del titular (choca con la cadena de hash). |
+| H-15 | Más datos de los necesarios | Parcial | Alias solo en el dispositivo con heurística; nombre, notas, parámetros, `fuente.info` y eventos no se suben (`datosNube.js`, `_limpiar_datos_sesion` en `schema.sql:1738`). **Diferido:** peso por rangos (sigue el peso exacto con consentimiento). Mayoría de edad autodeclarada. |
+| H-16 | Consentimiento por terceros | Parcial | El consentimiento registra `otorgadoPor`, `canal`, `declaraMayorEdad`, `alcance`; la declaración sobre el paciente es obligatoria para subir o publicar. Es autodeclarada, sin verificación; falta revisión legal (C-28). |
+| H-17 | Integridad y completitud de la copia | Diferido | Conciliación de bloques (`contar_bloques`), indicador de pendientes y cola de bloques son C-19 (no implementados). Mitigación parcial: la subida ocurre solo al "Guardar", con reintentos (`subirBloquesConReintento`); el `upsert` de bloques sigue sin `ignoreDuplicates` (`cloudSync.js:428`). |
+| H-18 | Migraciones inconsistentes | Parcial | Orden formal en cabeceras; migraciones 1-4 neutralizadas, `migracion_eventos_camara.sql` no-op, `migracion_admin_mfa.sql` con `drop function`; `schema.sql` integra todo. Pendiente: `supabase/migrations/` del CLI y `verificar_estado.sql` (no creados); el estado real de la base no se auditó con consultas de solo lectura. |
+| H-19 | `sesiones.datos` sin validar | Parcial | El servidor limpia claves (`notas`, `nombre`, `parametrosAplicados`, `eventos`, `fuente.info`) y exige consentimiento 2.0 y declaración; **no** existe `validar_datos_sesion()` con lista blanca de claves y tipos (C-20). |
+| H-20 | Cobertura de eventos incompleta; cadena local sin clave | Parcial | Eventos nuevos (`ACCOUNT_PASSWORD_CHANGED`, `ADMIN_DATA_ACCESS`, `CONTENT_*`, `ISMS_EVIDENCE_RECORDED`). No se añadieron `ACCOUNT_LOGIN_FAILED`, `CLOUD_SYNC_FAILED`, `QUOTA_EXCEEDED`, `SESSION_EXPIRED`, `CONSENT_UPDATED`; no se ancla el hash local en la nube. Los inicios fallidos se revisan en los registros de Auth (Manual, trimestral). |
+| H-21 | Continuidad, proveedores y contratos | Manual | Nada verificable en código: plan de respaldo, prueba de restauración, DPA, región y segundo propietario son acciones de la responsable. Existe una copia temporal en el esquema privado `respaldo_20261020` que debe eliminarse tras validar. |
+| H-22 | Documentación contradice el código | Parcial | Revisión documental completa en esta pasada (SoA, riesgos, SGSI, trazabilidad, informe). Diferido: `scripts/verificarDocs.mjs` en CI (C-26). La verificación cruzada se hizo con un script puntual fuera del repositorio. |
+| H-23 | Etiquetas "Paciente N" duplicadas | Resuelto | Regex corregidos, `services/users/etiquetas.js`, índice único `pacientes_etiqueta_unica` (`schema.sql:1670`, se omite con aviso si hay duplicados), reintento ante `23505`; `tests/etiquetas.spec.js`. |
+| H-24 | Privilegios de BD por defecto | Parcial | `REVOKE` explícitos por función y tabla (incl. `cuota()`, `schema.sql:599`) y `(select public.es_admin())` en políticas. Pendiente: `revoke all on all tables ... from anon` global, `alter default privileges` y Advisors archivados (C-22). |
+| H-25 | Service worker, CSP y cabeceras | Parcial | `public/sw.js`: solo cachea respuestas `ok` y `basic`, no `no-store/private` ni URLs con `code/token`. Pendiente en `vercel.json`: sigue `wss://` en `connect-src`, sin CORS restringido; no existe `public/.well-known/security.txt`. |
+| H-26 | Cadena de suministro y CI | Manual | `ci.yml` (lint, pruebas, build, `npm audit`, E2E, gitleaks) y Dependabot existen. Pendiente: acciones fijadas por SHA, CodeQL, SBOM, protección de la rama `main` y MFA en GitHub/Vercel (paneles). |
+| H-27 | Modo PIN local residual | Diferido | `adminAuth` y `/admin/setup` siguen compilados (`src/router/index.js:24`, `src/stores/auth.js:3`); con nube el PIN no interviene. C-27 no se hizo. |
+| H-28 | Higiene del repositorio | Parcial | El archivo temporal `e2e/zz_tmp.nube.spec.js` ya no existe. Pendiente: `SECURITY.md` y sacar el proyecto de OneDrive o excluir `.env.local`/`node_modules` de la sincronización. |
+| H-29 | Relojes del cliente | Resuelto | Cuotas, purga y CHECK de `inicio` usan `creado_en`/`now()` del servidor (`schema.sql:984-1021`); `hora_servidor()` para el desfase. |
+| H-30 | Dispositivos y seguridad física | Diferido | C-29 (aislamiento galvánico como requisito, CRC por línea) no se implementó; sigue siendo requisito de procedimiento (`docs/sgsi/uso_aceptable_y_clasificacion.md`). |
+
+### Cambios C-01 a C-29
+
+| ID | Cambio | Estado | Evidencia y por qué |
+|---|---|---|---|
+| C-01 | Línea base BD, migraciones y prueba real de RLS | Parcial | Hecho: `schema.sql` integrador, orden documentado, migraciones neutralizadas, `supabase/pruebas_rls.sql` (101 casos, 0 fallos en PGlite). No hecho: `verificar_estado.sql`, `supabase/migrations/`, prueba con dos cuentas reales, pgTAP en CI. |
+| C-02 | Consentimiento y aviso veraces | Resuelto | `CONSENT_VERSION = '2.0'`, `ConsentDialog.vue`, `PrivacyView.vue`, `src/data/privacidad.js`, responsable por `VITE_RESPONSABLE_NOMBRE/CORREO`; `tests/privacy.spec.js` vigila frases falsas. Revisión legal pendiente. |
+| C-03 | Nube opt-in; borradores no salen | Resuelto | `nubeOptIn.js`, `cloudSync.js`, `subidaMonitoreo.js`, `/cuenta`; `tests/nubeOptIn.spec.js` y `e2e/privacidad.nube.spec.js`. |
+| C-04 | Rediseñar lo público | Resuelto | Puntos 1-6 hechos (RPC, fecha truncada, consentimiento de publicación 2.0 por monitoreo, retiro al retirar el consentimiento, reportes y retiro con `retiros_contenido`). El punto 7 (correo institucional) no se aplicó. Manual: desactivar inicios anónimos. |
+| C-05 | Privilegio admin caduca en servidor | Parcial | `totp_reciente`, `es_admin_reciente`, renovación TOTP, `signOut('others')`. Pendiente: verificar `amr` real (caso 0), *time-box* de Supabase, aplicar `es_admin_reciente` a `parametros`. |
+| C-06 | Mínimo privilegio del admin | Resuelto | `admin_leer_sesion`, `mis_accesos_admin`, `SoportePanel.vue`. Sin `admin_resumen_cuentas`/`admin_borrar_sesion` por decisión. |
+| C-07 | Sesiones: expiración y equipo compartido | Resuelto | `almacenSesion.js`, `inactividad.js`, `useInactividad.js`, borrado de tokens al cerrar sesión. Se cierra la sesión por inactividad (no hay bloqueo con reingreso). Manual: *time-box* de Supabase. |
+| C-08 | Auditoría de nube confiable | Resuelto | Ver H-06. Excepciones diferidas: eventos `ACCOUNT_LOGIN_FAILED`, `CLOUD_SYNC_FAILED`, `QUOTA_EXCEEDED`, `SESSION_EXPIRED`, `CONSENT_UPDATED` y anclaje del hash local. |
+| C-09 | Incidentes de extremo a extremo | Resuelto | Ver H-07. Sin webhook/correo; plazo y plantilla de notificación a la Agencia quedan en C-28. |
+| C-10 | Ejecutar y firmar el ciclo del SGSI | Manual | Solo existe el registro de evidencias en la app. Actas de auditoría interna y revisión por la dirección: plantillas listas, **pendientes de ejecución**; objetivos actualizados en `docs/sgsi/objetivos_seguridad.md`. |
+| C-11 | Cuotas y retención por servidor | Resuelto | Ver H-09 y H-29. |
+| C-12 | Anti-automatización y configuración de Auth | Manual | Código parcial (CAPTCHA solo en registro). Todo lo demás es del panel de Supabase/Vercel. |
+| C-13 | Reautenticación y contraseñas | Parcial | Cliente hecho; el servidor no impone `amr` con `password` reciente (diferido); TOTP opcional para todas las cuentas no implementado; contraseñas filtradas: manual. |
+| C-14 | Cifrado local: alcance real | Parcial | Alcance corregido en textos; clave por espacio y bóveda con frase diferidas (Q13). |
+| C-15 | Vincular solo con selección explícita | Resuelto | `linkLocal.js`, `LinkLocalBanner.vue`, `tests/privacidadTanda2.spec.js`. |
+| C-16 | Retención y supresión coherentes | Parcial | Plazos alineados y documentados; faltan `exportar_mis_datos()`, `purgar_incidentes`, `purgar_cuentas_inactivas` y un `docs/sgsi/retencion.md` único (los plazos están en `control_acceso.md`). |
+| C-17 | Minimización | Parcial | Alias local; sin nombre, notas, `fuente.info` ni parámetros en la nube. Peso por rangos: diferido. |
+| C-18 | Mayoría de edad y declaración | Resuelto | Casilla en `/registro`, declaración por paciente (`DECLARACION_VERSION`, `src/services/accounts/validation.js:6`); sin declaración no se sube ni publica. Es autodeclarada. |
+| C-19 | Integridad y completitud de la réplica | Diferido | Conciliación y cola de bloques fuera del alcance de las tandas. |
+| C-20 | Validación de `sesiones.datos` en servidor | Parcial | Limpieza de claves y consentimiento exigido; sin `validar_datos_sesion()`. |
+| C-21 | Regex y etiquetas únicas | Resuelto | Ver H-23. |
+| C-22 | Privilegios y pruebas de políticas en CI | Parcial | `pruebas_rls.sql` existe pero es manual (no corre en CI); `REVOKE` globales y Advisors pendientes. |
+| C-23 | Service worker y cabeceras | Parcial | `sw.js` hecho; `vercel.json` y `security.txt` pendientes. |
+| C-24 | CI, repositorio y entorno | Manual | Ver H-26 y H-28. |
+| C-25 | Continuidad, respaldos y proveedores | Manual | Decisión de plan (Q4), RPO/RTO, restauración, keep-alive, DPA y región: acciones de la responsable. |
+| C-26 | Documentación coherente | Parcial | Documentación actualizada en esta pasada y verificada con un script puntual; el job `verificarDocs.mjs` en CI no existe. |
+| C-27 | Retirar el modo PIN local | Diferido | No se tocó el router ni `adminAuth`; riesgo bajo con nube (el PIN no interviene). |
+| C-28 | Registro de tratamientos, EIPD y brechas (Ley 21.719) | Manual | Requiere asesoría legal; la ley entra en vigor en diciembre de 2026. |
+| C-29 | Dispositivos: aislamiento e integridad | Diferido | Sin cambios en firmware ni parser. |

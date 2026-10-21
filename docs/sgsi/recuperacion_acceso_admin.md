@@ -1,11 +1,12 @@
 # Procedimiento formal de recuperación, concesión y retiro del acceso de administrador
 
-> **Código:** SGSI-ADM-01 · **Versión:** 1.0 · **Fecha:** 2026-10-20 · **Clasificación:** Interno
-> **Referencias:** ISO/IEC 27001:2013 A.9.2.3 (gestión de privilegios), A.9.2.4 (información secreta de autenticación), A.9.2.5 (revisión de derechos), A.9.2.6 (retirada de derechos), A.9.4.2 (inicio de sesión seguro), A.16.1.2/A.16.1.7 (eventos y evidencias), A.12.4.1 (registro) · Implementación: `supabase/migracion_admin_mfa.sql`, `src/stores/auth.js`, `src/views/admin/AdminMfaView.vue`
+> **Código:** SGSI-ADM-01 · **Versión:** 2.0 · **Fecha:** 2026-10-20 · **Clasificación:** Interno
+> **Referencias:** ISO/IEC 27001:2013 A.9.2.3 (gestión de privilegios), A.9.2.4 (información secreta de autenticación), A.9.2.5 (revisión de derechos), A.9.2.6 (retirada de derechos), A.9.4.2 (inicio de sesión seguro), A.16.1.2/A.16.1.7 (eventos y evidencias), A.12.4.1 (registro) · Implementación: `supabase/schema.sql` (`es_admin()`, `es_admin_reciente()`, `admin_conceder_rol`, `admin_retirar_rol`), `supabase/migracion_admin_roles.sql`, `src/stores/auth.js`, `src/stores/admin.js`, `src/components/admin/AdminRolesPanel.vue`, `src/views/admin/AdminMfaView.vue`
+> **Cambio de la v2.0:** se corrige la inconsistencia señalada por `AUDITORIA_SISTEMA.md` (H-22): el rol **se concede y se retira desde la app** (un administrador con TOTP reciente, `admin_conceder_rol`/`admin_retirar_rol`) y el SQL del dueño del proyecto es **solo contingencia**; la sección 9 ya no dice que las concesiones se hacen solo en el panel de Supabase.
 
 ## 1. Principio
 
-El administrador es **una cuenta normal** (correo + contraseña) con un **rol asignado** en `public.administradores` y un **segundo factor TOTP** obligatorio. Los privilegios efectivos (`es_admin()`, usada por RLS) exigen rol **y** sesión `aal2`. Por eso **restablecer la contraseña por correo no concede privilegios**: sin el factor TOTP la sesión queda en `aal1` y el servidor rechaza toda operación privilegiada. No existe autoservicio para recuperar el factor TOTP: se hace solo con este procedimiento.
+El administrador es **una cuenta normal** (correo + contraseña) con un **rol asignado** en `public.administradores` y un **segundo factor TOTP** obligatorio. Los privilegios efectivos (`es_admin()`, usada por RLS) exigen rol, sesión `aal2` **y** un código TOTP verificado en los últimos 15 minutos (claim `amr` del token); las acciones sensibles exigen uno de los últimos 5 minutos (`es_admin_reciente(300)`). Por eso **restablecer la contraseña por correo no concede privilegios**: sin el factor TOTP la sesión queda en `aal1` y el servidor rechaza toda operación privilegiada. No existe autoservicio para recuperar el factor TOTP: se hace solo con este procedimiento.
 
 ## 2. Quién puede qué
 
@@ -70,9 +71,15 @@ Aplica cuando se perdió la contraseña **y/o** el dispositivo con el TOTP.
 
 ## 7. Caducidad de sesiones privilegiadas
 
-- Modo admin en la app: **15 minutos de inactividad** y **60 minutos como máximo**; salir del modo admin o cerrar la sesión de la cuenta lo cierra de inmediato. Volver a entrar exige un **código TOTP nuevo**.
+- **Servidor (fuente de verdad):** `es_admin()` = rol + `aal2` + TOTP de ≤ 15 min. `es_admin_reciente(300)` (TOTP de ≤ 5 min) se exige para conceder o retirar el rol, leer el contenido de una sesión ajena (`admin_leer_sesion`) y retirar publicaciones. Cuando el servidor responde «privilegios insuficientes», la app abre un diálogo que pide un código nuevo y reintenta una vez.
+- Modo admin en la app: **15 minutos de inactividad** y **60 minutos como máximo**; salir del modo admin o cerrar la sesión de la cuenta lo cierra de inmediato. Volver a entrar exige un **código TOTP nuevo**. Cambiar la contraseña cierra las demás sesiones de la cuenta.
 - Acciones destructivas (borrado total, exportación global, cambio de retención) piden **un código TOTP nuevo** (reautenticación).
-- **Límite conocido:** el servidor valida el nivel `aal2` del token de acceso, que dura lo que indique *JWT expiry* (por defecto 1 h). Tras cerrar el modo admin en la app, un token `aal2` ya emitido seguiría siendo aceptado por el servidor hasta expirar. Mitigación: mantener *JWT expiry* en 3600 s o menos y, ante sospecha, retirar el rol (efecto inmediato) o cerrar todas las sesiones del usuario desde el panel.
+- **Límite conocido:** tras cerrar el modo admin en la app, un token con un TOTP de menos de 15 minutos sigue siendo aceptado hasta cumplir ese plazo; retirar el rol sí es inmediato. Mantener *JWT expiry* en 3600 s o menos y, ante sospecha, retirar el rol o cerrar todas las sesiones del usuario desde el panel.
+- **Pendiente de verificar (no confirmado con un JWT real):** que tras `challengeAndVerify` la claim `amr` traiga una entrada `totp` con marca reciente (caso 0 de `supabase/pruebas_rls.sql`). Si no la trajera, **ningún administrador tendría privilegios**. Contingencia (no hay otra vía en la app):
+  1. Avisar al docente y abrir una entrada en el registro de incidentes (tipo «acceso»).
+  2. El dueño del proyecto, en el SQL Editor, ajusta temporalmente la función `public.totp_reciente` de modo que no exija la marca de `amr` mientras `aal` sea `aal2`, deja constancia en el acta y la revierte al corregir la causa. No se desactiva el MFA ni se usa `service_role` en la app.
+  3. Anotar fecha, motivo y reversión en `registro_no_conformidades.md` (NC-08).
+  Hasta confirmar `amr`, conviene tener **dos administradores** con TOTP y probar ambos antes de depender del panel.
 
 ## 8. Sin nube configurada
 
@@ -80,4 +87,6 @@ Si la copia de la aplicación no tiene Supabase, el único mecanismo es el **adm
 
 ## 9. Registro de eventos de auditoría
 
-`ADMIN_ACCOUNT_LOGIN` (inicio de sesión de una cuenta con rol), `ADMIN_MFA_ENROLLED`, `ADMIN_MFA_VERIFIED`, `ADMIN_MFA_FAILED`, `ADMIN_ROLE_GRANTED`, `ADMIN_ROLE_REVOKED`, `ADMIN_RECOVERY_REQUESTED`, además de `ACCESS_REVIEW_DONE` (revisión A.9.2.5). Las concesiones y retiros se hacen en el panel de Supabase y se documentan en el acta; los eventos `ADMIN_ROLE_*` y `ADMIN_RECOVERY_REQUESTED` están en la lista blanca para registrarlos en `auditoria` cuando el administrador los anote.
+`ADMIN_ACCOUNT_LOGIN` (inicio de sesión de una cuenta con rol), `ADMIN_MFA_ENROLLED`, `ADMIN_MFA_VERIFIED`, `ADMIN_MFA_FAILED`, `ADMIN_RECOVERY_REQUESTED` y `ACCESS_REVIEW_DONE` (revisión A.9.2.5), más los que emite **el servidor** por sí mismo: `ADMIN_ROLE_GRANTED` y `ADMIN_ROLE_REVOKED` (al conceder o retirar el rol desde la app, con identificadores y sin correos), `ADMIN_DATA_ACCESS` (lectura excepcional de una sesión, con el motivo), `CONTENT_REMOVED`, `CONTENT_REPORT_REVIEWED` e `INCIDENT_UPDATED`. Todos viven en la tabla `tipos_evento`; el cliente no puede insertar tipos de origen `admin` o `servidor`.
+
+Las concesiones y retiros hechos **desde la app** los registra el servidor. Solo los hechos por la **vía de contingencia (SQL del dueño del proyecto)** no generan evento y deben anotarse en el acta.

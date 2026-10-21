@@ -22,9 +22,9 @@
 
 ## Resumen
 
-El presente informe documenta el análisis, el diseño, la implementación, la verificación y la gestión de la seguridad de la información de un monitor de electrocardiograma (ECG) web, desarrollado como proyecto de la asignatura Programación Web de la Universidad de Santiago de Chile. El sistema original consistía en una página HTML con JavaScript que graficaba, mediante la Web Serial API, la señal de un sensor AD8232 conectado a un Arduino; era monocanal, no contaba con usuarios ni persistencia y presentaba diecisiete problemas técnicos documentados. A partir de él se construyó una aplicación de página única (SPA) en Vue 3 que cubre los 27 requerimientos funcionales (RF01–RF27) y los 9 no funcionales (RNF01–RNF09) del encargo: hasta cinco canales simultáneos, simulador, comparación con una señal de referencia, administración de rangos, alertas, contenido educativo y almacenamiento local cifrado, con sincronización opcional con Supabase y despliegue en Vercel. Con posterioridad se añadieron la medición por fotopletismografía (PPG) con la cámara del celular y con un sensor MAX30100 conectado a un ESP32 (el sensor real del prototipo es óptico, no un ECG), una aplicación web progresiva (PWA), cuentas de usuario con correo y contraseña, un mantenedor de pacientes por cuenta, monitoreos guardables con informes en PDF e historial, y visibilidad privada o pública anónima con retención definida.
+El presente informe documenta el análisis, el diseño, la implementación, la verificación y la gestión de la seguridad de la información de un monitor de electrocardiograma (ECG) web, desarrollado como proyecto de la asignatura Programación Web de la Universidad de Santiago de Chile. El sistema original consistía en una página HTML con JavaScript que graficaba, mediante la Web Serial API, la señal de un sensor AD8232 conectado a un Arduino; era monocanal, no contaba con usuarios ni persistencia y presentaba diecisiete problemas técnicos documentados. A partir de él se construyó una aplicación de página única (SPA) en Vue 3 que cubre los 27 requerimientos funcionales (RF01–RF27) y los 9 no funcionales (RNF01–RNF09) del encargo: hasta cinco canales simultáneos, simulador, comparación con una señal de referencia, administración de rangos, alertas, contenido educativo y almacenamiento local cifrado, con sincronización opcional con Supabase y despliegue en Vercel. Con posterioridad se añadieron la medición por fotopletismografía (PPG) con la cámara del celular y con un sensor MAX30100 conectado a un ESP32 (el sensor real del prototipo es óptico, no un ECG), una aplicación web progresiva (PWA), cuentas de usuario con correo y contraseña, un mantenedor de pacientes por cuenta, monitoreos guardables con informes en PDF e historial, y visibilidad privada o pública (visible solo para cuentas registradas, como «Paciente anónimo» y con consentimiento por monitoreo) con retención definida. En octubre de 2026 una auditoría de sistema de solo lectura (30 hallazgos y 29 cambios propuestos) dio lugar a dos tandas de endurecimiento: servidor (TANDA 1: lo público por funciones, privilegio del administrador con TOTP reciente, administrador sin lectura masiva, auditoría de la nube con hash encadenado, incidentes de extremo a extremo, cuotas con la hora del servidor) y privacidad en la aplicación (TANDA 2: nube opcional apagada por defecto, borradores que no se suben, consentimiento 2.0, equipo compartido e inactividad). Este informe declara qué quedó implementado, qué se difirió y qué **no está verificado** en el entorno real.
 
-La seguridad se abordó con un Sistema de Gestión de Seguridad de la Información (SGSI) alineado con la norma ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): contexto, alcance, política, roles, apreciación de 26 riesgos, Declaración de Aplicabilidad de los 114 controles del Anexo A (71 aplicables, 27 aplicables parcialmente y 16 excluidos), controles técnicos con evidencia en el código, procedimiento de incidentes, plan de continuidad, auditoría interna y registro de no conformidades. La verificación automatizada arrojó 0 problemas de lint, 212 de 212 pruebas unitarias aprobadas (18 archivos), 33 de 33 pruebas de extremo a extremo (Playwright), compilación exitosa y 0 vulnerabilidades en las dependencias de producción. La aplicación está publicada en https://monitor-ecg1.vercel.app/ y el código en https://github.com/mariajose920/monitor-ecg.
+La seguridad se abordó con un Sistema de Gestión de Seguridad de la Información (SGSI) alineado con la norma ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): contexto, alcance, política, roles, apreciación de 38 riesgos (R01–R38, con riesgo residual), Declaración de Aplicabilidad de los 114 controles del Anexo A (71 aplicables, 27 aplicables parcialmente y 16 excluidos; por estado: 31 Implementado, 31 Documentado, 36 Parcial y 16 N/A), controles técnicos con evidencia en el código, procedimiento de incidentes, plan de continuidad, plantillas de auditoría interna y registro de 18 no conformidades. La verificación automatizada arrojó 0 problemas de lint, 343 de 343 pruebas unitarias aprobadas (28 archivos), 75 de 75 pruebas de extremo a extremo (Playwright, 16 archivos; las de nube con Supabase simulado), compilación exitosa y 0 vulnerabilidades en las dependencias de producción. El SQL se probó en un PostgreSQL embebido (PGlite), **no** en Supabase real: la prueba de RLS con cuentas reales, la verificación del claim `amr` del segundo factor, la configuración del panel y las actas de auditoría interna y de revisión por la dirección siguen pendientes. La aplicación está publicada en https://monitor-ecg1.vercel.app/ y el código en https://github.com/mariajose920/monitor-ecg.
 
 El informe declara con transparencia lo que no se ha podido demostrar: la prueba con hardware real, la conexión inalámbrica BLE con ESP32, la activación del CAPTCHA, las mediciones de rendimiento, la presentación y la firma docente del plan de tratamiento de riesgos. El sistema es de uso educativo y no constituye un dispositivo médico.
 
@@ -34,7 +34,7 @@ El informe declara con transparencia lo que no se ha podido demostrar: la prueba
 
 This report documents the analysis, design, implementation, verification and information security management of a web-based electrocardiogram (ECG) monitor developed for the Web Programming course at Universidad de Santiago de Chile. The original system was a plain HTML/JavaScript page that plotted, through the Web Serial API, the signal of an AD8232 sensor attached to an Arduino; it was single-channel, had no users or persistence, and exhibited seventeen documented technical defects. It was rebuilt as a Vue 3 single-page application that covers the 27 functional (RF01–RF27) and 9 non-functional (RNF01–RNF09) requirements: up to five simultaneous channels, a simulator, comparison against a reference signal, administrative range settings, alerts, educational content, encrypted local storage, optional Supabase synchronization and deployment on Vercel.
 
-Security was addressed through an Information Security Management System (ISMS) aligned with ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): context, scope, policy, roles, a 26-item risk assessment, a Statement of Applicability covering the 114 Annex A controls (71 applicable, 27 partially applicable, 16 excluded), technical controls backed by code evidence, an incident procedure, a continuity plan, internal audit and a nonconformity register. Automated verification produced 0 lint problems, 212/212 unit tests passed, 33/33 end-to-end tests passed (Playwright), a successful build and 0 production-dependency vulnerabilities. The application is deployed at https://monitor-ecg1.vercel.app/.
+Security was addressed through an Information Security Management System (ISMS) aligned with ISO/IEC 27001:2013 (UNE-EN ISO/IEC 27001:2017): context, scope, policy, roles, a 38-item risk assessment with residual risk, a Statement of Applicability covering the 114 Annex A controls (71 applicable, 27 partially applicable, 16 excluded; by status 31 implemented, 31 documented, 36 partial, 16 not applicable), technical controls backed by code evidence, an incident procedure, a continuity plan, internal audit templates and a register of 18 nonconformities. After a read-only system audit and two hardening batches, automated verification produced 0 lint problems, 343/343 unit tests, 75/75 end-to-end tests (Playwright; cloud tests use a simulated Supabase), a successful build and 0 production-dependency vulnerabilities. The SQL was tested in an embedded PostgreSQL (PGlite), not in the real Supabase project: the real RLS test with actual accounts, the check of the second-factor `amr` claim, the dashboard configuration and the signed internal audit and management review records remain pending. The application is deployed at https://monitor-ecg1.vercel.app/.
 
 The report states openly what has not been demonstrated: testing with the real MAX30100/ESP32 sensor and the phone camera on people, ESP32 BLE connectivity, CAPTCHA activation, performance measurements, the presentation and the instructor's signature on the risk treatment plan. The system is for educational use and is not a medical device.
 
@@ -367,11 +367,11 @@ erDiagram
   incidentes { uuid reportante text tipo text severidad text estado }
 ```
 
-*Descripción del diagrama (figura 6.3).* Las sesiones pertenecen a una cuenta de Supabase (en la primera entrega, a una identidad anónima) (`propietario = auth.uid()`) y contienen bloques de muestras. La auditoría y los incidentes también se asocian a la identidad que los generó. La tabla `administradores` enumera las cuentas con privilegios; la función `es_admin()` la consulta para autorizar la escritura en `parametros` y la lectura global. El diagrama es esquemático: el detalle de columnas, restricciones `CHECK` y políticas se encuentra en `supabase/schema.sql`.
+*Descripción del diagrama (figura 6.3).* Las sesiones pertenecen a una cuenta de Supabase (en la primera entrega, a una identidad anónima) (`propietario = auth.uid()`) y contienen bloques de muestras. La auditoría y los incidentes también se asocian a la identidad que los generó. La tabla `administradores` enumera las cuentas con privilegios; la función `es_admin()` la consulta para autorizar la escritura en `parametros`, la lectura de la auditoría de la nube, la moderación de contenido y el acceso excepcional con motivo; desde la TANDA 1 el administrador **ya no lee de forma masiva** los datos de otras cuentas. Además de las seis tablas del diagrama existen `pacientes`, `uso_cuenta`, `tipos_evento`, `reportes_contenido`, `retiros_contenido` y `accesos_admin`. El diagrama es esquemático: el detalle de columnas, restricciones `CHECK` y políticas se encuentra en `supabase/schema.sql`.
 
 ### 6.6 Modelo de seguridad por capas
 
-La seguridad se diseñó como defensa en profundidad con tres niveles. Primero, el cliente aplica un guard de rutas (con lista blanca de redirecciones), la verificación `assertAdmin()` en toda acción privilegiada del almacén, validación de entradas, cifrado en reposo y auditoría encadenada. Segundo, el servidor de datos impone RLS en todas las tablas, restricciones `CHECK`, cuotas por usuario y fijación de hora y autor en la auditoría. Tercero, la entrega aplica cabeceras HTTP restrictivas (CSP sin `unsafe-inline` ni `unsafe-eval`, HSTS, Permissions-Policy). Como todo control del cliente puede eludirse por quien controla el navegador, la autorización real sobre los datos en la nube la determina RLS; este límite se declara como riesgo residual (sección 8.5).
+La seguridad se diseñó como defensa en profundidad con tres niveles. Primero, el cliente aplica un guard de rutas (con lista blanca de redirecciones), la verificación `assertAdmin()` en toda acción privilegiada del almacén, validación de entradas, cifrado en reposo y auditoría encadenada. Segundo, el servidor de datos impone RLS en todas las tablas, restricciones `CHECK`, cuotas por usuario y fijación de hora y autor en la auditoría. Tercero, la entrega aplica cabeceras HTTP restrictivas (CSP sin `unsafe-inline` ni `unsafe-eval`, HSTS, Permissions-Policy). Desde la TANDA 1 el servidor también calcula el actor y la hora de la auditoría (`registrar_evento`), exige un código TOTP reciente al administrador (`es_admin()` y `es_admin_reciente()`) y fija el tiempo de las cuotas (`creado_en`). Como todo control del cliente puede eludirse por quien controla el navegador, la autorización real sobre los datos en la nube la determina RLS; este límite se declara como riesgo residual (sección 8.5). Esa autorización se probó en PGlite y **no** con cuentas reales (sección 9.5).
 
 ## 7 Implementación
 
@@ -386,15 +386,18 @@ El proyecto `monitor-ecg-vue/` se organiza en `src/views` (vistas), `src/compone
 | Ruta | Vista | Acceso |
 |---|---|---|
 | `/` | Inicio | Público |
-| `/usuarios` | Participantes (alta, consentimiento, datos opcionales) | Público |
+| `/pacientes` (`/usuarios` redirige) | Pacientes (alta con declaración de mayoría de edad, consentimiento 2.0, datos opcionales, alias solo en el dispositivo) | Público |
+| `/acceso`, `/registro`, `/recuperar`, `/restablecer` | Inicio de sesión (con casilla de equipo compartido), alta de cuenta, recuperación y nueva contraseña | Público |
+| `/cuenta` | Mi cuenta: interruptor «Guardar mis datos en la nube» (apagado por defecto), vincular datos, borrar mis datos y eliminar mi cuenta | Requiere cuenta |
 | `/monitor` | Monitor de hasta 5 canales | Requiere participante elegido |
 | `/comparar` | Comparación con señal de referencia | Público |
-| `/sesiones`, `/sesiones/:id` | Historial y detalle de sesiones, exportación CSV | Requiere participante elegido |
+| `/monitoreos`, `/monitoreos/:id` (`/sesiones*` redirige) | Historial y detalle de monitoreos, exportación CSV y PDF, visibilidad | Requiere paciente elegido |
 | `/aprende/:tema?` | Contenido educativo | Público |
 | `/privacidad` | Aviso de privacidad, derechos y borrado en la nube | Público |
 | `/seguridad` | Política de seguridad, uso aceptable, notificación de incidentes | Público |
-| `/admin/setup`, `/admin/acceso` | Configuración inicial del PIN e inicio de sesión | Público |
-| `/admin`, `/admin/auditoria` | Administración (rangos, sincronización, usuarios, SGSI) y auditoría | Requiere administrador |
+| `/admin/setup`, `/admin/acceso` | Configuración inicial del PIN e inicio de sesión del administrador local (con nube redirigen a `/acceso`) | Público, solo sin nube |
+| `/admin/mfa` | Inscripción y verificación del segundo factor TOTP | Cuenta con rol |
+| `/admin`, `/admin/auditoria` | Administración (parámetros, sincronización, nube, administradores, soporte y moderación, SGSI) y auditoría local y de la nube | Requiere administrador (rol, `aal2` y TOTP reciente) |
 
 ### 7.3 Almacenes (Pinia)
 
@@ -406,7 +409,7 @@ Los servicios agrupan: adquisición (`channelRegistry`, `renderScheduler`, `sess
 
 ### 7.5 Base de datos y políticas RLS
 
-El proyecto de Supabase está alojado en la región us-east-1 (Estados Unidos). Las seis tablas tienen RLS activa y suman 16 políticas.
+El proyecto de Supabase está alojado en la región us-east-1 (Estados Unidos). En la primera entrega las seis tablas tenían RLS activa y sumaban 16 políticas; la tabla siguiente describe ese estado inicial y las secciones 7.5b a 7.5d lo actualizan (la tabla `sesiones`, por ejemplo, ya no se lee por el administrador).
 
 **Tabla 7.2.** Tablas y políticas RLS (`supabase/schema.sql`)
 
@@ -419,13 +422,46 @@ El proyecto de Supabase está alojado en la región us-east-1 (Estados Unidos). 
 | `auditoria` | 2 | Los autenticados registran; el administrador lee; sin actualización ni borrado |
 | `incidentes` | 3 | Cualquiera notifica; el reportante o el administrador lee; solo el administrador gestiona; sin borrado |
 
-Además, el esquema contiene: restricciones `CHECK` de tamaño y consistencia (JSON de sesión de hasta 64 KB, `seq` de hasta 5400, BPM consistente); la función `cuota()` y disparadores de cuota por usuario (50 sesiones por día, 300 bloques por minuto, 200 eventos de auditoría por hora, 10 incidentes por día); una lista blanca de tipos de evento de auditoría; un disparador que fija `ts = now()` y `usuario = auth.uid()` en la auditoría; la función `borrar_mis_datos()` para el ejercicio del derecho de supresión; `hora_servidor()` para contrastar el reloj; y `purgar_sesiones()`, programable con `pg_cron`. El script es idempotente. Conforme a la verificación realizada sobre la base, los avisos de seguridad y rendimiento del asesor de Supabase fueron corregidos. El inicio de sesión anónimo estaba desactivado (error 422) y debe activarlo la usuaria en el panel; hasta entonces la aplicación opera en modo local.
+Además, el esquema contiene: restricciones `CHECK` de tamaño y consistencia (JSON de sesión de hasta 64 KB, `seq` de hasta 5400, BPM consistente); la función `cuota()` y disparadores de cuota por usuario (50 sesiones por día, 300 bloques por minuto, 200 eventos de auditoría por hora, 10 incidentes por día); una lista blanca de tipos de evento de auditoría; un disparador que fija `ts = now()` y `usuario = auth.uid()` en la auditoría; la función `borrar_mis_datos()` para el ejercicio del derecho de supresión; `hora_servidor()` para contrastar el reloj; y `purgar_sesiones()`, programable con `pg_cron`. El script es idempotente. Conforme a la verificación realizada sobre la base, los avisos de seguridad y rendimiento del asesor de Supabase fueron corregidos. (Nota histórica: la primera entrega usaba inicio de sesión anónimo, que ya no existe.)
 
 ### 7.5b Cuentas, pacientes y visibilidad (actualización)
 
-El esquema fue ampliado (`supabase/migracion_cuentas_pacientes.sql` y `schema.sql`; en total 7 tablas y 26 políticas según los scripts, no revalidadas contra la base real tras la ampliación). Cada cuenta (Supabase Auth, correo y contraseña de al menos 10 caracteres, con confirmación) es dueña de sus pacientes y monitoreos mediante RLS; el administrador no tiene política sobre `pacientes`. Un monitoreo es `privado` por defecto o `publico`; lo público solo se expone por las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` (`security definer`, `search_path` fijo, solo columnas permitidas, «Paciente anónimo», máximo 100 filas, sin acceso para `anon`), que sustituyen a la vista `monitoreos_publicos`, señalada por el asesor de Supabase como `security_definer_view`. Los cambios están en `supabase/migracion_endurecimiento.sql`, **escrita y probada solo como texto en las pruebas unitarias; aún no aplicada en la base real**.
+El esquema fue ampliado (`supabase/migracion_cuentas_pacientes.sql` y `schema.sql`; en total 7 tablas y 26 políticas según los scripts, no revalidadas contra la base real tras la ampliación). Cada cuenta (Supabase Auth, correo y contraseña de al menos 10 caracteres, con confirmación) es dueña de sus pacientes y monitoreos mediante RLS; el administrador no tiene política sobre `pacientes`. Un monitoreo es `privado` por defecto o `publico`; lo público solo se expone por las funciones RPC `listar_monitoreos_publicos()` y `monitoreo_publico()` (`security definer`, `search_path` fijo, solo columnas permitidas, «Paciente anónimo», máximo 100 filas, sin acceso para `anon`), que sustituyen a la vista `monitoreos_publicos`, señalada por el asesor de Supabase como `security_definer_view`. Los cambios están en `supabase/migracion_endurecimiento.sql`, **ya aplicada en el proyecto real**; su comportamiento se probó en PGlite y con pruebas de texto, no con cuentas reales.
 
-**Retención.** Las sesiones locales se purgan según el plazo del administrador (30 días por defecto, máximo 180). Los monitoreos en la nube se conservan 365 días desde su inicio salvo borrado previo del titular, mediante la tarea diaria `purga-ecg` (pg_cron, `purgar_sesiones(365)`), también pendiente de aplicar. Las cuentas sin acceso en 24 meses se avisan y se eliminan por un procedimiento manual (sin automatizar).
+**Retención.** Las sesiones locales se purgan según el plazo del administrador (30 días por defecto, máximo 180). Los monitoreos en la nube se conservan 365 días desde su inicio salvo borrado previo del titular, mediante la tarea diaria `purga-ecg` (pg_cron, `purgar_sesiones(365)`, ahora por `creado_en` del servidor); la auditoría de la nube se conserva 2 años (`purga-auditoria`). Que ambas tareas estén activas en el proyecto real **no se ha verificado** (`select jobname from cron.job`). Las cuentas sin acceso en 24 meses se avisan y se eliminan por un procedimiento manual (sin automatizar).
+
+### 7.5c TANDA 1: endurecimiento del servidor
+
+La TANDA 1 (`supabase/migracion_endurecimiento_2.sql`, integrada en `schema.sql`; detalle y lo diferido en `docs/CAMBIOS_TANDA1.md`) respondió a los hallazgos de la auditoría de sistema. Las migraciones anteriores 1 a 4 se neutralizaron para que no puedan reabrir lo cerrado.
+
+**Tabla 7.3.** Cambios de la TANDA 1 y su estado
+
+| Cambio | Qué hace | Estado |
+|---|---|---|
+| Lo público solo por funciones (C-04) | Se eliminó la política pública de `bloques_muestras`; `senal_publica` (máx. 60 bloques por llamada), `listar_monitoreos_publicos` y `monitoreo_publico` excluyen cuentas anónimas y entregan el inicio truncado al día y la duración; reportes de contenido y retiro por el administrador, sin posibilidad de volver a publicar lo retirado | Implementado; probado en PGlite; sin prueba real |
+| Privilegio del administrador con caducidad (C-05) | `es_admin()` = rol + `aal2` + código TOTP de ≤ 15 min leído de `amr`; `es_admin_reciente(300)` para conceder o retirar el rol, retirar publicaciones y leer contenido; la app pide un código nuevo cuando el servidor lo exige; al cambiar la contraseña se cierran las demás sesiones | Parcial: **el claim `amr` no se verificó con un JWT real** |
+| Mínimo privilegio (C-06) | El administrador no lee `sesiones` ni `bloques_muestras` ajenos; `admin_leer_sesion(id, motivo)` exige un motivo de 10 a 300 caracteres, lo registra antes de leer, entrega solo `datos` y el titular lo ve en «Monitoreos» | Implementado |
+| Auditoría de la nube fiable (C-08) | `tipos_evento` como única lista blanca, `registrar_evento` con actor y hora del servidor, hash encadenado, `verificar_cadena_auditoria()`, lectura paginada para el administrador, purga a 2 años, cola persistente con reintento exponencial en el cliente | Parcial: sin anclaje externo ni eventos de fallo (`ACCOUNT_LOGIN_FAILED`, `CLOUD_SYNC_FAILED`, etc.) |
+| Incidentes de extremo a extremo (C-09) | Alta restringida, disparador que rechaza RUT, correos y valores de salud, ciclo validado en el servidor, el reportante ve estado y respuesta | Implementado |
+| Cuotas y hora del servidor (C-11) | `creado_en` del servidor, CHECK de coherencia de `inicio`, topes de 32 KB por bloque, 25 MB por sesión, 50 MB por cuenta, 1000 sesiones y 200 pacientes | Implementado; concurrencia real no probada |
+| Etiquetas únicas (C-21) | Expresiones regulares corregidas, índice único por cuenta, reintento ante duplicado | Implementado |
+
+### 7.5d TANDA 2: privacidad en la aplicación
+
+La TANDA 2 (`supabase/migracion_tanda2.sql` y cambios del cliente; detalle en `docs/CAMBIOS_TANDA2.md`) alineó lo que la aplicación hace con lo que informa.
+
+**Tabla 7.4.** Cambios de la TANDA 2 y su estado
+
+| Cambio | Qué hace | Estado |
+|---|---|---|
+| Consentimiento 2.0 y textos veraces (C-02) | `CONSENT_VERSION = '2.0'`; textos de consentimiento y privacidad leen de un único origen de hechos (`src/data/privacidad.js`) vigilado por `tests/privacy.spec.js`; responsable configurable con `VITE_RESPONSABLE_NOMBRE` y `VITE_RESPONSABLE_CORREO` | Implementado; revisión legal y variables en Vercel pendientes |
+| Nube opcional (C-03) | Apagada por defecto por cuenta; los borradores no se suben; se sube solo al «Guardar»; alias, nombre, notas, parámetros, eventos y datos del dispositivo nunca salen del equipo | Implementado |
+| Sesión de cuenta (C-07) | «Equipo compartido» con token en `sessionStorage`; cierre por inactividad de 15 min con aviso; cerrar sesión quita los datos del equipo compartido | Implementado; *time-box* de Supabase manual |
+| Reautenticación y contraseñas (C-13) | Contraseña actual para cambiar la contraseña, borrar datos de la nube y eliminar la cuenta; política de contraseñas en el cliente | Parcial: el servidor no exige la reautenticación |
+| Vincular, mayoría de edad, minimización (C-15 a C-18) | Vincular con selección por paciente; declaración de mayoría de edad (autodeclarada); heurística que rechaza nombres y números de documento en el alias; el servidor exige consentimiento de publicación 2.0 por monitoreo | Implementado; peso por rangos diferido |
+| Evidencias del SGSI (C-10, parte de la app) | Registro de fecha y responsable de auditoría interna y revisión por la dirección | Implementado; **las actas no existen** |
+
+**Diferido por decisión:** bóveda local con frase y clave por espacio (cambiaría la clave de los datos existentes), reautenticación impuesta por el servidor, restauración de monitoreos propios desde la nube, `exportar_mis_datos()`, conciliación de bloques subidos, validación completa de `sesiones.datos` en el servidor, retirar el modo PIN local.
 
 ### 7.6 Despliegue
 
@@ -443,14 +479,16 @@ La aplicación se publica en https://monitor-ecg1.vercel.app/ desde el repositor
 | Mantenedor de pacientes | Pacientes propios de cada cuenta con perfil y consentimiento, cuota de 200 | Pruebas unitarias y E2E `cuentas.spec.js`; RLS no probada con dos cuentas reales |
 | Monitoreos guardables, informes e historial | Guardar, nombrar, descartar o decidir después; informe en PDF; historial por paciente | Pruebas unitarias (`informes.spec.js`, `historial.spec.js`) y E2E `monitoreos.spec.js` |
 | Cuentas | Alta, acceso y baja con auditoría; `eliminar_mi_cuenta()` | Pruebas unitarias; SMTP propio, MFA y protección de contraseñas filtradas pendientes (manual) |
-| Visibilidad pública y comunidad | Casilla de consentimiento; lectura por RPC solo de contenido anónimo, solo para cuentas autenticadas; pestaña Comunidad | `visibilidad.spec.js`; funciones por aplicar en la base real |
+| Visibilidad pública y comunidad | Casilla de consentimiento; lectura por RPC solo de contenido anónimo, solo para cuentas autenticadas; pestaña Comunidad | `visibilidad.spec.js`; funciones aplicadas en la base real, sin prueba con cuentas reales |
 | Hallazgos ISO del 20 de octubre | R22–R26, NC-05 a NC-07, retención de 365 días, `PENDIENTES_MANUALES.md` | Documentación revisada; sin auditoría independiente |
+| Auditoría de sistema y TANDAS 1 y 2 | 30 hallazgos y 29 cambios; ver 7.5c y 7.5d | 343 unitarias y 75 E2E (nube simulada); SQL en PGlite y `supabase/pruebas_rls.sql` (101 casos, 0 fallos en PGlite); **sin prueba real de RLS ni del claim `amr`** |
+| Documentación del SGSI v3.0 | SoA con estados reales, riesgos R01–R38 con residual, objetivos OBJ-1 a OBJ-12, NC-01 a NC-18, `PENDIENTES_MANUALES.md` priorizado | Verificada con un script de consistencia cruzada; sin auditoría independiente |
 
 El sensor real del prototipo es óptico (PPG), no un ECG: ver `docs/ERRATAS_REQUERIMIENTOS.md`.
 
 ## 8 Sistema de gestión de seguridad de la información
 
-Este capítulo resume el SGSI documentado en `docs/ISO27001_controles.md` (versión 2.0) y en `docs/sgsi/`. El texto de la norma no se reproduce; solo se citan números y nombres de cláusulas y controles.
+Este capítulo resume el SGSI documentado en `docs/ISO27001_controles.md` (versión 3.0, actualizada el 20 de octubre de 2026 tras las TANDAS 1 y 2) y en `docs/sgsi/`. El texto de la norma no se reproduce; solo se citan números y nombres de cláusulas y controles.
 
 ### 8.1 Contexto y alcance (cláusula 4)
 
@@ -458,7 +496,7 @@ Este capítulo resume el SGSI documentado en `docs/ISO27001_controles.md` (versi
 
 **Alcance (4.3).** El SGSI cubre el diseño, desarrollo, despliegue y operación de la aplicación «Monitor ECG»: captura de hasta cinco sensores (Web Serial y simulador), visualización y comparación, identificación seudonimizada, datos opcionales con consentimiento, configuración administrativa, exportación CSV, almacenamiento cifrado en el navegador, auditoría encadenada, sincronización opcional con Supabase, notificación de incidentes y despliegue en Vercel; incluye el firmware en lo que respecta a la integridad del flujo de datos. Se excluyen la seguridad física y de red de las instalaciones universitarias, la infraestructura interna de los proveedores, la certificación eléctrica o médica y el uso clínico.
 
-**Inventario y clasificación de activos (A.8.1.1, A.8.2.1).** Se inventariaron 17 activos (A01–A17) con propietario y valoración de confidencialidad, integridad y disponibilidad. Se clasifican en cuatro niveles: Público, Interno, Confidencial y Confidencial-Sensible (datos de salud). Son Confidencial-Sensible la señal ECG y el BPM por sesión (A01), los datos opcionales (A03) y los CSV exportados (A14).
+**Inventario y clasificación de activos (A.8.1.1, A.8.2.1).** Se inventariaron 19 activos (A01–A19, incluidos el registro de accesos del administrador y la copia de respaldo temporal `respaldo_20261020`) con propietario y valoración de confidencialidad, integridad y disponibilidad. Se clasifican en cuatro niveles: Público, Interno, Confidencial y Confidencial-Sensible (datos de salud). Son Confidencial-Sensible la señal ECG y el BPM por sesión (A01), los datos opcionales (A03) y los CSV exportados (A14).
 
 ### 8.2 Liderazgo, política y roles (cláusula 5)
 
@@ -481,12 +519,12 @@ La matriz RACI, la segregación de tareas (quien desarrolla un cambio no lo apru
 
 **Metodología (6.1.2).** Cada riesgo se valora por probabilidad (P) e impacto (I) en una escala de 1 a 3; el nivel es P × I (1–2 Bajo, 3–4 Medio, 6–9 Alto). Se aceptan los riesgos Bajos; los Medios y Altos se tratan, y el riesgo residual lo acepta el dueño del riesgo. La apreciación se repite en cada hito y ante cambios significativos, como la incorporación de Supabase.
 
-**Tabla 8.2.** Registro de riesgos (R01–R26)
+**Tabla 8.2.** Registro de riesgos (R01–R38). El nivel es el inicial; el residual tras las TANDAS 1 y 2 se resume después de la tabla
 
 | N.º | Amenaza | I | P | Nivel | Tratamiento principal (controles del Anexo A) |
 |---|---|---|---|---|---|
-| R01 | Acceso no autorizado a datos de salud en equipo compartido | 3 | 3 | 9 Alto | Cifrado AES-GCM, retención, borrado, expiración de sesión (A.10.1.1, A.8.3.2, A.18.1.4, A.11.2.8, A.11.2.9) |
-| R02 | Un participante modifica rangos o sincronización | 2 | 3 | 6 Alto | PIN con PBKDF2, bloqueo, guard, auditoría y RLS en `parametros` (A.9.1.1, A.9.2.3, A.9.4.2, A.12.4.1) |
+| R01 | Acceso no autorizado a datos de salud en equipo compartido | 3 | 3 | 9 Alto | Cifrado AES-GCM (alcance limitado), retención, borrado, equipo compartido con token en `sessionStorage` e inactividad de 15 min, nube apagada por defecto (A.10.1.1, A.8.3.2, A.18.1.4, A.11.2.8, A.11.2.9) |
+| R02 | Un participante modifica rangos o sincronización | 2 | 3 | 6 Alto | Con nube, `parametros` solo con `es_admin()` (rol, `aal2`, TOTP reciente); sin nube, PIN con PBKDF2, bloqueo y auditoría (A.9.1.1, A.9.2.3, A.9.4.2, A.12.4.1) |
 | R03 | Ejecución de código malicioso (XSS) | 3 | 2 | 6 Alto | CSP, sin `v-html`, dependencias empaquetadas (A.14.1.2, A.14.2.5, A.14.2.1) |
 | R04 | Datos seriales malformados o maliciosos | 2 | 3 | 6 Alto | Parser estricto, límite de buffer (A.14.1.3, A.12.2.1) |
 | R05 | Cadena de suministro comprometida | 3 | 2 | 6 Alto | Sin CDN, lockfile, `npm audit` (A.15.1.3, A.12.6.1, A.14.2.4) |
@@ -494,31 +532,43 @@ La matriz RACI, la segregación de tareas (quien desarrolla un cambio no lo apru
 | R07 | Reidentificación del participante | 3 | 2 | 6 Alto | Seudónimos, edad por rangos (A.18.1.4) |
 | R08 | Tratamiento sin base legal | 3 | 2 | 6 Alto | Consentimiento, aviso, retiro y supresión (A.18.1.1, A.18.1.4) |
 | R09 | Clickjacking, sniffing MIME, degradación a HTTP | 2 | 2 | 4 Medio | Cabeceras de `vercel.json` (A.13.1.1, A.13.1.2, A.14.1.2) |
-| R10 | Pérdida de datos por borrado del navegador | 2 | 2 | 4 Medio | Copia en Supabase y exportación (A.12.3.1, A.17.2.1) |
-| R11 | Manipulación del registro de auditoría | 2 | 2 | 4 Medio | Cadena SHA-256 y réplica sin UPDATE/DELETE (A.12.4.2, A.18.1.3) |
+| R10 | Pérdida de datos por borrado del navegador | 2 | 2 | 4 Medio | Copia opcional en Supabase y exportación; **no hay restauración desde la nube** (A.12.3.1, A.17.2.1) |
+| R11 | Manipulación del registro de auditoría | 2 | 2 | 4 Medio | Cadena SHA-256 local; en la nube, actor y hora del servidor, hash encadenado y verificación (A.12.4.2, A.18.1.3) |
 | R12 | Secretos en el bundle o mapas de código | 2 | 2 | 4 Medio | Solo clave publicable, sin source maps (A.9.4.5, A.10.1.2, A.14.2.6) |
 | R13 | Indisponibilidad durante una sesión | 2 | 1 | 2 Bajo | Aceptar: detección de desconexión, simulador, local-first (A.17.1.2) |
 | R14 | Descarga eléctrica al participante | 3 | 2 | 6 Alto | Aviso obligatorio, batería o Bluetooth (A.11.2.1, A.11.2.2) |
-| R15 | Fuga entre participantes en la nube | 3 | 2 | 6 Alto | RLS en todas las tablas (A.9.4.1, A.14.2.8, A.18.2.3) |
-| R16 | Abuso del registro de cuentas | 2 | 2 | 4 Medio | Confirmación de correo, límites de Auth, `CHECK`, cuotas, CAPTCHA opcional, purga (A.13.1.2, A.12.1.3, A.9.2.1) |
+| R15 | Fuga entre participantes en la nube | 3 | 2 | 6 Alto | RLS en todas las tablas, sin lectura masiva del administrador, `pruebas_rls.sql`; prueba con cuentas reales pendiente (A.9.4.1, A.14.2.8, A.18.2.3) |
+| R16 | Abuso del registro de cuentas | 2 | 2 | 4 Medio | Confirmación de correo, límites de Auth, `CHECK`, cuotas por cuenta, purga; CAPTCHA solo en el registro y desactivado (A.13.1.2, A.12.1.3, A.9.2.1) |
 | R17 | Compromiso de la cuenta administradora de Supabase o de `service_role` | 3 | 1 | 3 Medio | Contraseña robusta, MFA, tabla `administradores` (A.9.2.3, A.9.2.4, A.9.4.2, A.10.1.2) |
-| R18 | Transferencia internacional de datos de salud | 3 | 2 | 6 Alto | Consentimiento informado, seudonimización, DPA, opción local (A.15.1.1, A.15.1.2, A.18.1.4) |
+| R18 | Transferencia internacional de datos de salud | 3 | 2 | 6 Alto | Nube opcional apagada por defecto, consentimiento informado, seudonimización sin alias ni notas, DPA pendiente, opción local (A.15.1.1, A.15.1.2, A.18.1.4) |
 | R19 | Incidente no notificado o no gestionado | 2 | 2 | 4 Medio | Formulario, tabla `incidentes`, procedimiento (A.16.1.1–A.16.1.6) |
 | R20 | Marcas de tiempo inconsistentes | 1 | 2 | 2 Bajo | UTC y comparación con `hora_servidor()` (A.12.4.4) |
 | R21 | Uso indebido de la cámara del celular | 3 | 2 | 6 Alto | Solo promedios RGB, consentimiento, apagado automático, auditoría (A.18.1.4, A.14.2.5) |
-| R22 | Publicación de datos de salud | 3 | 2 | 6 Alto | Privado por defecto, consentimiento, anonimato, retiro (A.8.2.3, A.13.2.1, A.18.1.4) |
-| R23 | Compromiso de cuentas y credenciales | 3 | 2 | 6 Alto | Contraseña ≥ 10, confirmación de correo, RLS; SMTP propio, filtradas y MFA pendientes (A.9.2.1, A.9.2.4, A.9.4.3) |
-| R24 | Exposición por la vista/función pública | 3 | 2 | 6 Alto | Vista sustituida por funciones RPC (migración pendiente de aplicar) (A.9.4.1, A.14.2.5) |
-| R25 | Datos conservados más de lo necesario | 2 | 2 | 4 Medio | Purga a 365 días (pg_cron, por aplicar); cuentas inactivas manual (A.18.1.3, A.8.3.2) |
+| R22 | Publicación de datos de salud | 3 | 2 | 6 Alto | Privado por defecto; el servidor exige consentimiento de publicación 2.0 por monitoreo y declaración de mayoría de edad; solo cuentas registradas, fecha truncada; reporte y retiro (A.8.2.3, A.13.2.1, A.18.1.4) |
+| R23 | Compromiso de cuentas y credenciales | 3 | 2 | 6 Alto | Política de contraseñas, confirmación de correo, RLS, cierre de otras sesiones al cambiar la contraseña; SMTP propio, contraseñas filtradas y desactivar inicios anónimos pendientes (A.9.2.1, A.9.2.4, A.9.4.3) |
+| R24 | Exposición por la vista/función pública | 3 | 2 | 6 Alto | Vista sustituida por funciones RPC solo para cuentas registradas (migraciones aplicadas; sin prueba real) (A.9.4.1, A.14.2.5) |
+| R25 | Datos conservados más de lo necesario | 2 | 2 | 4 Medio | `purga-ecg` (365 días) y `purga-auditoria` (2 años), por verificar en `cron.job`; cuentas inactivas manual (A.18.1.3, A.8.3.2) |
 | R26 | Señal PPG tomada como diagnóstico | 2 | 2 | 4 Medio | Aviso de no dispositivo médico, rótulo de la fuente, erratas (A.18.1.1) |
+| R27 | Cuenta privilegiada comprometida | 3 | 2 | 6 Alto | TOTP obligatorio y reciente, restablecimiento por correo sin privilegios, recuperación con regla de dos personas, auditoría `ADMIN_*` (A.9.2.3–A.9.2.6, A.9.4.2) |
+| R28 | El claim `amr` no se comporta como se supone (ningún administrador con privilegios) | 2 | 2 | 4 Medio | Caso 0 de `pruebas_rls.sql`; contingencia por SQL del dueño (A.9.2.3, A.9.4.2) |
+| R29 | Divergencia entre lo probado (PGlite) y lo desplegado | 3 | 2 | 6 Alto | Ejecutar `pruebas_rls.sql` con cuentas reales y los Advisors (A.14.2.8, A.18.2.3) |
+| R30 | Reautenticación solo en el cliente | 3 | 1 | 3 Medio | Diálogo de contraseña; exigirla en el servidor está diferido (A.9.4.2, A.9.4.3) |
+| R31 | Cifrado local de alcance limitado | 3 | 2 | 6 Alto | Aviso del alcance real y equipo compartido; bóveda con frase diferida (A.10.1.1, A.10.1.2) |
+| R32 | Copia de respaldo temporal olvidada | 3 | 2 | 6 Alto | Eliminar el esquema `respaldo_20261020` tras validar (A.8.3.2, A.18.1.3) |
+| R33 | Monitoreos públicos previos sin consentimiento 2.0 | 3 | 2 | 6 Alto | Decisión de la responsable; reporte y retiro disponibles (A.18.1.1, A.18.1.4) |
+| R34 | Declaración de mayoría de edad falsa | 3 | 1 | 3 Medio | Casillas; sin declaración no se sube ni se publica; autodeclarada (A.18.1.1) |
+| R35 | Fallas de auditoría no detectadas | 2 | 1 | 2 Bajo | Revisión trimestral de los registros de Auth y verificación de la cadena (A.12.4.1, A.12.4.2) |
+| R36 | Configuración manual del panel sin verificar | 2 | 3 | 6 Alto | `PENDIENTES_MANUALES.md` priorizado (A.9.2.4, A.9.4.2, A.12.1.2) |
+| R37 | Incumplimiento de la Ley 21.719 | 3 | 2 | 6 Alto | Revisión legal, registro de tratamientos, DPA (A.18.1.1, A.15.1.2) |
+| R38 | Abuso del acceso excepcional del administrador | 3 | 1 | 3 Medio | Motivo escrito, TOTP ≤ 5 min, registro previo y aviso al titular (A.9.4.1, A.12.4.3) |
 
-**Tratamiento (6.1.3, 8.3).** El plan de tratamiento (SGSI-RSK-02) asigna a cada riesgo una opción (mitigar, evitar o aceptar), las acciones, los controles, el responsable y el estado. Según ese plan, el riesgo residual queda en nivel Bajo para la mayoría de los riesgos y Medio para R01, R03, R05, R06, R14, R18, R22 y R23. Los riesgos residuales aceptados explícitamente son: (1) quien controla el navegador y las herramientas de desarrollo puede eludir los controles del cliente, inherente a una SPA y mitigado con RLS y con reglas de uso del laboratorio; (2) la integración continua y Dependabot existen en el repositorio, pero falta la protección de la rama `main`; y (3) la región del proveedor (us-east-1) fuera de Chile, mitigada con datos seudonimizados, consentimiento informado y la opción de operar solo en local. **La aprobación del plan por el docente (6.1.3 f) está pendiente de firma.**
+**Tratamiento (6.1.3, 8.3).** El plan de tratamiento (SGSI-RSK-02) asigna a cada riesgo una opción (mitigar, evitar o aceptar), las acciones, los controles, el responsable y el estado. Según la versión 2.0 del plan, el riesgo residual con lo **implementado en el código** queda en nivel Alto para R01 y R31 (el cifrado local no protege frente a quien controla el equipo), R15 y R29 (RLS probada solo en PGlite) y R23 y R36 (configuración manual pendiente); Medio para R02, R03, R05, R06, R10, R14, R16, R18, R22, R24, R25, R27 y R37; y Bajo para el resto. Los residuales Altos requieren una decisión documentada de la dirección, que **no existe**. Los riesgos residuales aceptados explícitamente son: (1) quien controla el navegador y las herramientas de desarrollo puede eludir los controles del cliente, inherente a una SPA y mitigado con RLS y con reglas de uso del laboratorio; (2) la integración continua y Dependabot existen en el repositorio, pero falta la protección de la rama `main`; y (3) la región del proveedor (us-east-1) fuera de Chile, mitigada con datos seudonimizados, consentimiento informado y la opción de operar solo en local. **La aprobación del plan por el docente (6.1.3 f) está pendiente de firma.**
 
-**Objetivos de seguridad (6.2).** Seis objetivos medibles (OBJ-1 a OBJ-6): integridad de la auditoría verificada al 100 %; cero incidentes graves abiertos al cierre de cada hito; no más de 10 inicios de sesión fallidos de administrador en 30 días; revisión de accesos con menos de 90 días; política vigente aceptada; cero errores de integridad de datos cifrados en 30 días. La aplicación los evalúa automáticamente en Administración → SGSI.
+**Objetivos de seguridad (6.2).** Doce objetivos medibles. Los seis primeros (OBJ-1 a OBJ-6) los calcula la aplicación en Administración → SGSI sobre la auditoría local: integridad de la auditoría al 100 %; cero incidentes graves abiertos al cierre de cada hito; no más de 10 inicios de sesión fallidos de administrador en 30 días; revisión de accesos con menos de 90 días; política vigente aceptada; cero errores de integridad de datos cifrados. OBJ-7 a OBJ-12 se miden fuera de la aplicación y **no tienen aún una primera medición**: prueba de restauración en los últimos 90 días, consentimiento vigente, cierre de incidentes en plazo, revisión trimestral de los registros de Auth, verificación trimestral de la cadena de auditoría de la nube y 0 vulnerabilidades de producción (esta última medida: 0 el 20 de octubre).
 
 ### 8.4 Declaración de Aplicabilidad por dominio (A.5–A.18)
 
-La Declaración de Aplicabilidad (6.1.3 d) evalúa los 114 controles del Anexo A. Resultado: 71 aplican plenamente, 27 aplican con alcance parcial y 16 se excluyen con justificación; en total 98 controles aplican y 16 se excluyen. La tabla 8.3 muestra el resumen por dominio y el Anexo A, la declaración completa con justificación, estado y evidencia.
+La Declaración de Aplicabilidad (6.1.3 d) evalúa los 114 controles del Anexo A. Resultado: 71 aplican plenamente, 27 aplican con alcance parcial y 16 se excluyen con justificación; en total 98 controles aplican y 16 se excluyen. Por estado de implementación (recalculado con script tras las TANDAS 1 y 2): 31 Implementado, 31 Documentado, 36 Parcial y 16 N/A. La tabla 8.3 muestra el resumen por dominio y el Anexo A, la declaración completa con justificación, estado y evidencia.
 
 **Tabla 8.3.** Resumen de la Declaración de Aplicabilidad por dominio
 
@@ -540,7 +590,7 @@ La Declaración de Aplicabilidad (6.1.3 d) evalúa los 114 controles del Anexo A
 | A.18 | Cumplimiento | 8 | 7 | 1 | 0 |
 | | **Total** | **114** | **71** | **27** | **16** |
 
-Los 16 controles excluidos corresponden a: A.7.1.1, A.7.1.2 y A.7.2.3 (recursos humanos, sin contratación ni proceso disciplinario propio); A.9.4.4 (utilidades privilegiadas); seis controles de seguridad física de instalaciones, A.11.1.1 a A.11.1.6, fuera del alcance; A.12.6.2 y A.12.7.1; A.13.1.3 y A.13.2.3; y A.14.2.3 y A.14.2.7. Cada exclusión se justifica en el Anexo A. El estado de implementación (Implementado, Documentado, Parcial) permite distinguir los controles ejecutados en el sistema de aquellos que solo cuentan con procedimiento escrito.
+Los 16 controles excluidos corresponden a: A.7.1.1, A.7.1.2 y A.7.2.3 (recursos humanos, sin contratación ni proceso disciplinario propio); A.9.4.4 (utilidades privilegiadas); seis controles de seguridad física de instalaciones, A.11.1.1 a A.11.1.6, fuera del alcance; A.12.6.2 y A.12.7.1; A.13.1.3 y A.13.2.3; y A.14.2.3 y A.14.2.7. Cada exclusión se justifica en el Anexo A. El estado de implementación (Implementado, Documentado, Parcial) permite distinguir los controles ejecutados en el sistema de aquellos que solo cuentan con procedimiento escrito. Criterio de esta versión: no se declara «Implementado» un control que dependa de una verificación o de una configuración manual aún no hecha en el entorno real; por eso los controles de acceso (A.9.1.1, A.9.2.x, A.9.4.x), criptografía (A.10), equipo desatendido (A.11.2.8), registros (A.12.4.1 a A.12.4.3), intercambio (A.13.2.1), pruebas (A.14.2.8 y A.14.2.9), parte de la gestión de incidentes (A.16.1.4 a A.16.1.7) y privacidad y registros (A.18.1.3, A.18.1.4, A.18.2.2) figuran como «Parcial», y la v2.0 de la SoA los declaraba «Implementado».
 
 ### 8.5 Controles técnicos implementados y su evidencia
 
@@ -548,49 +598,53 @@ Los 16 controles excluidos corresponden a: A.7.1.1, A.7.1.2 y A.7.2.3 (recursos 
 
 | Control | Medida implementada | Evidencia |
 |---|---|---|
-| A.9.1.1, A.9.2.3, A.9.4.1 | Dos roles; guard de rutas con lista blanca de redirecciones; `assertAdmin()` en acciones privilegiadas; RLS | `stores/auth.js`, `router/guards.js`, `supabase/schema.sql` |
+| A.9.1.1, A.9.2.3, A.9.4.1 | Dos roles; guard de rutas con lista blanca de redirecciones; `assertAdmin()` en acciones privilegiadas; RLS por propietario; el administrador sin lectura masiva (acceso excepcional con motivo, visible para el titular) | `stores/auth.js:63`, `router/guards.js:17`, `supabase/schema.sql` (`admin_leer_sesion`, línea 1522) |
+| A.9.2.3, A.9.4.2 (nube) | `es_admin()` = rol + `aal2` + TOTP de ≤ 15 min; `es_admin_reciente(300)` para acciones sensibles; concesión y retiro del rol desde la app (máx. 5); renovación de TOTP en el cliente. **Sin verificar con un JWT real** | `supabase/schema.sql:623-672`, `services/security/adminTotp.js`, `adminRenovacion.js` |
 | A.9.2.4, A.9.4.3 | PIN sin valor por defecto, mínimo 8 caracteres, rechazo de triviales y secuencias; PBKDF2-SHA-256 con 600 000 iteraciones y sal de 16 bytes | `services/security/pinHash.js` |
-| A.9.4.2 | Comparación en tiempo constante; bloqueo tras 5 fallos (5 a 60 min, persistente); expiración tras 10 min de inactividad o 60 min absolutos; CAPTCHA opcional y límite de intentos de registro | `lockout.js`, `captcha.js`, `rateLimiter.js` |
-| A.10.1.1, A.10.1.2 | AES-GCM de 256 bits, IV aleatorio de 12 bytes, clave no extraíble, *crypto-shredding* al borrar | `services/storage/secureStorage.js`, `wipe.js` |
-| A.12.4.1–A.12.4.4 | Auditoría encadenada con SHA-256, JSON canónico y ancla de rotación; verificación y exportación; sin datos de salud ni credenciales en el registro; en la nube, `ts` y `usuario` fijados por el servidor, lista blanca y cuotas | `services/audit/auditLog.js`, `schema.sql` |
+| A.9.4.2 | Sin nube: comparación en tiempo constante, bloqueo tras 5 fallos (5 a 60 min, persistente), expiración tras 10 min de inactividad o 60 min absolutos. Cuentas: cierre por inactividad de 15 min con aviso, token en `sessionStorage` en equipo compartido, límite de intentos; CAPTCHA opcional solo en el registro | `lockout.js`, `services/security/inactividad.js:5`, `services/cloud/almacenSesion.js:55`, `captcha.js`, `rateLimiter.js` |
+| A.9.4.3, A.9.2.4 (cuentas) | Contraseña de al menos 10 caracteres con letras y números, sin el correo ni contraseñas comunes; contraseña actual para cambiarla, borrar datos de la nube y eliminar la cuenta (control del cliente; el servidor no lo exige) | `services/accounts/validation.js:5`, `services/security/reauth.js:5` |
+| A.10.1.1, A.10.1.2 | AES-GCM de 256 bits, IV aleatorio de 12 bytes, clave no extraíble, *crypto-shredding* al borrar. Alcance real: lectura casual de los archivos del navegador; una sola clave para todos los espacios; no protege frente a quien controla el equipo ni frente a XSS | `services/storage/secureStorage.js:20`, `wipe.js:15`, `src/data/privacidad.js` |
+| A.12.4.1–A.12.4.4 | Auditoría local encadenada con SHA-256, JSON canónico y ancla de rotación; verificación y exportación; sin datos de salud ni credenciales. En la nube: `registrar_evento` con actor y hora del servidor, `tipos_evento` como lista blanca, hash encadenado en servidor, `verificar_cadena_auditoria()`, cola persistente en el cliente, purga a 2 años. Faltan eventos de fallo y anclaje externo | `services/audit/auditLog.js`, `services/cloud/auditOutbox.js:43`, `supabase/schema.sql:758-967` |
 | A.14.1.3, A.14.2.5, A.12.2.1 | Parser serial estricto (línea de hasta 64 caracteres, rangos por campo, tiempo monótono); sin `v-html`, `eval` ni `new Function`; ESLint con `eslint-plugin-security` | `ecgCsvParser.js`, `eslint.config.js` |
 | A.13.2.1, A.8.2.2, A.8.2.3 | CSV seudonimizado con línea de clasificación, advertencia previa, neutralización de inyección de fórmulas y auditoría de la exportación | `csvExporter.js`, `ExportWarningDialog.vue` |
 | A.13.1.1, A.13.1.2, A.14.1.2 | CSP, HSTS, Permissions-Policy, nosniff, X-Frame-Options, COOP y CORP; verificadas por prueba E2E | `vercel.json`, `e2e/seguridad.spec.js` |
 | A.14.2.1, A.14.2.8, A.14.2.9 | Pruebas unitarias y E2E en integración continua; lista de aceptación | `tests/`, `e2e/`, `.github/workflows/ci.yml` |
 | A.12.6.1, A.15.1.3, A.14.2.4 | Sin CDN, `package-lock.json`, versiones con `~`, `npm audit`, Dependabot | `package.json`, `.github/dependabot.yml` |
-| A.18.1.4, A.8.3.2 | Consentimiento expreso, edad por rangos, actividad de lista cerrada, retiro con borrado inmediato, «Eliminar mis datos» local y en la nube (`borrar_mis_datos()`) | `ConsentDialog.vue`, `PrivacyView.vue`, `cloudSync.js` |
+| A.18.1.4, A.8.3.2 | Nube opcional apagada por defecto y borradores que no se suben; consentimiento 2.0 expreso, edad por rangos, actividad de lista cerrada, alias, nombre y notas solo en el dispositivo, declaración de mayoría de edad, consentimiento de publicación por monitoreo exigido por el servidor, retiro con borrado inmediato y retiro de lo público, «Eliminar mis datos» local y en la nube (`borrar_mis_datos()`) | `nubeOptIn.js:30`, `datosNube.js:26`, `consentimiento.js:8`, `ConsentDialog.vue`, `PrivacyView.vue`, `schema.sql:1678`, `schema.sql:1807` |
+| A.13.2.1, A.18.1.4 | Lo público solo por funciones para cuentas registradas, con fecha truncada y «Paciente anónimo»; reporte de contenido y retiro por el administrador; service worker que no cachea datos | `schema.sql:1268-1503`, `CommunityPicker.vue`, `SoportePanel.vue`, `public/sw.js:10` |
+| A.16.1.2–A.16.1.6 | Incidentes de extremo a extremo: alta restringida, disparador de privacidad, ciclo validado en el servidor, el reportante ve estado y respuesta | `schema.sql:1590-1660`, `MisIncidentes.vue` |
 | A.11.2.1 | Acuse obligatorio de seguridad eléctrica antes de Web Serial, registrado como `ELECTRICAL_SAFETY_ACK` | `MonitorView.vue`, `SafetyBanner.vue` |
-| A.12.1.3 | Máximo de 5 canales; estimación de cuota de almacenamiento; cuotas del servidor | `stores/channels.js`, `main.js`, `schema.sql` |
+| A.12.1.3, A.12.4.4 | Máximo de 5 canales; estimación de cuota de almacenamiento; cuotas del servidor con la hora del servidor (32 KB por bloque, 25 MB por sesión, 50 MB por cuenta, 1000 sesiones, 200 pacientes) | `stores/channels.js:50`, `main.js:49`, `schema.sql:576`, `schema.sql:984` |
 
-**Limitaciones intrínsecas.** (1) El PIN local disuade el uso casual pero no es seguridad real frente a quien controla el equipo; para la nube, la autenticación del administrador sí es real (Supabase Auth con RLS). (2) El cifrado en IndexedDB protege frente a copias del almacenamiento, no frente a XSS ni a quien controla el navegador abierto. (3) Sin nube no hay respaldo central ni auditoría inalterable. (4) Todo lo que está en el bundle es público; solo se usa la clave publicable de Supabase. (5) Con la nube activa, los datos seudonimizados salen del equipo hacia el proveedor (R18). Estas limitaciones se informan a los usuarios en `/privacidad` y en el README (A.18.1.4).
+**Limitaciones intrínsecas.** (1) El PIN local disuade el uso casual pero no es seguridad real frente a quien controla el equipo; para la nube, la autenticación del administrador sí es real (Supabase Auth con RLS). (2) El cifrado en IndexedDB protege la lectura casual de los archivos del navegador, no frente a XSS, extensiones ni a quien controla el equipo o copia el perfil (la clave convive con los datos y es una sola; la bóveda con frase está diferida). (3) Sin nube no hay respaldo central ni auditoría inalterable. (4) Todo lo que está en el bundle es público; solo se usa la clave publicable de Supabase. (5) Solo con una cuenta y con «Guardar mis datos en la nube» activado (apagado por defecto), y solo al guardar, los datos seudonimizados salen del equipo hacia el proveedor (R18). (6) La reautenticación con contraseña es del cliente; el servidor no la exige. Estas limitaciones se informan a los usuarios en `/privacidad` y en el README (A.18.1.4).
 
 ### 8.6 Gestión de incidentes (A.16)
 
-El procedimiento SGSI-INC-01 cubre las responsabilidades (A.16.1.1), la notificación (A.16.1.2 y A.16.1.3), la evaluación (A.16.1.4), la respuesta (A.16.1.5), el aprendizaje (A.16.1.6) y la recopilación de evidencias (A.16.1.7). Cualquier persona puede notificar un evento o un punto débil mediante el formulario de `/seguridad`; la descripción (10 a 500 caracteres) rechaza RUT, correos y valores de salud. El ciclo de vida es abierto, en análisis, y cerrado o descartado; el cierre exige respuesta y lección aprendida. Se guarda cifrado en el equipo, se audita como `INCIDENT_REPORTED` y, con nube, se inserta en la tabla `incidentes` (sin borrado). Los plazos orientativos son menos de 24 horas para severidad alta y menos de 72 horas para media. Si hay datos personales afectados, el docente evalúa la notificación a los titulares y a la Agencia de Protección de Datos Personales (Ley 21.719). Hasta la fecha del informe no se ha registrado ningún incidente real en las fuentes revisadas.
+El procedimiento SGSI-INC-01 cubre las responsabilidades (A.16.1.1), la notificación (A.16.1.2 y A.16.1.3), la evaluación (A.16.1.4), la respuesta (A.16.1.5), el aprendizaje (A.16.1.6) y la recopilación de evidencias (A.16.1.7). Cualquier persona puede notificar un evento o un punto débil mediante el formulario de `/seguridad`; la descripción (10 a 500 caracteres) rechaza RUT, correos y valores de salud. El ciclo de vida es abierto, en análisis, y cerrado o descartado; el cierre exige respuesta y lección aprendida. Se guarda cifrado en el equipo, se audita como `INCIDENT_REPORTED` y, con nube, se inserta en la tabla `incidentes` (sin borrado) mediante un alta restringida (solo estado abierto, sin respuesta ni lección, con disparador que rechaza RUT, correos y valores de salud); el administrador ve todos los incidentes y los gestiona con un ciclo validado en el servidor, y el reportante ve el estado y la respuesta en «Mis notificaciones». Cualquier cuenta puede además reportar un monitoreo público, y el administrador lo revisa y puede retirarlo con motivo. No hay aviso automático al responsable ni plantilla de notificación a la Agencia, y el simulacro de incidente no se ha ejecutado. Los plazos orientativos son menos de 24 horas para severidad alta y menos de 72 horas para media. Si hay datos personales afectados, el docente evalúa la notificación a los titulares y a la Agencia de Protección de Datos Personales (Ley 21.719). Hasta la fecha del informe no se ha registrado ningún incidente real en las fuentes revisadas.
 
 ### 8.7 Continuidad (A.17)
 
-El plan SGSI-BCP-01 define como proceso crítico las sesiones de medición en clase, con un tiempo máximo tolerable equivalente a la duración de una sesión (unos 15 minutos) y la regla de que la seguridad no se relaja en los modos de respaldo. Los escenarios cubiertos son: desconexión del sensor, sensor averiado (uso del simulador), pérdida de Internet o caída de Vercel, caída de Supabase (continuidad en modo local), borrado del almacenamiento del navegador (recuperación desde la nube o la última exportación), equipo robado (borrado con *crypto-shredding*) y pérdida del PIN (restablecimiento que borra los datos locales, por diseño). Se realiza un simulacro por hito. Está pendiente la PWA para carga sin conexión (SEC-62) y el registro de una prueba de restauración.
+El plan SGSI-BCP-01 define como proceso crítico las sesiones de medición en clase, con un tiempo máximo tolerable equivalente a la duración de una sesión (unos 15 minutos) y la regla de que la seguridad no se relaja en los modos de respaldo. Los escenarios cubiertos son: desconexión del sensor, sensor averiado (uso del simulador), pérdida de Internet o caída de Vercel, caída de Supabase (continuidad en modo local), borrado del almacenamiento del navegador (recuperación desde la última exportación: la aplicación no restaura monitoreos propios desde la nube), pérdida del TOTP o del claim `amr` (procedimiento de recuperación con regla de dos personas), equipo robado (borrado con *crypto-shredding*) y pérdida del PIN (restablecimiento que borra los datos locales, por diseño). Se prevé un simulacro por hito, que **no se ha ejecutado**. La PWA (SEC-62) cubre el app shell sin conexión pero no la nube. Existe una copia de respaldo temporal en el esquema privado `respaldo_20261020`, que debe eliminarse al validar la migración; no se ha realizado ninguna prueba de restauración ni se han medido RPO y RTO (propuestos: 7 días y 1 día).
 
 ### 8.8 Proveedores (A.15)
 
-La política (A.15.1.1) y las fichas de proveedores (SGSI-REG-03) cubren Supabase, Vercel y GitHub: servicio, datos tratados, región, garantías declaradas, límites, controles propios y vía de salida. Supabase trata sesiones y señales seudonimizadas (datos de salud) y se aloja en la región us-east-1; las garantías declaradas por el proveedor incluyen informe SOC 2 y DPA disponible. La aceptación de los términos y del DPA por el docente está pendiente de registrar con fecha. Se mantiene un registro de vulnerabilidades técnicas: al 15 de octubre de 2026 constan una vulnerabilidad crítica en `tinypool` (dependencia transitiva de `vitest` 3, solo de desarrollo y fuera del bundle) y una moderada en `@vitest/mocker`; se aceptaron temporalmente y se migrará a una versión superior de `vitest` cuando Dependabot lo proponga. La revisión de proveedores es semestral.
+La política (A.15.1.1) y las fichas de proveedores (SGSI-REG-03) cubren Supabase, Vercel y GitHub: servicio, datos tratados, región, garantías declaradas, límites, controles propios y vía de salida. Supabase trata sesiones y señales seudonimizadas (datos de salud) y se aloja en la región us-east-1; las garantías declaradas por el proveedor incluyen informe SOC 2 y DPA disponible. La aceptación de los términos y del DPA por el docente está pendiente de registrar con fecha, y la decisión sobre la región (us-east-1) sigue abierta. Se mantiene un registro de vulnerabilidades técnicas: al 15 de octubre de 2026 constan una vulnerabilidad crítica en `tinypool` (dependencia transitiva de `vitest` 3, solo de desarrollo y fuera del bundle) y una moderada en `@vitest/mocker`; se aceptaron temporalmente y se migrará a una versión superior de `vitest` cuando Dependabot lo proponga. La revisión de proveedores es semestral.
 
 ### 8.9 Protección de datos personales (A.18.1.4)
 
-Las medidas incluyen: seudónimos «Usuario N» y alias validado, sin solicitar nombre, RUT, correo ni fecha de nacimiento; consentimiento informado no premarcado, versionado y revocable; edad por rangos, peso acotado y actividad de lista cerrada; cifrado en reposo; supresión local y en la nube; retención de 30 días por defecto (máximo 180) con purga automática; y la ruta pública `/privacidad`, que informa la base legal (consentimiento expreso), la finalidad, la transferencia internacional (Supabase en us-east-1, Estados Unidos), los derechos de acceso, rectificación, supresión, oposición y portabilidad, los plazos y las limitaciones. Dado que el proyecto de Supabase está fuera de Chile, existe una transferencia internacional de datos de salud seudonimizados que debe tratarse conforme a la Ley 19.628 y a la Ley 21.719 una vez vigente; el riesgo se registra como R18 y se mitiga con consentimiento informado, seudonimización, el DPA del proveedor y la posibilidad de operar solo en modo local.
+Las medidas incluyen: seudónimos «Paciente N» y alias que se queda solo en el dispositivo (con heurística que rechaza nombres y números de documento), sin solicitar nombre, RUT, correo ni fecha de nacimiento; nube opcional apagada por defecto, borradores que nunca se suben y subida solo al guardar; consentimiento informado no premarcado, versionado (2.0) y revocable, con declaración de mayoría de edad y consentimiento de publicación por monitoreo; edad por rangos, peso acotado y actividad de lista cerrada; cifrado en reposo; supresión local y en la nube; retención de 30 días por defecto (máximo 180) en el equipo, 365 días en la nube y 2 años para la auditoría de la nube, con purga automática (por verificar en la base real); y la ruta pública `/privacidad`, que informa la base legal (consentimiento expreso), la finalidad, la transferencia internacional (Supabase en us-east-1, Estados Unidos), los derechos de acceso, rectificación, supresión, oposición y portabilidad, los plazos y las limitaciones. Dado que el proyecto de Supabase está fuera de Chile, existe una transferencia internacional de datos de salud seudonimizados que debe tratarse conforme a la Ley 19.628 y a la Ley 21.719 una vez vigente; el riesgo se registra como R18 y se mitiga con consentimiento informado, seudonimización, el DPA del proveedor y la posibilidad de operar solo en modo local.
 
 ### 8.10 Seguimiento y medición (9.1)
 
-Los indicadores se calculan en la propia aplicación (Administración → SGSI): inicios de sesión fallidos y bloqueos en 30 días, integridad de la auditoría, incidentes abiertos y de severidad alta, exportaciones, desfase del reloj, revisión de accesos y aceptación de la política. Se complementan con indicadores manuales: resultado de `npm test`, `npm run lint`, `npm audit` (0 vulnerabilidades en producción), nota de securityheaders.com (objetivo A, no registrada) y la lista de aceptación. Las funciones de cálculo son puras y cuentan con pruebas (`tests/isms.spec.js`).
+Los indicadores OBJ-1 a OBJ-6 se calculan en la propia aplicación (Administración → SGSI), sobre la auditoría local; OBJ-7 a OBJ-12 se miden fuera de ella y están pendientes de primera medición. Indicadores de la aplicación: inicios de sesión fallidos y bloqueos en 30 días, integridad de la auditoría, incidentes abiertos y de severidad alta, exportaciones, desfase del reloj, revisión de accesos y aceptación de la política. Se complementan con indicadores manuales: resultado de `npm test`, `npm run lint`, `npm audit` (0 vulnerabilidades en producción), nota de securityheaders.com (objetivo A, no registrada) y la lista de aceptación. Las funciones de cálculo son puras y cuentan con pruebas (`tests/isms.spec.js`).
 
 ### 8.11 Auditoría interna (9.2)
 
-El programa prevé una auditoría por hito, con un auditor de otro grupo, criterios basados en las cláusulas 4–10, la Declaración de Aplicabilidad y los documentos del SGSI, y una plantilla de informe. La auditoría AI-01 está planificada para el hito 3 y **aún no se ha ejecutado**; por tanto, no existen hallazgos de auditoría que informar.
+El programa prevé una auditoría por hito, con un auditor de otro grupo, criterios basados en las cláusulas 4–10, la Declaración de Aplicabilidad y los documentos del SGSI, y una plantilla de informe. La auditoría AI-01 está planificada para el hito 3 y **aún no se ha ejecutado**; por tanto, no existen hallazgos de auditoría interna que informar. La auditoría de sistema de octubre de 2026 (`docs/AUDITORIA_SISTEMA.md`) fue una revisión independiente de solo lectura, con 30 hallazgos y 29 cambios propuestos; sirve de insumo para AI-01, pero **no es un acta de auditoría interna firmada**.
 
 ### 8.12 Revisión por la dirección (9.3)
 
-Se dispone de una plantilla de acta con las entradas 9.3 a) a f) (acciones previas, cambios de contexto, desempeño, comentarios de partes interesadas, riesgos y oportunidades) y sus salidas (decisiones, cambios, recursos y aceptación de riesgos). La revisión RD-01 está planificada para el cierre del hito 3 y **aún no se ha realizado**.
+Se dispone de una plantilla de acta con las entradas 9.3 a) a f) (acciones previas, cambios de contexto, desempeño, comentarios de partes interesadas, riesgos y oportunidades) y sus salidas (decisiones, cambios, recursos y aceptación de riesgos). La revisión RD-01 está planificada para el cierre del hito 3 y **aún no se ha realizado**; tampoco se han firmado la política, la política criptográfica ni el plan de tratamiento, ni se han aceptado los residuales Altos. La aplicación permite registrar que una auditoría o revisión se hizo (fecha y responsable), pero no guarda resultados.
 
 ### 8.13 No conformidades y mejora continua (cláusula 10)
 
@@ -601,9 +655,23 @@ Se dispone de una plantilla de acta con las entradas 9.3 a) a f) (acciones previ
 | NC-01 | Revisión de documentación | La SoA y el código citaban la edición 2022 (93 controles) en lugar de ISO/IEC 27001:2013 (114 controles) | Reescritura de la SoA y renumeración en el código y el esquema | Corregida, pendiente de verificación de eficacia |
 | NC-02 | Revisión de documentación | Faltaba información documentada exigida por las cláusulas (política, roles, plan de tratamiento, objetivos, auditoría, revisión) | Creación de `docs/sgsi/` | Corregida, pendiente de verificación de eficacia |
 | NC-03 | Revisión de código | La aplicación no permitía notificar incidentes, revisar accesos ni registrar la aceptación de la política | Implementación de `/seguridad`, del panel SGSI y de la tabla `incidentes` | Corregida, pendiente de verificación de eficacia |
-| NC-04 | Revisión de código | `/privacidad` indicaba que no había servidor remoto, aunque existe sincronización con Supabase | Texto actualizado | Corregida, pendiente de verificación de eficacia |
+| NC-04 | Revisión de código | `/privacidad` indicaba que no había servidor remoto, aunque existe sincronización con Supabase | Texto actualizado; consentimiento 2.0 y prueba que vigila frases falsas | Cerrada el 20 de octubre (revisión legal pendiente) |
+| NC-05 | Revisión de documentación | SoA, plan de tratamiento y continuidad desactualizados | Actualización de la SoA (v3.0) y de `docs/sgsi/` | Corregida, pendiente de verificación |
+| NC-06 | Revisión de configuración | Purga de la nube no programada | `purga-ecg` y `purga-auditoria` en las migraciones, ya aplicadas | Corregida en código; verificar `cron.job` |
+| NC-07 | Asesor de Supabase | Vista con `security_definer` | Funciones RPC; política pública de bloques eliminada | Corregida en código; verificar el asesor |
+| NC-08 | Auditoría de sistema | Claim `amr` no verificado con un JWT real | Contingencia documentada | Abierta |
+| NC-09 | Auditoría de sistema | `pruebas_rls.sql` solo ejecutado en PGlite | — | Abierta |
+| NC-10 | Migración | Copia de respaldo temporal `respaldo_20261020` con datos de salud | — | Abierta |
+| NC-11 | TANDA 2 | Monitoreos públicos previos sin consentimiento 2.0 | Servidor exige 2.0 para nuevas publicaciones | Abierta (decisión) |
+| NC-12 | Auditoría de sistema | Configuración del panel de Supabase sin verificar | — | Abierta |
+| NC-13 | Auditoría de sistema | Rama `main` sin protección; MFA en GitHub y Vercel sin verificar | — | Abierta |
+| NC-14 | Auditoría de sistema | Sin actas de auditoría interna ni de revisión; documentos sin firma | Plantillas | Abierta |
+| NC-15 | Auditoría de sistema | Reautenticación solo en el cliente | Diálogo de contraseña | Abierta (diferida) |
+| NC-16 | Auditoría de sistema | Eventos de auditoría de fallo no emitidos; sin anclaje | — | Abierta (diferida) |
+| NC-17 | Auditoría de sistema | DPA, región y requisitos de la Ley 21.719 sin formalizar | Aviso de transferencia internacional | Abierta |
+| NC-18 | TANDA 2 | Variables `VITE_RESPONSABLE_*` sin confirmar en Vercel | El aviso lo declara | Abierta |
 
-El 20 de octubre se registraron además NC-05 (documentación desactualizada), NC-06 (purga de la nube no programada) y NC-07 (vista con `security_definer`), estas dos últimas abiertas hasta aplicar la migración `supabase/migracion_endurecimiento.sql`. La verificación de eficacia de las no conformidades corresponde a la auditoría AI-01 (aún no ejecutada). Las oportunidades de mejora (10.2) son: MC-01, integración continua con `npm audit` y Dependabot (flujo definido en el repositorio; falta activar la protección de rama); MC-02, PWA sin conexión (implementada para el app shell; no cubre la nube); MC-03, protección del registro de cuentas (la autenticación anónima se eliminó; CAPTCHA opcional no activado); y MC-04, prueba automatizada de las políticas RLS (pendiente).
+Se cierra solo lo que se pudo verificar con evidencia reproducible (NC-01, con el script de consistencia; NC-03 en código y NC-04, con las pruebas automáticas); lo demás queda «corregida en código» o abierta. La verificación independiente de eficacia corresponde a la auditoría AI-01 (aún no ejecutada). Las oportunidades de mejora (10.2) son: MC-01, integración continua con `npm audit` y Dependabot (flujo definido en el repositorio; falta activar la protección de rama); MC-02, PWA sin conexión (implementada para el app shell; no cubre la nube); MC-03, protección del registro de cuentas (la autenticación anónima se eliminó; CAPTCHA opcional no activado); y MC-04, prueba automatizada de las políticas RLS (`pruebas_rls.sql` corre en PGlite y a mano, no en CI). Se añadieron MC-05 a MC-11: bóveda local con frase, reautenticación y `amr` en el servidor, restauración desde la nube y `exportar_mis_datos()`, conciliación de bloques, validación de `sesiones.datos`, indicadores OBJ-7 a OBJ-12 en el panel y verificación de documentación en CI, y retirar el modo PIN local.
 
 ## 9 Pruebas y verificación
 
@@ -614,30 +682,44 @@ El 20 de octubre se registraron además NC-05 (documentación desactualizada), N
 | Verificación | Resultado |
 |---|---|
 | `npm run lint` (ESLint con `eslint-plugin-vue` y `eslint-plugin-security`) | 0 problemas |
-| `npm test` (Vitest, 18 archivos) | 212 de 212 pruebas aprobadas (20 de octubre) |
-| `npm run test:e2e` (Playwright, Chromium, 10 archivos) | 33 de 33 pruebas aprobadas (20 de octubre) |
+| `npm test` (Vitest, 28 archivos) | 343 de 343 pruebas aprobadas (20 de octubre, tras las TANDAS 1 y 2) |
+| `npm run test:e2e` (Playwright, Chromium, 16 archivos) | 75 de 75 pruebas aprobadas (proyecto sin nube y proyecto «nube» con toda la red a Supabase simulada) |
 | `npm run build` | Compilación exitosa |
 | `npm audit --omit=dev` (producción) | 0 vulnerabilidades (20 de octubre) |
 | `npm audit` (desarrollo) | 1 crítica (`tinypool` vía `vitest` 3) y 1 moderada, registradas; no llegan al bundle |
-| Base de datos de Supabase | En la primera entrega: 6 tablas con RLS y 16 políticas, avisos del asesor corregidos. Después: el asesor señaló `security_definer_view`; la corrección está escrita y pendiente de aplicar; no se revalidó contra la base real |
+| Base de datos de Supabase | En la primera entrega: 6 tablas con RLS y 16 políticas, avisos del asesor corregidos. Después: las migraciones de las TANDAS 1 y 2 se aplicaron al proyecto real; **no** se reejecutó el asesor ni se probó la RLS con cuentas reales |
+| `supabase/pruebas_rls.sql` (101 casos) en PGlite | 0 fallos en tres rutas: base antigua migrada, migraciones 1 a 4 más la 5, y `schema.sql` nuevo; no cubre concurrencia real ni `pg_cron` ni el JWT real de Supabase |
 | `schema.sql` en PostgreSQL embebido (PGlite) | Ejecutado dos veces (idempotente); cuota de 50 sesiones bloquea la 51.ª; lista blanca y supresión verificadas |
 
 ### 9.2 Pruebas unitarias
 
-Las pruebas unitarias cubren el anillo de datos, el analizador CSV serial (líneas truncadas, valores fuera de rango, reinicio de tiempo, cabecera), el evaluador de rangos, la exportación CSV (incluida la neutralización de fórmulas), el detector de pico R, la correlación cruzada con desfase conocido, la seguridad (PBKDF2, política de PIN, bloqueo, expiración de sesión, redirección segura, cifrado y auditoría encadenada), los controles de abuso (límites de tasa, CAPTCHA y coherencia de la lista blanca de eventos con la del esquema) y el SGSI (incidentes, política, revisión de accesos, desfase de reloj, indicadores y objetivos). La verificación independiente del 5 de octubre de 2026 registró 84 pruebas en 7 archivos; con `isms.spec.js` (+10) y `abuseControls.spec.js` (+9) se llega a las 103 pruebas actuales en 9 archivos.
+Las pruebas unitarias cubren el anillo de datos, el analizador CSV serial (líneas truncadas, valores fuera de rango, reinicio de tiempo, cabecera), el evaluador de rangos, la exportación CSV (incluida la neutralización de fórmulas), el detector de pico R, la correlación cruzada con desfase conocido, la seguridad (PBKDF2, política de PIN, bloqueo, expiración de sesión, redirección segura, cifrado y auditoría encadenada), los controles de abuso (límites de tasa, CAPTCHA y coherencia de la lista blanca de eventos con la del esquema) y el SGSI (incidentes, política, revisión de accesos, desfase de reloj, indicadores y objetivos). La verificación independiente del 5 de octubre de 2026 registró 84 pruebas en 7 archivos; la suite actual tiene **343 pruebas en 28 archivos** (20 de octubre), con las TANDAS 1 y 2 incorporando, entre otros, `adminTotp` (10), `auditOutbox` (10), `cloudSyncNube` (11), `incidentesNube` (9), `etiquetas` (6), `nubeOptIn` (7), `privacy` (4) y `privacidadTanda2` (34), y ampliaciones de `schema` (20) y `visibilidad` (23). Los archivos más numerosos son `privacidadTanda2` (34), `ppgCamera` (31) y `ecgCsvParser` (30). Las pruebas con `Supabase` usan un cliente simulado: comprueban qué se envía, no cómo responde el servidor real.
 
 ### 9.3 Pruebas de extremo a extremo
 
-**Tabla 9.2.** Pruebas E2E con Playwright (Chromium)
+**Tabla 9.2.** Pruebas E2E con Playwright (Chromium): 75 pruebas en 16 archivos
 
 | Archivo | Prueba | Pruebas |
 |---|---|---|
 | `inicio.spec.js` | Carga de la portada sin errores de CSP ni de consola; enlace «Saltar al contenido» accesible por teclado; `/privacidad` con base legal, derechos y transferencia internacional | 3 |
-| `admin.spec.js` | `/admin` y `/admin/auditoria` no accesibles sin sesión; rutas de participante exigen elegir usuario | 3 |
+| `admin.spec.js` | `/admin` y `/admin/auditoria` no accesibles sin sesión; rutas de participante exigen elegir paciente | 5 |
 | `seguridad.spec.js` | `/seguridad` publica la política y el formulario de incidentes; las cabeceras de `vercel.json` se aplican | 2 |
 | `simulador.spec.js` | El simulador muestra BPM en vivo con alternativa textual del gráfico | 1 |
+| `monitoreos.spec.js` | Guardar y descartar monitoreos, filtros y detalle | 3 |
+| `monitor-sin-usuario.spec.js` | El monitor sin paciente elegido | 3 |
+| `canal-acciones.spec.js` | Acciones sobre los canales | 5 |
+| `camara.spec.js` | Asistente de cámara PPG con cámara simulada | 1 |
+| `pwa.spec.js` | Instalación y uso sin conexión del app shell | 3 |
+| `encabezado.spec.js` | Encabezado adaptable, sin desbordes en seis anchos de pantalla | 13 |
+| `cuentas.spec.js` | Cuentas, pacientes y visibilidad (sin nube real) | 9 |
+| `admin-cuenta.nube.spec.js` | Administrador con cuenta y TOTP, gestión de administradores (nube simulada) | 9 |
+| `admin-soporte.nube.spec.js` | Soporte y moderación, renovación de TOTP, acceso excepcional con motivo (nube simulada) | 6 |
+| `auditoria.nube.spec.js` | Pestaña «Nube» de la auditoría, verificación de la cadena (nube simulada) | 4 |
+| `comunidad.nube.spec.js` | Comunidad, lectura pública por funciones y reporte de contenido (nube simulada) | 3 |
+| `privacidad.nube.spec.js` | Nube apagada: nada se envía; borrador no se sube; guardado sin nombre, notas ni alias; interruptor con borrado y contraseña; equipo compartido y personal (nube simulada) | 5 |
+| **Total** | **16 archivos** | **75** |
 
-Las pruebas E2E se ejecutan sobre una copia compilada sin nube (`dist-e2e/`) con las mismas cabeceras que producción.
+Las pruebas E2E se ejecutan sobre dos copias compiladas con las mismas cabeceras que producción: una sin nube (`dist-e2e/`) y otra con nube cuyo tráfico a Supabase se simula con `page.route` (`dist-e2e-nube/`, archivos `*.nube.spec.js`). Por eso **no** demuestran el comportamiento del Supabase real.
 
 ### 9.4 Verificación independiente y manual
 
@@ -645,7 +727,7 @@ La verificación independiente (5 de octubre de 2026) revisó el código sin apo
 
 ### 9.5 Lo que no se ha verificado
 
-No se probó la aplicación con un puerto serie físico, con el módulo AD8232 real, con un HC-05 ni, en esta revisión, con el MAX30100 y el ESP32 reales ni con la cámara sobre personas; no se ejecutaron las pruebas de dispositivos móviles reales; no se adjuntó informe Lighthouse o axe; no se midieron FPS ni uso de CPU con cinco canales; no se realizó una prueba funcional de RLS con dos cuentas reales (pendiente en `PENDIENTES_MANUALES.md`); no se aplicó ni verificó en la base real la migración de endurecimiento ni la tarea `purga-ecg`; y las no conformidades NC-01 a NC-07 no han pasado por una auditoría de eficacia. Estas brechas se retoman en el capítulo 11.
+No se probó la aplicación con un puerto serie físico, con el módulo AD8232 real, con un HC-05 ni, en esta revisión, con el MAX30100 y el ESP32 reales ni con la cámara sobre personas; no se ejecutaron las pruebas de dispositivos móviles reales; no se adjuntó informe Lighthouse o axe; no se midieron FPS ni uso de CPU con cinco canales; no se realizó una prueba funcional de RLS con cuentas reales (`pruebas_rls.sql` solo en PGlite; pendiente en `PENDIENTES_MANUALES.md`); no se verificó con un JWT real que el claim `amr` traiga el TOTP reciente; las migraciones se aplicaron a la base real, pero no se comprobó allí que `purga-ecg` y `purga-auditoria` estén activas ni se reejecutó el asesor de Supabase; no se probó concurrencia real de las cuotas; no se verificó la configuración del panel (inicios anónimos, SMTP, CAPTCHA, contraseñas filtradas, *time-box*); no se ejecutaron la auditoría interna, la revisión por la dirección, el simulacro de incidente ni la prueba de restauración; y las no conformidades no han pasado por una auditoría de eficacia independiente. Estas brechas se retoman en el capítulo 11.
 
 ## 10 Cambios realizados
 
@@ -664,7 +746,11 @@ No se probó la aplicación con un puerto serie físico, con el módulo AD8232 r
 | Octubre de 2026 (fecha no registrada en las fuentes) | Publicación en Vercel y en GitHub; configuración del proyecto de Supabase (región us-east-1), 6 tablas con RLS y 16 políticas, corrección de los avisos del asesor | Aplicación en línea; sesión anónima aún desactivada |
 | 16 de octubre de 2026 | Elaboración del presente informe | Entregable `INFORME_FORMAL` |
 | Octubre de 2026 (posterior) | Cámara PPG, sensor MAX30100 con ESP32, PWA, cuentas con Supabase Auth (se eliminó el inicio de sesión anónimo), mantenedor de pacientes, monitoreos guardables, informes PDF e historial, visibilidad pública | 212 pruebas unitarias y 33 E2E (20 de octubre) |
-| 20 de octubre de 2026 | Endurecimiento: funciones RPC en lugar de la vista pública, retención de 365 días con `purga-ecg`, riesgos R22–R26, NC-05 a NC-07, erratas RF04/RF23, `PENDIENTES_MANUALES.md` | Migración escrita, pendiente de aplicar; documentación actualizada |
+| 20 de octubre de 2026 | Endurecimiento: funciones RPC en lugar de la vista pública, retención de 365 días con `purga-ecg`, riesgos R22–R26, NC-05 a NC-07, erratas RF04/RF23, `PENDIENTES_MANUALES.md` | Migración escrita (luego aplicada); documentación actualizada |
+| 20 de octubre de 2026 | Auditoría de sistema de solo lectura frente a ISO/IEC 27001:2013 (`docs/AUDITORIA_SISTEMA.md`) | 30 hallazgos (H-01 a H-30) y 29 cambios propuestos (C-01 a C-29); 232 pruebas unitarias al momento de la auditoría |
+| 20 de octubre de 2026 | TANDA 1 (servidor): lo público por funciones, `es_admin()` con TOTP reciente, administrador sin lectura masiva, auditoría de la nube, incidentes, cuotas con hora del servidor, etiquetas únicas | `migracion_endurecimiento_2.sql`; `pruebas_rls.sql` (101 casos) en PGlite |
+| 20 de octubre de 2026 | TANDA 2 (privacidad en la aplicación): nube opcional, borradores locales, consentimiento 2.0, equipo compartido, inactividad, reautenticación, mayoría de edad, alias local | `migracion_tanda2.sql`; 343 pruebas unitarias y 75 E2E |
+| 20 de octubre de 2026 | Documentación del SGSI v3.0 y verificación cruzada; migraciones aplicadas al proyecto real con copia temporal `respaldo_20261020` | SoA con 31 Implementado, 31 Documentado, 36 Parcial y 16 N/A; riesgos R01–R38; NC-01 a NC-18 |
 
 ## 11 Limitaciones y trabajo futuro
 
@@ -672,24 +758,26 @@ Se enumeran, sin atenuar, los pendientes que impiden afirmar un cumplimiento com
 
 1. **Hardware real.** `SerialSource` sigue la API documentada, pero no se probó con un puerto físico; el comportamiento con Arduino, AD8232 y HC-05 reales (incluida la estabilización del BPM y el acuse eléctrico) queda por demostrar. El simulador reemplaza al sensor en las pruebas.
 2. **Conexión BLE con ESP32.** `BleSource` es solo un esqueleto; falta definir el servicio GATT y el formato. Mientras tanto, el ESP32 se soporta únicamente por USB, y la Permissions-Policy mantiene Bluetooth deshabilitado (RNF08 parcial).
-3. **CAPTCHA.** Está implementado en el código (Turnstile o hCaptcha mediante variables públicas), pero no está activado ni en el proveedor ni en la CSP; hasta entonces el riesgo R16 (registro de cuentas) se trata con confirmación de correo, límites de tasa de Auth y cuotas.
+3. **CAPTCHA.** Está implementado en el código (Turnstile o hCaptcha mediante variables públicas), pero no está activado ni en el proveedor ni en la CSP; hasta entonces el riesgo R16 (registro de cuentas) se trata con confirmación de correo, límites de tasa de Auth y cuotas. **Advertencia:** el código envía el token solo al crear la cuenta; activar el CAPTCHA en el panel de Supabase sin que el inicio de sesión y la recuperación lo envíen impediría entrar.
 4. **Firma docente.** El plan de tratamiento de riesgos, la política criptográfica y la aceptación de los riesgos residuales requieren la aprobación firmada del docente; también falta registrar la fecha de aceptación del DPA de los proveedores.
 5. **Presentación.** El material de presentación (SUG-27) no está elaborado.
 6. **Rendimiento.** No se han medido FPS ni uso de CPU con cinco canales (SUG-21); los objetivos de la sección 6.4 son de diseño, no resultados.
 7. **Accesibilidad y responsividad.** Faltan la auditoría con Lighthouse o axe y las pruebas en dispositivos móviles reales.
 8. **Región us-east-1** (aplica también a las cuentas y a los monitoreos públicos). El proyecto de Supabase está en Estados Unidos, lo que constituye una transferencia internacional de datos de salud seudonimizados (Ley 19.628 y Ley 21.719); no se evaluó una región más cercana ni se ha registrado el DPA.
-9. **Cuentas, administrador y migraciones en Supabase.** El inicio de sesión anónimo se eliminó. Falta aplicar `migracion_endurecimiento.sql` (funciones públicas y `purga-ecg`), configurar SMTP propio, MFA de la cuenta administradora y la protección de contraseñas filtradas, y ejecutar la prueba de RLS con dos cuentas (ver `docs/PENDIENTES_MANUALES.md`).
+9. **Cuentas, administrador y migraciones en Supabase.** Las migraciones ya están aplicadas, pero falta: verificar con un JWT real el claim `amr` (de lo que depende `es_admin()`), crear un segundo administrador, ejecutar `pruebas_rls.sql` con cuentas reales, comprobar `cron.job`, desactivar los inicios anónimos, configurar SMTP propio, la protección de contraseñas filtradas y el *time-box* de sesiones, y eliminar la copia temporal `respaldo_20261020` (ver `docs/PENDIENTES_MANUALES.md`).
 10. **Referencia validada (RF11).** La señal de referencia es sintética; incorporar un registro validado (por ejemplo, de PhysioNet) con su licencia.
-11. **Procesos del SGSI.** Ejecutar la auditoría interna AI-01 y la revisión por la dirección RD-01 con actas firmadas, verificar la eficacia de NC-01 a NC-07, hacer un simulacro de incidente, activar la protección de la rama `main` y probar la restauración desde la nube.
-12. **Otros.** Ampliar la PWA para cubrir la nube con cola de reintentos (SEC-62 cubre solo el app shell), ficha educativa de PPG, esquema ESP32 + MAX30100, Web Worker para la correlación cruzada, persistencia de la referencia entre vistas y migración a una versión superior de `vitest`. Como trabajo futuro se proponen el canal de lactato mediante la abstracción de fuentes, más de cinco canales y el cálculo de la variabilidad de la frecuencia cardíaca.
+11. **Procesos del SGSI.** Ejecutar la auditoría interna AI-01 y la revisión por la dirección RD-01 con actas firmadas (hoy solo hay plantillas), firmar la política, la política criptográfica y el plan de tratamiento, decidir sobre los residuales Altos, verificar la eficacia de NC-01 a NC-18, hacer un simulacro de incidente, activar la protección de la rama `main` y probar una restauración en un proyecto aparte.
+12. **Diferido por las TANDAS 1 y 2.** Bóveda local con frase y clave por espacio; reautenticación y `amr` con contraseña exigidos por el servidor; restauración de monitoreos propios desde la nube y `exportar_mis_datos()`; conciliación de bloques subidos; validación de `sesiones.datos` con lista blanca; peso por rangos; eventos de auditoría de fallo y anclaje de la cadena; retirar el modo PIN local; aislamiento galvánico y CRC por línea para los sensores.
+13. **Legal.** Revisión por asesoría legal de los textos de privacidad y del consentimiento, registro de actividades de tratamiento, evaluación de impacto y procedimiento de notificación de brechas conforme a la Ley 21.719 (vigencia prevista para diciembre de 2026); decisión sobre los monitoreos públicos publicados antes del consentimiento 2.0.
+14. **Otros.** Ampliar la PWA para cubrir la nube con cola de reintentos (SEC-62 cubre solo el app shell), ficha educativa de PPG, esquema ESP32 + MAX30100, Web Worker para la correlación cruzada, persistencia de la referencia entre vistas y migración a una versión superior de `vitest`. Como trabajo futuro se proponen el canal de lactato mediante la abstracción de fuentes, más de cinco canales y el cálculo de la variabilidad de la frecuencia cardíaca.
 
 ## 12 Conclusiones
 
 Se cumplió el objetivo principal de transformar un prototipo monocanal en una plataforma web completa que implementa los 27 requerimientos funcionales y los 9 no funcionales, con dos calificaciones parciales en RF y tres en RNF que se declaran y se explican. La nueva arquitectura corrige los diecisiete defectos del sistema original y resuelve, mediante perfiles de dispositivo, simulador y detección de capacidades, las inconsistencias entre el hardware y la documentación.
 
-La aplicación se verificó con 212 pruebas unitarias, 33 pruebas de extremo a extremo, lint sin problemas, compilación exitosa y ninguna vulnerabilidad en las dependencias de producción, y se publicó en Vercel con una política de cabeceras restrictiva y una base de datos con RLS activa en todas sus tablas.
+La aplicación se verificó con 343 pruebas unitarias, 75 pruebas de extremo a extremo (las de nube con Supabase simulado), lint sin problemas, compilación exitosa y ninguna vulnerabilidad en las dependencias de producción, y se publicó en Vercel con una política de cabeceras restrictiva y una base de datos con RLS activa en todas sus tablas. Tras una auditoría de sistema se aplicaron dos tandas de endurecimiento que cerraron los hallazgos de mayor gravedad en el código (nube opcional, lo público por funciones, administrador sin lectura masiva, auditoría de la nube fiable), con 8 de 30 hallazgos y 11 de 29 cambios resueltos, y el resto parcial, diferido o dependiente de acciones manuales.
 
-El SGSI aporta, de forma coherente con ISO/IEC 27001:2013, la documentación de las cláusulas 4 a 10, una apreciación de 26 riesgos, una Declaración de Aplicabilidad de 114 controles (71 aplicables, 27 parciales y 16 excluidos) trazada a evidencias del código, y procedimientos de incidentes y continuidad. Su principal debilidad es que los procesos de evaluación y mejora (auditoría interna, revisión por la dirección y verificación de las no conformidades) están planificados pero no ejecutados, y que la aprobación docente está pendiente. Asimismo, por tratarse de una aplicación de cliente, los controles locales disuaden pero no impiden el acceso a quien controla el navegador; la autorización efectiva sobre los datos en la nube recae en RLS, cuya prueba funcional con dos cuentas reales aún debe realizarse.
+El SGSI aporta, de forma coherente con ISO/IEC 27001:2013, la documentación de las cláusulas 4 a 10, una apreciación de 38 riesgos con su riesgo residual, una Declaración de Aplicabilidad de 114 controles (71 aplicables, 27 parciales y 16 excluidos; 31 Implementado, 31 Documentado, 36 Parcial y 16 N/A) trazada a evidencias del código con archivo y línea, y procedimientos de incidentes y continuidad. Su principal debilidad es que los procesos de evaluación y mejora (auditoría interna, revisión por la dirección y verificación de las no conformidades) están planificados pero no ejecutados, y que la aprobación docente está pendiente. Asimismo, por tratarse de una aplicación de cliente, los controles locales disuaden pero no impiden el acceso a quien controla el navegador; la autorización efectiva sobre los datos en la nube recae en RLS, cuya prueba funcional con cuentas reales aún debe realizarse, igual que la verificación del claim `amr` del que depende el privilegio del administrador. Por honestidad con esas brechas, la Declaración de Aplicabilidad v3.0 no declara «Implementado» ningún control que dependa de esas verificaciones.
 
 Como aprendizaje, el trabajo evidenció que la seguridad de un sistema que maneja datos de salud no se agota en el cifrado o en las cabeceras: exige base legal, minimización, gestión de proveedores y transferencia internacional, gobierno y mejora continua. Se recomienda a futuro priorizar la prueba con hardware real, la activación y verificación de la nube, la medición de rendimiento y la ejecución de la primera auditoría interna.
 
@@ -749,7 +837,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
 | A.6.1.1 | Roles y responsabilidades en seguridad de la información | Sí | Distinguir docente, responsable, admin, participante, desarrollador | Documentado | `sgsi/roles_responsabilidades.md`; tabla de roles en `/seguridad` |
-| A.6.1.2 | Segregación de tareas | Parcial | Equipo pequeño | Parcial | Participante no configura; admin no aprueba su propio PR (`SEC-58`); auditor interno de otro grupo |
+| A.6.1.2 | Segregación de tareas | Parcial | Equipo pequeño | Parcial | Participante no configura; admin no aprueba su propio PR (`SEC-58`, protección de rama pendiente); auditor interno de otro grupo (no designado) |
 | A.6.1.3 | Contacto con las autoridades | Parcial | Ley 21.719 puede exigir notificar brechas | Documentado | `sgsi/procedimiento_incidentes.md` §5 (Agencia de Protección de Datos Personales, CSIRT de Gobierno) |
 | A.6.1.4 | Contacto con grupos de interés especial | Parcial | Avisos de vulnerabilidades del ecosistema | Documentado | GitHub Security Advisories, avisos de Supabase/Vercel (`sgsi/roles_responsabilidades.md`) |
 | A.6.1.5 | Seguridad de la información en la gestión de proyectos | Sí | Seguridad desde el inicio del proyecto | Implementado | Requisitos SEC en el backlog (sección 5) |
@@ -763,7 +851,7 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.7.1.1 | Investigación de antecedentes | No | Equipo estudiantil, sin contratación | N/A | — |
 | A.7.1.2 | Términos y condiciones del empleo | No | Sin relación laboral; el compromiso de confidencialidad se cubre en A.13.2.4 | N/A | — |
 | A.7.2.1 | Responsabilidades de gestión | Sí | El docente exige aplicar la política | Documentado | `sgsi/roles_responsabilidades.md` |
-| A.7.2.2 | Concienciación, educación y capacitación en seguridad de la información | Sí | Administrador y equipo manejan datos de salud | Implementado | Aceptación de política en la app (`src/stores/isms.js:82`); Aprende → Seguridad de la información (`src/data/learn/informationSecurity.js`) |
+| A.7.2.2 | Concienciación, educación y capacitación en seguridad de la información | Sí | Administrador y equipo manejan datos de salud | Implementado | Aceptación de política en la app (`src/stores/isms.js:108`); Aprende → Seguridad de la información (`src/data/learn/informationSecurity.js`) |
 | A.7.2.3 | Proceso disciplinario | No | Lo cubre el reglamento universitario | N/A | Referencia en la política §6 |
 | A.7.3.1 | Responsabilidades ante la finalización o cambio | Parcial | Fin de semestre o cambio de administrador | Documentado | Rotar PIN, revocar admin en `administradores`, borrar datos locales (`sgsi/control_acceso.md` §5) |
 
@@ -779,34 +867,34 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.8.2.2 | Etiquetado de la información | Sí | El usuario debe ver qué es sensible | Implementado | `src/components/common/DataClassBadge.vue`; cabecera CSV (`src/services/export/csvExporter.js:12`) |
 | A.8.2.3 | Manipulado de la información | Sí | Reglas por nivel (exportar, compartir, borrar) | Implementado | Diálogo de exportación, seudonimización, `sgsi/uso_aceptable_y_clasificacion.md` §4 |
 | A.8.3.1 | Gestión de soportes extraíbles | Parcial | CSV en USB | Documentado | Regla: USB cifrado o borrado tras uso (§4 de uso aceptable) |
-| A.8.3.2 | Eliminación de soportes | Sí | Derecho de supresión y fin del curso | Implementado | *Crypto-shredding* (`src/services/storage/secureStorage.js:91`, `src/services/storage/wipe.js:14`); nube: purga a 365 días (pg_cron, pendiente de aplicar) |
+| A.8.3.2 | Eliminación de soportes | Sí | Derecho de supresión y fin del curso | Parcial | *Crypto-shredding* (`src/services/storage/secureStorage.js:91`, `src/services/storage/wipe.js:15`); nube: `borrar_mis_datos()` (`supabase/schema.sql:1678`) y purga a 365 días (`:1192`, verificar `cron.job`); la copia temporal `respaldo_20261020` debe eliminarse (R32) |
 | A.8.3.3 | Soportes físicos en tránsito | Parcial | Portátiles/USB fuera del laboratorio | Documentado | Prohibido trasladar CSV sin cifrar (uso aceptable §4) |
 
 ### A.9 Control de acceso
 
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
-| A.9.1.1 | Política de control de acceso | Sí | RNF06: limitar funciones administrativas | Implementado | `sgsi/control_acceso.md`; RBAC (`src/stores/auth.js`); RLS (`supabase/schema.sql`) |
-| A.9.1.2 | Acceso a las redes y a los servicios de red | Parcial | Solo el proyecto Supabase y el propio origen | Implementado | CSP `connect-src` (`vercel.json:11`); solo clave publicable (`src/services/cloud/supabaseClient.js:15`) |
-| A.9.2.1 | Registro y baja de usuario | Sí | Cuentas de usuario con correo y contraseña; pacientes propios | Implementado | Supabase Auth (`src/services/accounts/authService.js`); alta, acceso y baja auditados (`ACCOUNT_*`); `eliminar_mi_cuenta()`; CAPTCHA opcional (`captcha.js`); la autenticación anónima se eliminó — SUG-04 |
-| A.9.2.2 | Provisión de acceso de usuario | Sí | Rol admin solo por alta explícita | Implementado | `insert into public.administradores` (`supabase/schema.sql`, final); setup único de PIN (`src/router/guards.js`) |
-| A.9.2.3 | Gestión de privilegios de acceso | Sí | Acciones privilegiadas restringidas | Implementado | `assertAdmin()` (`src/stores/auth.js:40`); `es_admin()` en RLS |
-| A.9.2.4 | Gestión de la información secreta de autenticación de los usuarios | Sí | PIN y contraseña de la nube | Implementado | Sin PIN por defecto, PBKDF2 (`src/services/security/pinHash.js:7`); MFA del panel Supabase (`SEC-50`) |
-| A.9.2.5 | Revisión de los derechos de acceso de usuario | Sí | Admin local y en la nube | Implementado | Pestaña SGSI → Revisión (`src/components/admin/IsmsPanel.vue`, `src/stores/isms.js:90`, `src/services/security/isms.js:22`) |
-| A.9.2.6 | Retirada o reasignación de los derechos de acceso | Sí | Cambio de administrador o baja de participante | Implementado | Cambio de PIN; `delete from administradores`; "Eliminar mis datos" (`src/stores/users.js:138`) |
+| A.9.1.1 | Política de control de acceso | Sí | RNF06: limitar funciones administrativas | Parcial | `sgsi/control_acceso.md` v2.0; RBAC (`src/stores/auth.js:63`); RLS en todas las tablas y `es_admin()` (`supabase/schema.sql:645`). Probado en PGlite (`supabase/pruebas_rls.sql`, 101 casos, 0 fallos); **no** ejecutado con dos cuentas reales |
+| A.9.1.2 | Acceso a las redes y a los servicios de red | Parcial | Solo el proyecto Supabase y el propio origen | Implementado | CSP `connect-src` (`vercel.json:11`; incluye `wss://` del proyecto aunque no se usa Realtime, H-25); solo clave publicable (`src/services/cloud/supabaseClient.js:13`) |
+| A.9.2.1 | Registro y baja de usuario | Sí | Cuentas de usuario con correo y contraseña; pacientes propios | Parcial | Supabase Auth (`src/services/accounts/authService.js:40`, `:51`); declaración de mayoría de edad (`src/services/accounts/validation.js:6`); alta, acceso y baja auditados (`ACCOUNT_*`); `eliminar_mi_cuenta()` (`supabase/schema.sql:547`). **Manual pendiente:** desactivar inicios anónimos, SMTP propio y CAPTCHA (el código lo envía solo en el registro, `authService.js:56`, y solo con `VITE_CAPTCHA_*`) |
+| A.9.2.2 | Provisión de acceso de usuario | Sí | Rol admin solo por alta explícita | Parcial | Rol de administrador concedido por otro administrador desde la app: `admin_conceder_rol` (`supabase/schema.sql:675`, exige `es_admin_reciente(300)`, máx. 5, cuenta confirmada, respuesta genérica); el SQL del dueño del proyecto es solo contingencia (`sgsi/recuperacion_acceso_admin.md` §3); sin nube, setup único de PIN (`src/router/guards.js:64`). Depende de verificar `amr` (R28) |
+| A.9.2.3 | Gestión de privilegios de acceso | Sí | Acciones privilegiadas restringidas | Parcial | `assertAdmin()` (`src/stores/auth.js:63`); `es_admin()` = rol + `aal2` + TOTP ≤ 15 min (`supabase/schema.sql:645`) y `es_admin_reciente(300)` (`:660`); renovación de TOTP en el cliente (`src/services/security/adminRenovacion.js:26`); `administradores` sin escritura directa (SEC-77/79/83/87). **Sin verificar** con un JWT real (caso 0 de `pruebas_rls.sql`) |
+| A.9.2.4 | Gestión de la información secreta de autenticación de los usuarios | Sí | Contraseña de la cuenta, secreto TOTP y PIN local (sin nube) | Parcial | Sin PIN por defecto, PBKDF2 (`src/services/security/pinHash.js:7`); contraseña ≥ 10 con letras y números, sin correo ni contraseñas comunes (`src/services/accounts/validation.js:5`); TOTP del administrador (SEC-78); `signOut({scope:'others'})` al cambiar la contraseña (`authService.js:98`); recuperación formal `docs/sgsi/recuperacion_acceso_admin.md`. Pendiente (manual): protección de contraseñas filtradas, SMTP propio, MFA del panel de Supabase (`SEC-50`) |
+| A.9.2.5 | Revisión de los derechos de acceso de usuario | Sí | Administradores (nube) y admin local (sin nube) | Parcial | Administración → Administradores y SGSI → Revisión con `admin_listar_administradores()` (`supabase/schema.sql:102`) y «Registrar revisión» (`src/stores/isms.js:116`, `src/services/security/isms.js:22`; SEC-81). No consta una revisión ejecutada: la primera está pendiente |
+| A.9.2.6 | Retirada o reasignación de los derechos de acceso | Sí | Cambio de administrador o baja de participante | Parcial | «Retirar rol» (`admin_retirar_rol`, `supabase/schema.sql:717`: TOTP reciente, no a uno mismo, mínimo 1); contingencia: `delete` del dueño del proyecto (`docs/sgsi/recuperacion_acceso_admin.md` §4); cerrar la sesión de la cuenta cierra el modo admin; «Eliminar mis datos» (`src/stores/users.js:198`) |
 | A.9.3.1 | Uso de la información secreta de autenticación | Sí | El admin no comparte el PIN | Documentado | `sgsi/control_acceso.md` §4; política de uso aceptable |
-| A.9.4.1 | Restricción del acceso a la información | Sí | El participante solo ve lo suyo | Implementado | `listSessions` por usuario (`src/services/storage/sessionRepository.js:35`); RLS `propietario = auth.uid()` |
-| A.9.4.2 | Procedimientos seguros de inicio de sesión | Sí | Admin local, cuentas y nube | Implementado | Bloqueo (`src/services/security/lockout.js:20`), expiración (`lockout.js:8`), Supabase Auth con confirmación de correo (`authService.js`); límite de intentos en cliente y de tasa en Supabase; CAPTCHA opcional; MFA y protección de contraseñas filtradas pendientes (manual) — SUG-04 |
-| A.9.4.3 | Sistema de gestión de contraseñas | Sí | Calidad del PIN | Implementado | `validateNewPin` (`src/services/security/pinHash.js:15`) |
+| A.9.4.1 | Restricción del acceso a la información | Sí | El participante solo ve lo suyo | Parcial | `listSessions` por usuario (`src/services/storage/sessionRepository.js:36`); RLS por propietario sin lectura masiva del administrador: acceso excepcional `admin_leer_sesion` con motivo y aviso al titular (`supabase/schema.sql:1522`, `:1556`); lo público solo por RPC (`:1268`, `:1310`, `:1349`). Probado en PGlite; prueba real con dos cuentas pendiente |
+| A.9.4.2 | Procedimientos seguros de inicio de sesión | Sí | Cuentas, administrador con TOTP (nube) y admin local (sin nube) | Parcial | Administrador = cuenta + `aal2` + TOTP ≤ 15 min exigidos por el servidor (SEC-77..82, SEC-87); sin nube: bloqueo del PIN (`src/services/security/lockout.js:20`) y expiración (`lockout.js:8`); cuentas: cierre por inactividad de 15 min (`src/services/security/inactividad.js:5`, `src/App.vue:16`), token en `sessionStorage` en equipo compartido (`src/services/cloud/almacenSesion.js:55`), límite de intentos en el cliente. Pendiente (manual): *time-box* de Supabase, CAPTCHA en el acceso, verificación de `amr` |
+| A.9.4.3 | Sistema de gestión de contraseñas | Sí | Calidad del PIN | Parcial | PIN: `validateNewPin` (`src/services/security/pinHash.js:15`); contraseñas de cuentas: política de cliente (`src/services/accounts/validation.js:5`; el servidor aplica la longitud mínima configurada en Supabase Auth, no verificada); protección de contraseñas filtradas pendiente (manual) |
 | A.9.4.4 | Uso de utilidades con privilegios del sistema | No | La SPA no usa ni ofrece utilidades privilegiadas; la clave `service_role` no se usa | N/A | — |
-| A.9.4.5 | Control de acceso al código fuente de los programas | Sí | Repositorio | Documentado | GitHub con acceso mínimo y `main` protegida (`SEC-58`) |
+| A.9.4.5 | Control de acceso al código fuente de los programas | Sí | Repositorio | Parcial | Repositorio con CI y Dependabot (`.github/workflows/ci.yml`, `.github/dependabot.yml`); **protección de `main` pendiente** (manual, `SEC-58`) |
 
 ### A.10 Criptografía
 
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
-| A.10.1.1 | Política de uso de los controles criptográficos | Sí | Datos sensibles en reposo y tránsito | Implementado | AES-GCM 256 (`src/services/storage/secureStorage.js:47`), PBKDF2, SHA-256, TLS; política §4; `docs/sgsi/politica_criptografica.md` — SUG-13 |
-| A.10.1.2 | Gestión de claves | Sí | Ciclo de vida de la clave AES y de las claves de Supabase | Implementado | Clave no extraíble en IndexedDB (`secureStorage.js:27`), destrucción (`secureStorage.js:91`); clave publicable vs `service_role`; ciclo de vida en `docs/sgsi/politica_criptografica.md` §2 — SUG-13 |
+| A.10.1.1 | Política de uso de los controles criptográficos | Sí | Datos sensibles en reposo y tránsito | Parcial | AES-GCM 256 (`src/services/storage/secureStorage.js:47`), PBKDF2, SHA-256, TLS; `docs/sgsi/politica_criptografica.md` v2.0. Alcance real: protege la lectura casual de los archivos del navegador, no a quien controle el equipo ni frente a XSS (`src/data/privacidad.js`, `CIFRADO_LOCAL_ALCANCE`); bóveda con frase diferida (R31) |
+| A.10.1.2 | Gestión de claves | Sí | Ciclo de vida de la clave AES y de las claves de Supabase | Parcial | Clave no extraíble en IndexedDB (`secureStorage.js:27`), destrucción (`secureStorage.js:91`); una sola clave `aes-gcm-v1` para todos los espacios (`secureStorage.js:20`), sin rotación; Supabase: solo clave publicable, `service_role` jamás en el frontend |
 
 ### A.11 Seguridad física y del entorno
 
@@ -824,8 +912,8 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | A.11.2.4 | Mantenimiento de los equipos | Parcial | Electrodos y sensores | Documentado | Reposición de electrodos, prueba con simulador |
 | A.11.2.5 | Retirada de materiales propiedad de la empresa | Parcial | Sensores del laboratorio | Documentado | Registro de préstamo (uso aceptable §5) |
 | A.11.2.6 | Seguridad de los equipos fuera de las instalaciones | Parcial | Portátiles con datos | Documentado | Cifrado de disco del SO recomendado; bloqueo de pantalla |
-| A.11.2.7 | Reutilización o eliminación segura de equipos | Sí | PC prestado devuelto con datos | Implementado | "Borrar todos los datos" con *crypto-shredding* (`src/services/storage/wipe.js:14`) |
-| A.11.2.8 | Equipo de usuario desatendido | Sí | Laboratorio compartido | Implementado | Expiración por inactividad 10 min (`src/services/security/lockout.js:8`), "Cerrar sesión" |
+| A.11.2.7 | Reutilización o eliminación segura de equipos | Sí | PC prestado devuelto con datos | Implementado | «Borrar todos los datos» con *crypto-shredding* (`src/services/storage/wipe.js:15`); en equipo compartido, cerrar sesión quita el espacio local de la cuenta sin preguntar |
+| A.11.2.8 | Equipo de usuario desatendido | Sí | Laboratorio compartido | Parcial | Cuentas: cierre por inactividad de 15 min con aviso 1 min antes (`src/services/security/inactividad.js:5`; una medición en curso cuenta como actividad); «equipo compartido» con token en `sessionStorage` (`almacenSesion.js:55`; marcado por defecto en escritorio, el usuario puede cambiarlo); admin local: 10 min (`lockout.js:8`). En equipo personal el token permanece en `localStorage` |
 | A.11.2.9 | Política de puesto de trabajo despejado y pantalla limpia | Sí | Datos de salud en pantalla | Implementado | Datos opcionales ocultos en multisensor (`SEC-05`); regla en uso aceptable §3 |
 
 ### A.12 Seguridad de las operaciones
@@ -833,17 +921,17 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
 | A.12.1.1 | Documentación de procedimientos operacionales | Sí | Sesiones de medición, exportación, borrado | Documentado | README, `sgsi/plan_continuidad.md`, `docs/VERIFICACION.md` |
-| A.12.1.2 | Gestión de cambios | Sí | Código y parámetros | Implementado | `PARAM_CHANGED` (`src/stores/settings.js:89`); CAMBIOS.md; PR con revisión |
-| A.12.1.3 | Gestión de capacidades | Sí | 5 sensores × 250 Hz; cuota del navegador | Implementado | `MAX_CHANNELS` (`src/stores/channels.js:6`); `storage.estimate()` (`src/main.js:41`); `CHECK` de 2000 muestras; cuotas por usuario (sesiones/día, bloques/min, auditoría/h, incidentes/día) y `CHECK` de tamaño en `supabase/schema.sql` (`public.cuota()`); límites del cliente `rateLimiter.js` — SUG-05 |
+| A.12.1.2 | Gestión de cambios | Sí | Código y parámetros | Parcial | `PARAM_CHANGED` (`src/stores/settings.js:89`); CAMBIOS.md; orden formal de migraciones en las cabeceras de `supabase/*.sql`; la revisión por PR no está impuesta (protección de rama pendiente) |
+| A.12.1.3 | Gestión de capacidades | Sí | 5 sensores × 250 Hz; cuota del navegador | Implementado | `MAX_CHANNELS` (`src/stores/channels.js:50`); `storage.estimate()` (`src/main.js:49`); topes por bloque 32 KB, sesión 25 MB, cuenta 50 MB, 1000 sesiones y 200 pacientes (`public.cuota()`, `supabase/schema.sql:576`; `tg_cuota_bloques`, `:1052`; `uso_cuenta`, `:1028`), error `ECG01`; límites del cliente `rateLimiter.js`. Concurrencia real no probada |
 | A.12.1.4 | Separación de los recursos de desarrollo, prueba y operación | Sí | Previews vs producción | Documentado | Vercel Preview/Production; `.env.local` fuera del repositorio |
 | A.12.2.1 | Controles contra el código malicioso | Parcial | Entrada serial y CSV externos | Implementado | Parser estricto, sin `eval` (ESLint `no-eval`), CSP |
-| A.12.3.1 | Copias de seguridad de la información | Parcial | Local-first con copia opcional en la nube | Parcial | Réplica en Supabase (`cloudSync.js`), exportación CSV/JSON; respaldo de Supabase según plan del proveedor |
-| A.12.4.1 | Registro de eventos | Sí | Trazabilidad | Implementado | `src/services/audit/auditLog.js`; réplica `auditoria` |
-| A.12.4.2 | Protección de la información del registro | Sí | Evitar manipulación | Implementado | Cadena SHA-256 y `verify()` (`auditLog.js:127`); sin UPDATE/DELETE en `auditoria`; en la nube: lista blanca de tipos, detalle ≤ 2 KB, `ts` y `usuario` fijados por trigger del servidor (`tg_auditoria_servidor`) — SUG-14 |
-| A.12.4.3 | Registros de administración y operación | Sí | Acciones del administrador | Implementado | Eventos `ADMIN_*`, `PARAM_CHANGED`, `ACCESS_REVIEW_DONE`; vista `/admin/auditoria` |
-| A.12.4.4 | Sincronización del reloj | Sí | Correlación de eventos entre equipos | Implementado | UTC ISO-8601 (`auditLog.js:91`); `hora_servidor()` + `clockSkew` (`src/services/security/isms.js:34`) |
+| A.12.3.1 | Copias de seguridad de la información | Parcial | Local-first con copia opcional en la nube | Parcial | Local-first; copia opcional en la nube solo con «Guardar mis datos en la nube» y al pulsar «Guardar» (`src/services/cloud/subidaMonitoreo.js:23`); **no existe** restauración de monitoreos propios desde la nube; exportación CSV/JSON; respaldo del proveedor según el plan; copia temporal `respaldo_20261020` por eliminar; prueba de restauración pendiente |
+| A.12.4.1 | Registro de eventos | Sí | Trazabilidad | Parcial | Log local (`src/services/audit/auditLog.js`); nube: `registrar_evento` con actor y hora del servidor (`supabase/schema.sql:865`), lista blanca `tipos_evento` (`:758`), cola persistente con reintentos (`src/services/cloud/auditOutbox.js:43`). Faltan `ACCOUNT_LOGIN_FAILED`, `CLOUD_SYNC_FAILED`, `QUOTA_EXCEEDED`, `SESSION_EXPIRED` y `CONSENT_UPDATED` |
+| A.12.4.2 | Protección de la información del registro | Sí | Evitar manipulación | Parcial | Cadena SHA-256 local y `verify()` (`auditLog.js:154`); nube: hash encadenado en el servidor bajo `pg_advisory_xact_lock` (`supabase/schema.sql:810`), `verificar_cadena_auditoria()` (`:921`), INSERT/UPDATE/DELETE directos revocados, purga a 2 años (`:954`). Sin anclaje externo; cadena local sin clave; verificada solo en PGlite |
+| A.12.4.3 | Registros de administración y operación | Sí | Acciones del administrador | Parcial | Eventos `ADMIN_*` emitidos por el servidor (`ADMIN_ROLE_*`; `ADMIN_DATA_ACCESS` en `admin_leer_sesion`, `supabase/schema.sql:1522`), `PARAM_CHANGED`, `ACCESS_REVIEW_DONE`; `/admin/auditoria` con pestaña «Nube» (`admin_leer_auditoria`, `:897`); el titular ve los accesos del administrador (`mis_accesos_admin`, `:1556`). Sin revisión periódica ejecutada |
+| A.12.4.4 | Sincronización del reloj | Sí | Correlación de eventos entre equipos | Implementado | UTC ISO-8601 (`src/services/audit/auditLog.js:118`); `hora_servidor()` + `clockSkew` (`src/services/security/isms.js:34`); cuotas, purga y CHECK de `inicio` por `creado_en` del servidor (`supabase/schema.sql:984`) |
 | A.12.5.1 | Instalación del software en explotación | Sí | Despliegue | Documentado | Solo desde `main` vía Vercel; `npm ci` |
-| A.12.6.1 | Gestión de las vulnerabilidades técnicas | Sí | Dependencias npm | Implementado | `npm audit --audit-level=high` en `.github/workflows/ci.yml`; `.github/dependabot.yml`; registro en `docs/sgsi/proveedores.md` §2 — SUG-10/18 |
+| A.12.6.1 | Gestión de las vulnerabilidades técnicas | Sí | Dependencias npm | Implementado | `npm audit --audit-level=high --omit=dev` en `.github/workflows/ci.yml` (0 vulnerabilidades de producción el 2026-10-20); `.github/dependabot.yml`; registro en `docs/sgsi/proveedores.md` §2 (`tinypool`, solo desarrollo) — SUG-10/18 |
 | A.12.6.2 | Restricción en la instalación de software | No | La app no instala software; los PCs del laboratorio los gestiona la universidad | N/A | — |
 | A.12.7.1 | Controles de auditoría de sistemas de información | No | No se auditan sistemas en producción con herramientas intrusivas | N/A | — |
 
@@ -852,9 +940,9 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
 | A.13.1.1 | Controles de red | Parcial | Solo HTTPS | Implementado | HSTS, `upgrade-insecure-requests` (`vercel.json:11`); cuotas del servidor frente a abuso de la API (`supabase/schema.sql`) |
-| A.13.1.2 | Seguridad de los servicios de red | Sí | Vercel y Supabase | Implementado | Cabeceras de seguridad; TLS de Supabase; límites de tasa de Supabase Auth |
+| A.13.1.2 | Seguridad de los servicios de red | Sí | Vercel y Supabase | Parcial | Cabeceras de seguridad (`vercel.json`); TLS de Supabase; límites de tasa de Supabase Auth (configuración del panel, no verificada); CAPTCHA no activado |
 | A.13.1.3 | Segregación en redes | No | No hay red propia | N/A | — |
-| A.13.2.1 | Políticas y procedimientos de intercambio de información | Sí | Exportación CSV y sincronización | Implementado | Exportación seudonimizada y auditada (`src/stores/admin.js`); política §4 |
+| A.13.2.1 | Políticas y procedimientos de intercambio de información | Sí | Exportación CSV y sincronización | Parcial | Exportación seudonimizada y auditada (`src/stores/admin.js:51`); sincronización solo con la nube activada por la persona y datos filtrados (`src/services/cloud/datosNube.js:26`); publicación por RPC con fecha truncada, consentimiento 2.0 por monitoreo y reporte/retiro (`supabase/schema.sql:1268-1503`); service worker sin datos (`public/sw.js:10`). Probado en PGlite; prueba real pendiente |
 | A.13.2.2 | Acuerdos de intercambio de información | Parcial | Entrega de CSV a terceros (docente/investigador) | Documentado | Solo a personal autorizado; uso aceptable §4 |
 | A.13.2.3 | Mensajería electrónica | No | La app no envía correos ni mensajes | N/A | — |
 | A.13.2.4 | Acuerdos de confidencialidad o no revelación | Sí | Integrantes con acceso a datos | Documentado | Compromiso de confidencialidad (`sgsi/roles_responsabilidades.md` §3) |
@@ -863,26 +951,26 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
-| A.14.1.1 | Análisis de requisitos y especificaciones de seguridad de la información | Sí | RNF06 | Implementado | Sección 5 (SEC-01..SEC-69) |
+| A.14.1.1 | Análisis de requisitos y especificaciones de seguridad de la información | Sí | RNF06 | Implementado | Sección 5 (SEC-01..SEC-102) |
 | A.14.1.2 | Asegurar los servicios de aplicaciones en redes públicas | Sí | SPA pública en Internet | Implementado | CSP, HSTS, RLS en Supabase |
-| A.14.1.3 | Protección de las transacciones de servicios de aplicaciones | Sí | Escrituras a Supabase | Implementado | Upsert idempotente por clave primaria, `CHECK` de consistencia (`supabase/schema.sql`), cola serie (`cloudSync.js`) |
+| A.14.1.3 | Protección de las transacciones de servicios de aplicaciones | Sí | Escrituras a Supabase | Implementado | Upsert idempotente por clave primaria, `CHECK` de consistencia, índice único de etiquetas (`supabase/schema.sql:1670`), cola serie (`src/services/cloud/cloudSync.js`); `sesiones.datos` solo se limpia (`schema.sql:1738`), no se valida con lista blanca (C-20 diferido) |
 | A.14.2.1 | Política de desarrollo seguro | Sí | Proyecto de desarrollo | Implementado | ESLint seguridad (`eslint.config.js:35`), reglas SEC-53 |
-| A.14.2.2 | Procedimiento de control de cambios en sistemas | Sí | Cambios de código y esquema | Documentado | PR + CAMBIOS.md; esquema SQL idempotente; plantilla de PR con checklist de seguridad (`.github/pull_request_template.md`) |
+| A.14.2.2 | Procedimiento de control de cambios en sistemas | Sí | Cambios de código y esquema | Documentado | PR + CAMBIOS.md; orden formal de migraciones y esquema idempotente; plantilla de PR (`.github/pull_request_template.md`); la protección de rama no está activa |
 | A.14.2.3 | Revisión técnica de las aplicaciones tras efectuar cambios en el sistema operativo | No | La SPA corre en el navegador, no depende del SO del servidor | N/A | Se reemplaza por pruebas tras actualizar el navegador (A.14.2.9) |
 | A.14.2.4 | Restricciones a los cambios en los paquetes de software | Sí | No parchear `node_modules` | Implementado | Versiones fijadas `~` y lockfile (`package.json`) |
 | A.14.2.5 | Principios de ingeniería de sistemas seguros | Sí | Diseño | Implementado | Defensa en profundidad, mínimo privilegio, fallo seguro (`src/stores/settings.js:53`) |
-| A.14.2.6 | Entorno de desarrollo seguro | Sí | Equipos y secretos del equipo | Implementado | `.env.local` ignorado, sin source maps (`vite.config.js:26`) |
+| A.14.2.6 | Entorno de desarrollo seguro | Sí | Equipos y secretos del equipo | Parcial | `.env.local` ignorado, sin source maps (`vite.config.js:46`) y sin `console` (`vite.config.js:44`); el proyecto vive en OneDrive (excluir `.env.local` y `node_modules` de la sincronización) y no existe `SECURITY.md` |
 | A.14.2.7 | Externalización del desarrollo de software | No | Lo desarrolla el propio equipo | N/A | — |
-| A.14.2.8 | Pruebas funcionales de seguridad de sistemas | Sí | Verificar controles | Implementado | `tests/security.spec.js`, `tests/isms.spec.js`; `tests/abuseControls.spec.js`; CI `.github/workflows/ci.yml` — SUG-10 |
-| A.14.2.9 | Pruebas de aceptación de sistemas | Sí | Entrega por hito | Implementado | Checklist 5.15; `docs/VERIFICACION.md`; E2E Playwright `e2e/*.spec.js` en CI; matriz `docs/TRAZABILIDAD.md` — SUG-11 |
+| A.14.2.8 | Pruebas funcionales de seguridad de sistemas | Sí | Verificar controles | Parcial | 343 pruebas unitarias (28 archivos, p. ej. `tests/security.spec.js`, `tests/isms.spec.js`, `tests/schema.spec.js`, `tests/privacy.spec.js`) y 75 E2E (16 archivos) con Supabase simulado; SQL en PGlite y `supabase/pruebas_rls.sql` (101 casos) fuera del CI; CI `.github/workflows/ci.yml`. Falta la prueba real de RLS y del claim `amr` |
+| A.14.2.9 | Pruebas de aceptación de sistemas | Sí | Entrega por hito | Parcial | Checklist 5.15 (sin ejecutar contra la nube real); `docs/VERIFICACION.md`; E2E Playwright `e2e/*.spec.js` en CI; matriz `docs/TRAZABILIDAD.md` — SUG-11 |
 | A.14.3.1 | Protección de los datos de prueba | Sí | No usar datos reales | Implementado | Simulador (`src/services/sources/SimulatorSource.js`), referencia sintética |
 
 ### A.15 Relación con proveedores
 
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
-| A.15.1.1 | Política de seguridad de la información en las relaciones con los proveedores | Sí | Supabase almacena datos de salud seudonimizados; Vercel sirve la app | Documentado | Política §5 (proveedores en la nube); términos y DPA de Supabase/Vercel; fichas en `docs/sgsi/proveedores.md` — SUG-15 |
-| A.15.1.2 | Requisitos de seguridad en contratos con terceros | Parcial | Planes gratuitos con términos estándar | Documentado | Revisión de DPA, región del proyecto y certificaciones del proveedor (R18) |
+| A.15.1.1 | Política de seguridad de la información en las relaciones con los proveedores | Sí | Supabase almacena datos de salud seudonimizados; Vercel sirve la app | Documentado | Política §5 (proveedores en la nube); fichas en `docs/sgsi/proveedores.md`; términos y DPA de Supabase/Vercel **sin registrar** (pendiente) — SUG-15 |
+| A.15.1.2 | Requisitos de seguridad en contratos con terceros | Parcial | Planes gratuitos con términos estándar | Parcial | Revisión de DPA, región (us-east-1) y certificaciones por registrar con fecha en `docs/sgsi/proveedores.md` (R18, R37) |
 | A.15.1.3 | Cadena de suministro de tecnología de la información y de las comunicaciones | Sí | Paquetes npm | Implementado | Sin CDN, lockfile, `npm audit` |
 | A.15.2.1 | Control y revisión de la provisión de servicios del proveedor | Parcial | Disponibilidad de Vercel/Supabase | Documentado | Revisión de la página de estado y avisos en cada hito; revisión semestral registrada en `docs/sgsi/proveedores.md` |
 | A.15.2.2 | Gestión de cambios en la provisión del servicio del proveedor | Parcial | Cambios de API/planes del proveedor | Documentado | Reapreciación del riesgo ante cambios (8.2) |
@@ -892,12 +980,12 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
 | A.16.1.1 | Responsabilidades y procedimientos | Sí | Fuga de CSV, alteración, acceso indebido | Documentado | `sgsi/procedimiento_incidentes.md` |
-| A.16.1.2 | Notificación de los eventos de seguridad de la información | Sí | Canal rápido para cualquier usuario | Implementado | `/seguridad#reportar` (`src/components/security/IncidentReportForm.vue`), `src/stores/isms.js:52`, tabla `incidentes` |
+| A.16.1.2 | Notificación de los eventos de seguridad de la información | Sí | Canal rápido para cualquier usuario | Implementado | `/seguridad#reportar` (`src/components/security/IncidentReportForm.vue`), `src/stores/isms.js:74`, tabla `incidentes` con trigger que rechaza RUT, correos y valores de salud (`supabase/schema.sql:1590`); reporte de contenido público (`reportar_monitoreo`, `:1387`) |
 | A.16.1.3 | Notificación de puntos débiles de la seguridad | Sí | Debilidades observadas | Implementado | Tipo `debilidad` (`src/services/security/incidents.js`) |
-| A.16.1.4 | Evaluación y decisión sobre los eventos de seguridad de información | Sí | Clasificar evento vs. incidente | Implementado | Estados `en_analisis`/`descartado` (`incidents.js:88`) |
-| A.16.1.5 | Respuesta a incidentes de seguridad de la información | Sí | Contención y recuperación | Implementado | Respuesta obligatoria para cerrar (`incidents.js:88`); procedimiento §3 |
-| A.16.1.6 | Aprendizaje de los incidentes de seguridad de la información | Sí | Mejora continua | Implementado | Lección aprendida obligatoria; entrada a 10.1 |
-| A.16.1.7 | Recopilación de evidencias | Sí | Investigación | Implementado | Exportación JSON de la auditoría con verificación (`src/stores/admin.js`); incidentes sin DELETE en la nube |
+| A.16.1.4 | Evaluación y decisión sobre los eventos de seguridad de información | Sí | Clasificar evento vs. incidente | Parcial | Estados `en_analisis`/`descartado` (`src/services/security/incidents.js:88`) y ciclo validado en el servidor (`admin_actualizar_incidente`, `supabase/schema.sql:1625`); sin simulacro ejecutado |
+| A.16.1.5 | Respuesta a incidentes de seguridad de la información | Sí | Contención y recuperación | Parcial | Respuesta obligatoria para cerrar (`incidents.js:88`, `schema.sql:1625`); procedimiento §3. Sin aviso automático al responsable ni plantilla de notificación a la Agencia; simulacro pendiente |
+| A.16.1.6 | Aprendizaje de los incidentes de seguridad de la información | Sí | Mejora continua | Parcial | Lección aprendida obligatoria para cerrar; entrada a 10.1; no hay lecciones reales registradas en este repositorio |
+| A.16.1.7 | Recopilación de evidencias | Sí | Investigación | Parcial | Exportación JSON de la auditoría con verificación (`src/stores/admin.js:34`); en la nube, `admin_leer_auditoria` y `verificar_cadena_auditoria()`; incidentes sin DELETE; cadena sin anclaje externo |
 
 ### A.17 Aspectos de seguridad de la información para la gestión de la continuidad de negocio
 
@@ -912,14 +1000,14 @@ Se presentan los 114 controles del Anexo A de ISO/IEC 27001:2013 con su aplicabi
 
 | Control | Nombre | Aplica | Justificación | Estado | Evidencia |
 |---|---|---|---|---|---|
-| A.18.1.1 | Identificación de la legislación aplicable y de los requisitos contractuales | Sí | Datos de salud | Documentado | Ley 19.628, Ley 21.719, Ley 20.584; términos de proveedores; `/privacidad` |
+| A.18.1.1 | Identificación de la legislación aplicable y de los requisitos contractuales | Sí | Datos de salud | Documentado | Ley 19.628, Ley 21.719, Ley 20.584; `/privacidad`; responsable configurable (`src/services/privacidad/responsable.js:8`). Sin revisión legal ni registro de tratamientos/EIPD (R37) |
 | A.18.1.2 | Derechos de Propiedad Intelectual (DPI) | Sí | Librerías y la propia norma | Implementado | Licencias MIT (Vue, uPlot); la norma UNE con licencia no se copia al repositorio |
-| A.18.1.3 | Protección de los registros de la organización | Sí | Consentimientos, auditoría, incidentes | Implementado | Cifrado + cadena de hashes; auditoría 180 días; monitoreos locales 30 días (por defecto) y en la nube 365 días desde el inicio |
-| A.18.1.4 | Protección y privacidad de la información de carácter personal | Sí | **Control central**: datos de salud | Implementado | Seudónimos, consentimiento, minimización, cifrado, supresión, RLS (`src/views/PrivacyView.vue`); base legal, transferencia internacional, tabla de derechos y "Eliminar mis datos en la nube" (`borrar_mis_datos()`) — SUG-06 |
+| A.18.1.3 | Protección de los registros de la organización | Sí | Consentimientos, auditoría, incidentes | Parcial | Cifrado + cadena de hashes; auditoría local 180 días y de la nube 2 años (`purgar_auditoria`, `supabase/schema.sql:954`); monitoreos locales 30 días (configurable) y en la nube 365 días desde el inicio (`:1192`, verificar `cron.job`); cuentas inactivas: procedimiento manual |
+| A.18.1.4 | Protección y privacidad de la información de carácter personal | Sí | **Control central**: datos de salud | Parcial | Control central. Nube opcional apagada por defecto (`src/services/cloud/nubeOptIn.js:30`), borradores sin subir, sin alias/nombre/notas en la nube (`datosNube.js:26`), consentimiento v2.0 (`consentimiento.js:8`), declaración de mayoría de edad (autodeclarada), publicación con consentimiento por monitoreo (`supabase/schema.sql:1807`), supresión (`borrar_mis_datos()`, `eliminar_mi_cuenta()`), `src/views/PrivacyView.vue`. Pendiente: revisión legal, DPA, prueba real de RLS, `exportar_mis_datos()` (diferido) |
 | A.18.1.5 | Regulación de los controles criptográficos | Sí | Uso de criptografía estándar | Implementado | Web Crypto (algoritmos estándar, sin restricciones de exportación aplicables) |
 | A.18.2.1 | Revisión independiente de la seguridad de la información | Parcial | Evaluación académica | Documentado | Auditoría por otro grupo y docente (`sgsi/auditoria_interna_y_revision.md`) |
-| A.18.2.2 | Cumplimiento de las políticas y normas de seguridad | Sí | Verificar el SoA | Implementado | Indicadores y objetivos en la app (`src/services/security/isms.js:53`) |
-| A.18.2.3 | Comprobación del cumplimiento técnico | Sí | Pruebas técnicas | Parcial | `npm test`, `npm run lint`, CI, securityheaders.com; la prueba real de RLS con dos cuentas está pendiente (docs/PENDIENTES_MANUALES.md) |
+| A.18.2.2 | Cumplimiento de las políticas y normas de seguridad | Sí | Verificar el SoA | Parcial | Indicadores y objetivos OBJ-1 a OBJ-6 en la app (`src/services/security/isms.js:53`) y registro de evidencias de auditoría/revisión (`src/services/security/evidencias.js:13`); OBJ-7 a OBJ-12 y las revisiones están sin ejecutar |
+| A.18.2.3 | Comprobación del cumplimiento técnico | Sí | Pruebas técnicas | Parcial | `npm test` (343), `npm run lint`, CI, securityheaders.com; `supabase/pruebas_rls.sql` (101 casos) probado en PGlite; **la prueba real de RLS con dos cuentas y el claim `amr` siguen pendientes** (docs/PENDIENTES_MANUALES.md) |
 
 ## Anexo B. Matriz de trazabilidad
 
@@ -937,9 +1025,9 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 
 | RF | Requerimiento (resumen) | Componentes principales | Pruebas | Controles |
 |---|---|---|---|---|
-| RF01 | Identificación de usuario | `stores/users.js`, `views/UserSelectView.vue`, `router/guards.js` (`requireUser`) | E `admin.spec.js` (redirige a /usuarios), E `simulador.spec.js` | A.9.2.1, A.18.1.4 |
-| RF02 | Sesión sin contraseña | `stores/users.js`, `services/cloud/cloudSync.js` (`ensureCloudSession`, anónima + CAPTCHA opcional) | U `abuseControls.spec.js` (límite de tasa, CAPTCHA) | A.9.2.1, A.9.4.2 |
-| RF03 | Datos opcionales con consentimiento | `components/users/ConsentDialog.vue`, `OptionalDataForm.vue`, `views/PrivacyView.vue` | E `inicio.spec.js` (privacidad), M | A.18.1.4, A.8.2.1 |
+| RF01 | Identificación de la persona medida (paciente «Paciente N», con declaración de mayoría de edad) | `stores/users.js`, `views/UserSelectView.vue` (`/pacientes`; `/usuarios` redirige), `router/guards.js` (`requireUser`) | E `admin.spec.js` (redirige a /pacientes), E `simulador.spec.js`, U `etiquetas.spec.js` | A.9.2.1, A.18.1.4 |
+| RF02 | Sesión sin contraseña para la persona medida: sin cuenta todo es local; con cuenta (correo y contraseña, Supabase Auth) la nube es opcional. **Ya no existe la sesión anónima** | `stores/users.js`, `stores/account.js`, `services/accounts/authService.js`, `services/cloud/nubeOptIn.js` | U `abuseControls.spec.js` (límite de tasa, CAPTCHA), U `cuentas.spec.js`, U `nubeOptIn.spec.js` | A.9.2.1, A.9.4.2 |
+| RF03 | Datos opcionales con consentimiento v2.0 | `components/users/ConsentDialog.vue`, `OptionalDataForm.vue`, `views/PrivacyView.vue`, `services/privacidad/consentimiento.js`, `data/privacidad.js` | E `inicio.spec.js` (privacidad), U `privacy.spec.js`, U `privacidadTanda2.spec.js`, M | A.18.1.4, A.8.2.1 |
 | RF04 | Recepción de datos | `services/sources/SerialSource.js`, `SimulatorSource.js`, `ReplaySource.js`, `services/parsing/ecgCsvParser.js` | U `ecgCsvParser.spec.js` | A.14.2.5, A.12.2.1 |
 | RF05 | Señal en tiempo real | `components/monitor/EcgChart.vue`, `services/acquisition/renderScheduler.js`, `utils/RingBuffer.js` | U `ringBuffer.spec.js`, E `simulador.spec.js` | A.12.1.3 |
 | RF06 | Frecuencia (BPM) | `utils/dsp/rPeakDetector.js`, `components/monitor/BpmDisplay.vue` | U `rPeakDetector.spec.js`, E `simulador.spec.js` | — |
@@ -973,7 +1061,7 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 
 | SUG | Implementación | Pruebas | Controles |
 |---|---|---|---|
-| SUG-04 | `services/cloud/captcha.js`, `utils/rateLimiter.js`, `cloudSync.js` | U `abuseControls.spec.js` | A.9.2.1, A.9.4.2 |
+| SUG-04 | `services/cloud/captcha.js` (el token se envía solo en el registro y solo si hay `VITE_CAPTCHA_*`), `utils/rateLimiter.js`, `services/accounts/authService.js` | U `abuseControls.spec.js` | A.9.2.1, A.9.4.2 |
 | SUG-05, SUG-14 | `supabase/schema.sql` (CHECK, lista blanca, triggers de cuota, `ts` y `usuario` del servidor) | U `abuseControls.spec.js`; validado en PostgreSQL embebido (PGlite) | A.12.1.3, A.12.4.2, A.13.1.1 |
 | SUG-06 | `views/PrivacyView.vue`, `deleteAllMyCloudData()`, `borrar_mis_datos()` | E `inicio.spec.js` | A.18.1.1, A.18.1.4 |
 | SUG-09 | `views/MonitorView.vue` (acuse obligatorio + evento `ELECTRICAL_SAFETY_ACK`) | M (Web Serial requiere hardware) | A.12.4.1 |
@@ -1002,10 +1090,51 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 |---|---|---|---|
 | Iniciar sesión / crear cuenta / recuperar | `views/account/*`, `services/accounts/*`, `stores/account.js` | U `cuentas.spec.js`, E `cuentas.spec.js` | A.9.2.1, A.9.4.2, A.9.4.3 |
 | Pacientes propios por cuenta | `stores/users.js`, `cloudSync.js`, tabla `pacientes` (RLS) | U `visibilidad.spec.js` (SQL) | A.9.1.1, A.9.4.1, A.18.1.4 |
-| Vincular datos locales / limpiar al salir | `services/accounts/linkLocal.js`, `storage/index.js` | — (manual) | A.8.3.2, A.11.2.7 |
+| Vincular datos locales / limpiar al salir | `services/accounts/linkLocal.js`, `components/account/LinkLocalBanner.vue`, `storage/index.js` | U `privacidadTanda2.spec.js`; E `privacidad.nube.spec.js` | A.8.3.2, A.11.2.7 |
 | Visibilidad privado/público con consentimiento | `services/monitoreos/visibilidad.js`, `SaveMonitoringDialog.vue`, `VisibilityDialog.vue` | U `visibilidad.spec.js`, E `cuentas.spec.js` | A.13.2.1, A.18.1.4 |
-| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, funciones RPC `listar_monitoreos_publicos`/`monitoreo_publico` | U `visibilidad.spec.js` | A.9.4.1, A.13.2.1 |
+| Comunidad (públicos) en Comparar y Aprende | `CommunityPicker.vue`, `stores/comunidad.js`, funciones RPC `listar_monitoreos_publicos`/`monitoreo_publico`/`senal_publica` | U `visibilidad.spec.js`; E `comunidad.nube.spec.js` | A.9.4.1, A.13.2.1 |
 | Auditoría de cuentas y visibilidad | `auditLog.js`, `schema.sql` | U `schema.spec.js` | A.12.4.1 |
+
+### B.7 Administrador con cuenta y segundo factor (oct-2026)
+
+| Requisito | Componentes | Pruebas | Controles |
+|---|---|---|---|
+| RF25 (revisado): el administrador inicia sesión como una cuenta y se activa el botón Admin; recuperación no por cualquier persona | `supabase/schema.sql` (`es_admin_registrado()`, `es_admin()` con `aal2` y TOTP reciente, `admin_listar_administradores()`; origen en `migracion_admin_mfa.sql`), `src/services/security/adminMfa.js`, `src/stores/auth.js`, `src/router/guards.js`, `src/views/admin/AdminMfaView.vue`, `AppHeader.vue`, `IsmsPanel.vue`, `docs/sgsi/recuperacion_acceso_admin.md` | U `tests/adminMfa.spec.js`, `tests/schema.spec.js`; E `e2e/admin-cuenta.nube.spec.js` (copia con nube y red simulada), `e2e/admin.spec.js` | A.9.2.3, A.9.2.4, A.9.2.5, A.9.2.6, A.9.4.2, A.12.4.1 (SEC-77..82) |
+| Gestión de administradores desde la app (conceder, retirar, revisar; máx. 5; TOTP nuevo; mensajes genéricos) | `supabase/migracion_admin_roles.sql` (`admin_conceder_rol`, `admin_retirar_rol`, `admin_listar_administradores` con correo), `src/components/admin/AdminRolesPanel.vue`, `src/stores/admin.js`, `src/services/security/adminMfa.js`, `src/views/admin/AdminView.vue` | U `tests/adminRoles.spec.js`; E `e2e/admin-cuenta.nube.spec.js` (lista, conceder con TOTP, retirar con confirmación, error genérico) | A.9.2.3, A.9.2.5, A.9.2.6, A.12.4.1 (SEC-83) |
+| RF15, RF26, RF27 con nube: el administrador (aal2) guarda y publica parámetros | `src/stores/settings.js`, `src/services/cloud/cloudSync.js` (`pushCloudParametros`), `src/components/admin/mensajesGuardado.js`, `CloudSettings.vue` | E `e2e/admin-cuenta.nube.spec.js` | A.9.2.3, A.12.1.2 (SEC-84) |
+| Encabezado adaptable en 3 niveles (fila con ícono + texto, dos filas compactas, solo íconos con desplegable; objetivos ≥ 44 px, nombre accesible) | `src/components/layout/AppHeader.vue` | E `e2e/encabezado.spec.js` (375, 600, 768, 1024, 1280 y 1440 px, sin desbordes) | RNF01, RNF04 |
+
+### B.8 TANDAS 1 y 2 (auditoría de sistema, 2026-10-20)
+
+Origen: `docs/AUDITORIA_SISTEMA.md` (H-01 a H-30, C-01 a C-29); detalle de lo hecho y diferido: `docs/CAMBIOS_TANDA1.md` y `docs/CAMBIOS_TANDA2.md`; estado fila por fila: sección «Estado de implementación» de la auditoría. Rutas de pantalla nuevas: `/cuenta`, `/acceso`, `/registro`, `/pacientes`, `/monitoreos`, `/admin`, `/admin/auditoria`, `/admin/mfa` (pestañas «Soporte y moderación» y «SGSI», esta con «Evidencias del SGSI», dentro de `/admin`; pestaña «Nube» en `/admin/auditoria`).
+
+### 8.1 Servidor (TANDA 1)
+
+| Cambio | Componentes | Pruebas | Controles | Estado |
+|---|---|---|---|---|
+| C-04 Lo público solo por RPC, fecha truncada, reportes y retiro | `supabase/schema.sql` (`senal_publica`, `listar_monitoreos_publicos`, `monitoreo_publico`, `reportes_contenido`, `reportar_monitoreo`, `admin_retirar_publicacion`, `retiros_contenido`), `services/cloud/cloudSync.js`, `components/community/CommunityPicker.vue` | U `visibilidad.spec.js`, `schema.spec.js`; E `comunidad.nube.spec.js`; SQL `supabase/pruebas_rls.sql` (PGlite) | A.9.4.1, A.13.2.1, A.18.1.4 | Implementado (prueba real pendiente) |
+| C-05 El privilegio del admin caduca en el servidor | `schema.sql` (`totp_reciente`, `es_admin`, `es_admin_reciente`), `services/security/adminTotp.js`, `adminRenovacion.js`, `components/admin/TotpRenovarDialog.vue` | U `adminTotp.spec.js`, `adminRoles.spec.js`; E `admin-soporte.nube.spec.js` | A.9.2.3, A.9.4.2 | Parcial (claim `amr` sin verificar, NC-08) |
+| C-06 Mínimo privilegio del administrador | `schema.sql` (`admin_leer_sesion`, `mis_accesos_admin`, `accesos_admin`), `services/security/soporte.js`, `components/admin/SoportePanel.vue`, `components/account/AccesosAdminAviso.vue` | E `admin-soporte.nube.spec.js` | A.9.4.1, A.12.4.3, A.18.1.4 | Implementado |
+| C-08 Auditoría de la nube fiable | `schema.sql` (`tipos_evento`, `registrar_evento`, `tg_auditoria_servidor`, `verificar_cadena_auditoria`, `admin_leer_auditoria`, `purgar_auditoria`), `services/cloud/auditOutbox.js`, `views/admin/AuditView.vue` | U `auditOutbox.spec.js`, `schema.spec.js`; E `auditoria.nube.spec.js` | A.12.4.1, A.12.4.2, A.12.4.3 | Parcial (sin anclaje ni eventos de fallo, NC-16) |
+| C-09 Incidentes de extremo a extremo | `schema.sql` (`tg_incidentes_servidor`, `admin_actualizar_incidente`), `components/security/MisIncidentes.vue`, `stores/isms.js` | U `incidentesNube.spec.js`, `isms.spec.js` | A.16.1.2–A.16.1.6 | Implementado |
+| C-11 Cuotas y hora del servidor | `schema.sql` (`creado_en`, `tg_sesion_tiempo`, `cuota`, `uso_cuenta`, `tg_cuota_bloques`) | U `abuseControls.spec.js`, `schema.spec.js` | A.12.1.3, A.12.4.4 | Implementado (concurrencia no probada) |
+| C-21 Etiquetas únicas | `services/users/etiquetas.js`, `schema.sql` (`pacientes_etiqueta_unica`) | U `etiquetas.spec.js` | A.14.1.3 | Implementado |
+
+### 8.2 Privacidad en la app (TANDA 2)
+
+| Cambio | Componentes | Pruebas | Controles | Estado |
+|---|---|---|---|---|
+| C-02 Consentimiento v2.0 y textos veraces; responsable configurable (`VITE_RESPONSABLE_NOMBRE`, `VITE_RESPONSABLE_CORREO`) | `services/privacidad/consentimiento.js`, `responsable.js`, `data/privacidad.js`, `views/PrivacyView.vue`, `components/users/ConsentDialog.vue` | U `privacy.spec.js`, `privacidadTanda2.spec.js` | A.18.1.1, A.18.1.4 | Implementado (revisión legal pendiente) |
+| C-03 Nube opcional, borradores locales, subida al «Guardar» | `services/cloud/nubeOptIn.js`, `subidaMonitoreo.js`, `datosNube.js`, `views/account/CuentaView.vue`, `components/account/CloudOptInBanner.vue` | U `nubeOptIn.spec.js`, `cloudSyncNube.spec.js`; E `privacidad.nube.spec.js` | A.18.1.4, A.13.2.1 | Implementado |
+| C-07 Equipo compartido e inactividad de 15 min | `services/cloud/almacenSesion.js`, `services/security/inactividad.js`, `composables/useInactividad.js`, `App.vue` | U `privacidadTanda2.spec.js`; E `privacidad.nube.spec.js` | A.9.4.2, A.11.2.8 | Implementado (*time-box* de Supabase: manual) |
+| C-13 Reautenticación (cliente) y política de contraseñas | `services/security/reauth.js`, `components/account/ReauthDialog.vue`, `services/accounts/validation.js` | U `privacidadTanda2.spec.js`, `cuentas.spec.js` | A.9.4.3, A.9.2.4 | Parcial (servidor no la exige, NC-15) |
+| C-15 Vincular con selección explícita | `services/accounts/linkLocal.js`, `components/account/LinkLocalBanner.vue` | U `privacidadTanda2.spec.js` | A.9.4.1, A.8.2.3 | Implementado |
+| C-16/17/18 Mayoría de edad, alias local, service worker sin datos, retención | `services/privacidad/alias.js`, `public/sw.js`, `services/accounts/validation.js` | U `privacidadTanda2.spec.js`; E `pwa.spec.js` | A.18.1.4, A.13.2.1 | Parcial (peso por rangos y `exportar_mis_datos()` diferidos) |
+| C-10 (app) Evidencias del SGSI | `services/security/evidencias.js`, `components/admin/IsmsPanel.vue` | U `privacidadTanda2.spec.js` | 9.2, 9.3 | Implementado (las actas no existen) |
+
+### 8.3 Diferido (ver los dos documentos de cambios)
+
+Bóveda local con frase y clave por espacio (C-14), reautenticación impuesta por el servidor, restauración de monitoreos propios desde la nube, `exportar_mis_datos()`, conciliación de bloques (C-19), `validar_datos_sesion()` (C-20), retirar el modo PIN local (C-27), aislamiento y CRC de los sensores (C-29). Manual: prueba real de RLS con dos cuentas, claim `amr`, SMTP, CAPTCHA, protección de rama, DPA y región, actas de auditoría interna y de revisión por la dirección (`docs/PENDIENTES_MANUALES.md`).
 
 
 ## Anexo C. Índice de documentos del SGSI
@@ -1028,7 +1157,11 @@ Fuente: `docs/TRAZABILIDAD.md`. Pruebas: U = unitaria (Vitest), E = extremo a ex
 | SGSI-AUD-01 | Auditoría interna y revisión por la dirección | `docs/sgsi/auditoria_interna_y_revision.md` | 9.2, 9.3 |
 | SGSI-NC-01 | Registro de no conformidades y acciones correctivas | `docs/sgsi/registro_no_conformidades.md` | 10.1, 10.2 |
 | SGSI-REG-03 | Evaluación de proveedores y registro de vulnerabilidades | `docs/sgsi/proveedores.md` | A.15, A.12.6.1 |
+| SGSI-ADM-01 | Concesión, retiro y recuperación del acceso de administrador | `docs/sgsi/recuperacion_acceso_admin.md` | A.9.2.3–A.9.2.6, A.9.4.2 |
 | — | Matriz de trazabilidad | `docs/TRAZABILIDAD.md` | A.14.2.9 |
+| — | Auditoría de sistema y estado de implementación (H-01 a H-30, C-01 a C-29) | `docs/AUDITORIA_SISTEMA.md` | 9.2 (insumo), A.18.2.1 |
+| — | Cambios de las TANDAS 1 y 2 | `docs/CAMBIOS_TANDA1.md`, `docs/CAMBIOS_TANDA2.md` | A.12.1.2, A.14.2.2 |
+| — | Pendientes manuales priorizados | `docs/PENDIENTES_MANUALES.md` | 10.1 |
 | — | Verificación independiente | `docs/VERIFICACION.md` | A.14.2.9 |
 | — | Sugerencias de cambio y estado | `docs/SUGERENCIAS_CAMBIOS.md` | — |
 | — | Arquitectura del sistema | `docs/ARQUITECTURA_VUE.md` | — |
@@ -1061,11 +1194,11 @@ Sin variables de entorno, la aplicación funciona de forma 100 % local (IndexedD
 ### D.3 Configuración de Supabase (opcional)
 
 1. Crear el proyecto y anotar la región (en este caso, us-east-1); registrarla en `docs/sgsi/proveedores.md`.
-2. En Authentication → Sign In / Providers, mantener el correo habilitado con «Confirm email» activo y desactivar los inicios de sesión anónimos; luego ejecutar también `supabase/migracion_endurecimiento.sql`.
-3. En el editor SQL, ejecutar completo `supabase/schema.sql` (idempotente).
-4. Crear la cuenta administradora (Authentication → Users, con contraseña robusta y MFA) e insertarla en `public.administradores` a partir de su correo.
-5. Opcional: activar `pg_cron` y programar `purgar_sesiones(30)`.
-6. Definir las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` (solo la clave publicable; nunca `service_role`) en `.env.local` y en Vercel.
+2. En Authentication → Sign In / Providers, mantener el correo habilitado con «Confirm email» activo y desactivar los inicios de sesión anónimos.
+3. En el editor SQL: en una instalación nueva, ejecutar solo `supabase/schema.sql` (idempotente; integra todo). En una base existente, ejecutar en este orden las que falten: `migracion_cuentas_pacientes.sql`, `migracion_endurecimiento.sql`, `migracion_admin_mfa.sql`, `migracion_admin_roles.sql`, `migracion_endurecimiento_2.sql` y `migracion_tanda2.sql` (esta última antes de publicar el cliente nuevo). Probar primero en un proyecto de pruebas y hacer antes una copia temporal en un esquema privado. Para probar las políticas, ejecutar `supabase/pruebas_rls.sql` con tres cuentas de prueba (el caso 0 comprueba el claim `amr`).
+4. Crear la cuenta administradora (Authentication → Users, con contraseña robusta y MFA TOTP) e insertar la primera en `public.administradores` a partir de su correo; las demás las concede otro administrador desde Administración → Administradores. Se recomiendan al menos dos.
+5. Activar `pg_cron`: las migraciones programan `purga-ecg` (365 días) y `purga-auditoria` (2 años); comprobar con `select jobname from cron.job`.
+6. Definir las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` (solo la clave publicable; nunca `service_role`) en `.env.local` y en Vercel, y `VITE_RESPONSABLE_NOMBRE` y `VITE_RESPONSABLE_CORREO` (responsable del tratamiento que muestra `/privacidad`).
 7. Opcional: CAPTCHA (Turnstile o hCaptcha) mediante `VITE_CAPTCHA_PROVIDER` y `VITE_CAPTCHA_SITE_KEY`, con la clave secreta en Supabase y la ampliación correspondiente de la CSP en `vercel.json`.
 
 ### D.4 Despliegue en Vercel
@@ -1074,9 +1207,9 @@ Importar el repositorio de GitHub como proyecto con el preset Vite; el archivo `
 
 ### D.5 Uso básico
 
-1. Participantes: crear o elegir «Usuario N» (sin contraseña) y, si se desea, aceptar el consentimiento para datos opcionales.
+1. Pacientes (`/pacientes`): crear o elegir «Paciente N» (con la declaración de que la persona medida es mayor de edad) y, si se desea, aceptar el consentimiento 2.0 para datos opcionales. Con una cuenta (`/acceso`, `/registro`), la nube es opcional y está apagada por defecto: se activa en `/cuenta`.
 2. Monitor: elegir hasta cinco canales con fuente (puerto serie, simulador o CSV), perfil y participante; aceptar el aviso de seguridad eléctrica antes de usar Web Serial; iniciar la sesión de medición.
-3. Sesiones: revisar el historial y exportar el CSV seudonimizado.
+3. Monitoreos (`/monitoreos`): guardar o descartar, revisar el historial y exportar el CSV seudonimizado; publicar solo con consentimiento y nube activa.
 4. Comparar: contrastar una señal con la referencia mediante pico R, correlación cruzada o ajuste manual.
-5. Administración (`/admin`): crear el PIN en el primer uso; configurar rangos, sincronización y retención; revisar usuarios, auditoría y panel SGSI.
+5. Administración (`/admin`): con nube, entrar con una cuenta con rol e ingresar el código TOTP; sin nube, crear el PIN en el primer uso. Configurar rangos, sincronización y retención; gestionar administradores; moderar reportes y, de modo excepcional y con motivo, leer una sesión; revisar auditoría (local y de la nube) y panel SGSI.
 6. Privacidad (`/privacidad`) y Seguridad (`/seguridad`): consultar los derechos, eliminar los datos en la nube y notificar incidentes.
