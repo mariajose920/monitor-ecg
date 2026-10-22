@@ -257,6 +257,21 @@ const dim = computed(() => (typeof props.size === 'number' ? `${props.size}px` :
       <line x1="17" y1="16" x2="23" y2="16" />
     </g>
 
+    <!-- Tijeras / Recortar -->
+    <g v-else-if="name === 'scissors' || name === 'crop'">
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <line x1="20" y1="4" x2="8.12" y2="15.88" />
+      <line x1="14.47" y1="14.48" x2="20" y2="20" />
+      <line x1="8.12" y1="8.12" x2="12" y2="12" />
+    </g>
+
+    <!-- Revertir / Restablecer -->
+    <g v-else-if="name === 'rotate-ccw' || name === 'reset'">
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </g>
+
     <!-- Por defecto: círculo genérico -->
     <circle v-else cx="12" cy="12" r="10" />
   </svg>

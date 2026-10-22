@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { generarCaptura, descargarBlob, copiarAlPortapapeles } from '@/services/report/snapshotService.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import {
+  generarCaptura,
+  descargarBlob,
+  copiarAlPortapapeles,
+  calcularBpmDeMuestras,
+  descargarCapturaCsv,
+} from '@/services/report/snapshotService.js'
 import { createRuntime, destroyRuntime } from '@/services/acquisition/channelRegistry.js'
+import { generateReferenceEcg } from '@/data/referenceEcg.js'
 
 describe('snapshotService', () => {
   afterEach(() => {
@@ -83,6 +90,124 @@ describe('snapshotService', () => {
     expect(mockContext.stroke).toHaveBeenCalled()
 
     destroyRuntime(99)
+  })
+
+  it('permite recortar una captura seleccionando límites de tiempo y recalculando el tramo', async () => {
+    const mockContext = {
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 50 })),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      clip: vi.fn(),
+      rect: vi.fn(),
+    }
+
+    const mockCanvas = {
+      width: 0,
+      height: 0,
+      getContext: () => mockContext,
+      toDataURL: () => 'data:image/png;base64,recorte-simulado',
+      toBlob: (cb) => cb(new Blob(['fake-png-recortado'], { type: 'image/png' })),
+    }
+
+    vi.stubGlobal('document', {
+      createElement: vi.fn((tag) => (tag === 'canvas' ? mockCanvas : {})),
+    })
+
+    // Creamos muestras sintéticas de 8 segundos a 250 Hz
+    const muestras = []
+    for (let i = 0; i < 2000; i++) {
+      muestras.push({
+        tRel: i / 250,
+        v: 2048 + Math.sin(i / 10) * 400,
+        lo: false,
+      })
+    }
+
+    const canal = {
+      id: 88,
+      nombre: 'Canal Recorte',
+      perfilId: 'esp32-ad8232',
+      bpmCalculado: 80,
+      actividad: 'reposo',
+    }
+
+    const res = await generarCaptura({
+      canal,
+      usuarioEtiqueta: 'Juan',
+      ventanaSeg: 8,
+      muestrasDirectas: muestras,
+      recorte: {
+        inicioSeg: 2.0,
+        finSeg: 5.5,
+        ventanaOriginalSeg: 8,
+      },
+    })
+
+    expect(res.recorte).toBeDefined()
+    expect(res.recorte.inicioSeg).toBe(2)
+    expect(res.recorte.finSeg).toBe(5.5)
+    expect(res.recorte.duracionSeg).toBe(3.5)
+    expect(res.ventanaSeg).toBe(3.5)
+    expect(res.filename).toContain('_recorte_2s-5.5s')
+    // Las muestras resultantes deben estar dentro del tramo y remapeadas
+    expect(res.samples.length).toBeGreaterThan(0)
+    expect(res.samples[0].tRel).toBeGreaterThanOrEqual(0)
+    expect(res.samples[res.samples.length - 1].tRel).toBeLessThanOrEqual(3.5)
+    // Se conservan las originales
+    expect(res.samplesOriginales.length).toBe(2000)
+  })
+
+  it('calcularBpmDeMuestras estima la frecuencia cardíaca de muestras o devuelve null si no alcanza', () => {
+    // 1) Señal vacía o insuficiente
+    expect(calcularBpmDeMuestras([])).toBeNull()
+    expect(calcularBpmDeMuestras(null)).toBeNull()
+
+    // 2) Señal de ECG de 5 segundos con 60 BPM (1 latido por segundo)
+    const { valores, fs } = generateReferenceEcg({ durationS: 5, bpm: 60 })
+    const muestras = Array.from(valores).map((v, i) => ({
+      tRel: i / fs,
+      v,
+      lo: false,
+    }))
+
+    const bpm = calcularBpmDeMuestras(muestras, fs)
+    expect(bpm).not.toBeNull()
+    expect(Math.abs(bpm - 60)).toBeLessThanOrEqual(3)
+  })
+
+  it('descargarCapturaCsv genera y descarga un archivo CSV con las muestras', () => {
+    const aMock = { href: '', download: '', click: vi.fn() }
+    const mockDoc = {
+      createElement: vi.fn().mockReturnValue(aMock),
+      body: {
+        appendChild: vi.fn(),
+        removeChild: vi.fn(),
+      },
+    }
+    vi.stubGlobal('document', mockDoc)
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn().mockReturnValue('blob:test-csv'),
+      revokeObjectURL: vi.fn(),
+    })
+
+    const captura = {
+      filename: 'captura_test.png',
+      samples: [
+        { tRel: 0.0, v: 2048, lo: false },
+        { tRel: 0.004, v: 2100, lo: false },
+      ],
+    }
+
+    descargarCapturaCsv(captura)
+    expect(aMock.download).toBe('captura_test.csv')
+    expect(aMock.click).toHaveBeenCalled()
   })
 
   it('descargarBlob crea y limpia el enlace temporal', () => {
