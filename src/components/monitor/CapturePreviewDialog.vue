@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import {
@@ -20,6 +20,7 @@ const emit = defineEmits(['cerrar'])
 const capturaActual = ref(props.captura)
 const copiado = ref(false)
 const procesandoRecorte = ref(false)
+const modoEdicion = ref(true) // true: ajustando límites sobre la onda completa; false: viendo resultado recortado
 
 // Duración total original de la captura (por defecto 8s)
 const duracionTotal = computed(() => {
@@ -49,16 +50,34 @@ const duracionSeleccionada = computed(() => {
   return Math.max(0, Number((limiteFin.value - limiteInicio.value).toFixed(2)))
 })
 
-// Porcentajes para la barra de línea de tiempo visual
-const pctInicio = computed(() => {
-  if (duracionTotal.value <= 0) return 0
-  return Math.max(0, Math.min(100, (limiteInicio.value / duracionTotal.value) * 100))
-})
+// Mapeo proporcional a la zona de trazado dentro de la imagen generada (1200x560, x0=70, w=1100, y0=92, h=400)
+const zonaRef = ref(null)
+const arrastrando = ref(null) // 'inicio' | 'fin' | 'zona' | null
+const dragStartX = ref(0)
+const dragStartIni = ref(0)
+const dragStartFin = ref(0)
 
-const pctAncho = computed(() => {
-  if (duracionTotal.value <= 0) return 100
-  return Math.max(0, Math.min(100 - pctInicio.value, (duracionSeleccionada.value / duracionTotal.value) * 100))
-})
+const hoverSec = ref(null)
+const mostrarHover = ref(false)
+
+function secToPct(sec) {
+  if (duracionTotal.value <= 0) return 0
+  return Math.max(0, Math.min(100, (sec / duracionTotal.value) * 100))
+}
+
+const pctInicio = computed(() => secToPct(limiteInicio.value))
+const pctFin = computed(() => secToPct(limiteFin.value))
+const pctAncho = computed(() => Math.max(0, pctFin.value - pctInicio.value))
+const pctHover = computed(() => (hoverSec.value != null ? secToPct(hoverSec.value) : 0))
+
+function clientXToSec(clientX) {
+  if (!zonaRef.value) return 0
+  const rect = zonaRef.value.getBoundingClientRect()
+  const relX = Math.max(0, Math.min(rect.width, clientX - rect.left))
+  const frac = relX / rect.width
+  const sec = frac * duracionTotal.value
+  return Math.max(0, Math.min(duracionTotal.value, Number(sec.toFixed(2))))
+}
 
 function recalcularBpmEstimado() {
   const muestras = muestrasFuente.value
@@ -77,10 +96,122 @@ function recalcularBpmEstimado() {
 
 watch([limiteInicio, limiteFin], () => {
   if (limiteInicio.value > limiteFin.value - 0.2) {
-    limiteInicio.value = Math.max(0, Number((limiteFin.value - 0.2).toFixed(1)))
+    limiteInicio.value = Math.max(0, Number((limiteFin.value - 0.2).toFixed(2)))
   }
   recalcularBpmEstimado()
 })
+
+// === INTERACCIÓN DIRECTA ARRASTRANDO SOBRE LA CAPTURA ===
+
+function iniciarArrastre(tipo, e) {
+  e.preventDefault()
+  e.stopPropagation()
+  arrastrando.value = tipo
+  dragStartX.value = e.clientX
+  dragStartIni.value = limiteInicio.value
+  dragStartFin.value = limiteFin.value
+  mostrarHover.value = false
+
+  window.addEventListener('pointermove', alArrastrar)
+  window.addEventListener('pointerup', alFinalizarArrastre)
+  window.addEventListener('pointercancel', alFinalizarArrastre)
+}
+
+function clickEnFondo(e) {
+  if (arrastrando.value) return
+  const clickSec = clientXToSec(e.clientX)
+  const distIni = Math.abs(clickSec - limiteInicio.value)
+  const distFin = Math.abs(clickSec - limiteFin.value)
+
+  if (clickSec < limiteInicio.value) {
+    limiteInicio.value = clickSec
+    iniciarArrastre('inicio', e)
+  } else if (clickSec > limiteFin.value) {
+    limiteFin.value = clickSec
+    iniciarArrastre('fin', e)
+  } else {
+    if (distIni < distFin) {
+      limiteInicio.value = clickSec
+      iniciarArrastre('inicio', e)
+    } else {
+      limiteFin.value = clickSec
+      iniciarArrastre('fin', e)
+    }
+  }
+}
+
+function alArrastrar(e) {
+  if (!arrastrando.value || !zonaRef.value) return
+  const rect = zonaRef.value.getBoundingClientRect()
+  const deltaSec = ((e.clientX - dragStartX.value) / rect.width) * duracionTotal.value
+
+  if (arrastrando.value === 'inicio') {
+    let nuevoIni = dragStartIni.value + deltaSec
+    nuevoIni = Math.max(0, Math.min(nuevoIni, limiteFin.value - 0.15))
+    limiteInicio.value = Number(nuevoIni.toFixed(2))
+  } else if (arrastrando.value === 'fin') {
+    let nuevoFin = dragStartFin.value + deltaSec
+    nuevoFin = Math.max(limiteInicio.value + 0.15, Math.min(duracionTotal.value, nuevoFin))
+    limiteFin.value = Number(nuevoFin.toFixed(2))
+  } else if (arrastrando.value === 'zona') {
+    const span = dragStartFin.value - dragStartIni.value
+    let nuevoIni = dragStartIni.value + deltaSec
+    let nuevoFin = dragStartFin.value + deltaSec
+    if (nuevoIni < 0) {
+      nuevoIni = 0
+      nuevoFin = span
+    }
+    if (nuevoFin > duracionTotal.value) {
+      nuevoFin = duracionTotal.value
+      nuevoIni = duracionTotal.value - span
+    }
+    limiteInicio.value = Number(nuevoIni.toFixed(2))
+    limiteFin.value = Number(nuevoFin.toFixed(2))
+  }
+}
+
+function alFinalizarArrastre() {
+  arrastrando.value = null
+  window.removeEventListener('pointermove', alArrastrar)
+  window.removeEventListener('pointerup', alFinalizarArrastre)
+  window.removeEventListener('pointercancel', alFinalizarArrastre)
+  recalcularBpmEstimado()
+}
+
+function alMoverHover(e) {
+  if (arrastrando.value) {
+    mostrarHover.value = false
+    return
+  }
+  hoverSec.value = clientXToSec(e.clientX)
+  mostrarHover.value = true
+}
+
+function alSalirHover() {
+  mostrarHover.value = false
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', alArrastrar)
+  window.removeEventListener('pointerup', alFinalizarArrastre)
+  window.removeEventListener('pointercancel', alFinalizarArrastre)
+})
+
+// === PRESETS Y PASOS FINOS ===
+
+function ajustarInicio(delta) {
+  const v = Math.max(0, Math.min(duracionTotal.value, Number((limiteInicio.value + delta).toFixed(2))))
+  if (v < limiteFin.value - 0.1) {
+    limiteInicio.value = v
+  }
+}
+
+function ajustarFin(delta) {
+  const v = Math.max(0, Math.min(duracionTotal.value, Number((limiteFin.value + delta).toFixed(2))))
+  if (v > limiteInicio.value + 0.1) {
+    limiteFin.value = v
+  }
+}
 
 function aplicarPreset(tipo) {
   const tot = duracionTotal.value
@@ -92,17 +223,18 @@ function aplicarPreset(tipo) {
     limiteFin.value = Math.min(3, tot)
   } else if (tipo === 'centro') {
     const centro = tot / 2
-    limiteInicio.value = Math.max(0, Number((centro - 1.5).toFixed(1)))
-    limiteFin.value = Math.min(tot, Number((centro + 1.5).toFixed(1)))
+    limiteInicio.value = Math.max(0, Number((centro - 1.5).toFixed(2)))
+    limiteFin.value = Math.min(tot, Number((centro + 1.5).toFixed(2)))
   } else if (tipo === 'ultimos') {
-    limiteInicio.value = Math.max(0, Number((tot - 3).toFixed(1)))
+    limiteInicio.value = Math.max(0, Number((tot - 3).toFixed(2)))
     limiteFin.value = tot
   }
+  modoEdicion.value = true
 }
 
 async function aplicarRecorte() {
-  if (duracionSeleccionada.value < 0.3) {
-    notify('El tramo a recortar debe ser de al menos 0.3 segundos.', { tipo: 'aviso' })
+  if (duracionSeleccionada.value < 0.25) {
+    notify('El tramo seleccionado debe ser de al menos 0.25 segundos.', { tipo: 'aviso' })
     return
   }
   procesandoRecorte.value = true
@@ -120,7 +252,8 @@ async function aplicarRecorte() {
       fechaStrPersonalizada: props.captura.fecha,
     })
     capturaActual.value = res
-    notify(`¡Captura recortada! Segmento de ${res.ventanaSeg}s guardado (${res.bpm != null ? res.bpm + ' BPM' : 'BPM estimado'}).`, { tipo: 'ok' })
+    modoEdicion.value = false
+    notify(`¡Captura recortada con éxito! Tramo de ${res.ventanaSeg}s guardado (${res.bpm != null ? res.bpm + ' BPM' : 'BPM estimado'}).`, { tipo: 'ok' })
   } catch (err) {
     notify(err.message || 'No se pudo recortar la captura.', { tipo: 'error' })
   } finally {
@@ -133,6 +266,7 @@ function restablecerOriginal() {
   limiteFin.value = duracionTotal.value
   capturaActual.value = props.captura
   bpmEstimado.value = props.captura.bpm
+  modoEdicion.value = true
   notify('Captura restablecida a su duración original.', { tipo: 'info' })
 }
 
@@ -169,16 +303,105 @@ async function copiar() {
 </script>
 
 <template>
-  <BaseDialog titulo="Captura de frecuencia cardíaca" ancho="920px" @cerrar="emit('cerrar')">
+  <BaseDialog titulo="Captura de frecuencia cardíaca" ancho="940px" @cerrar="emit('cerrar')">
     <div class="cuerpo-captura">
+      <!-- Marco principal con la captura y la capa interactiva ENCIMA de la señal -->
       <div class="vista-previa-marco">
+        <!-- Imagen de fondo: si está en modo edición de límites se muestra la original completa con la onda; si se aplicó el corte, se muestra el resultado final limpio -->
         <img
-          :src="capturaActual.dataUrl"
+          :src="modoEdicion ? props.captura.dataUrl : capturaActual.dataUrl"
           :alt="`Captura de señal ${capturaActual.usuario} - ${capturaActual.bpm ?? '--'} BPM`"
           class="img-captura"
         >
+
+        <!-- CAPA INTERACTIVA EXACTA SOBRE LA ONDA (ajustada a la cuadrícula del canvas: left 5.83%, width 91.67%, top 16.43%, height 71.43%) -->
+        <div
+          v-if="modoEdicion"
+          ref="zonaRef"
+          class="overlay-recorte"
+          @pointerdown="clickEnFondo"
+          @pointermove="alMoverHover"
+          @pointerleave="alSalirHover"
+        >
+          <!-- Máscara exterior izquierda (atenúa la señal descartada antes del límite inicial) -->
+          <div
+            class="mascara-descarte izquierda"
+            :style="{ width: `${pctInicio}%` }"
+          />
+
+          <!-- Zona activa seleccionada (brillante / iluminada, con insignia flotante) -->
+          <div
+            class="zona-seleccionada"
+            :style="{ left: `${pctInicio}%`, width: `${pctAncho}%` }"
+            title="Arrastra para mover todo el tramo seleccionado"
+            @pointerdown.stop="iniciarArrastre('zona', $event)"
+          >
+            <!-- Badge flotante central de tiempo y BPM instantáneo del tramo -->
+            <div class="badge-flotante-tramo">
+              <AppIcon name="scissors" :size="13" />
+              <span><strong>{{ duracionSeleccionada }}s</strong> ({{ bpmEstimado != null ? `${bpmEstimado} BPM` : '-- BPM' }})</span>
+            </div>
+          </div>
+
+          <!-- Máscara exterior derecha (atenúa la señal descartada después del límite final) -->
+          <div
+            class="mascara-descarte derecha"
+            :style="{ left: `${pctFin}%` }"
+          />
+
+          <!-- LÍNEA Y MANIPULADOR: LÍMITE INICIAL (arrastre directo sobre la onda) -->
+          <div
+            class="linea-limite inicio"
+            :style="{ left: `${pctInicio}%` }"
+            @pointerdown.stop="iniciarArrastre('inicio', $event)"
+          >
+            <div class="manilla-handle superior" title="Arrastra para fijar el punto de inicio exacto">
+              <span class="flecha">◀</span>
+              <span class="texto">Inicio: {{ limiteInicio }}s</span>
+            </div>
+            <div class="linea-resaltada" />
+            <div class="manilla-handle inferior">
+              <span>▲</span>
+            </div>
+          </div>
+
+          <!-- LÍNEA Y MANIPULADOR: LÍMITE FINAL (arrastre directo sobre la onda) -->
+          <div
+            class="linea-limite fin"
+            :style="{ left: `${pctFin}%` }"
+            @pointerdown.stop="iniciarArrastre('fin', $event)"
+          >
+            <div class="manilla-handle superior" title="Arrastra para fijar el punto de fin exacto">
+              <span class="texto">Fin: {{ limiteFin }}s</span>
+              <span class="flecha">▶</span>
+            </div>
+            <div class="linea-resaltada" />
+            <div class="manilla-handle inferior">
+              <span>▲</span>
+            </div>
+          </div>
+
+          <!-- Línea guía dinámica al mover el cursor (hover) para máxima precisión -->
+          <div
+            v-if="mostrarHover && !arrastrando"
+            class="guia-cursor"
+            :style="{ left: `${pctHover}%` }"
+          >
+            <span class="tooltip-cursor">{{ hoverSec }}s</span>
+          </div>
+        </div>
+
+        <!-- Cartel si se está viendo el recorte ya aplicado -->
+        <div v-if="!modoEdicion && estaRecortado" class="banner-vista-recortada">
+          <span>Vista de la captura recortada ({{ capturaActual.recorte.duracionSeg }} s)</span>
+          <button class="btn small cardio" type="button" @click="modoEdicion = true">
+            <AppIcon name="scissors" :size="14" />
+            <span>Volver a mover límites</span>
+          </button>
+        </div>
       </div>
 
+      <!-- Resumen en chips de datos -->
       <div class="resumen-chips">
         <span class="chip info">
           <AppIcon name="user" :size="14" />
@@ -186,8 +409,9 @@ async function copiar() {
         </span>
         <span class="chip cardio">
           <AppIcon name="heart" :size="14" filled />
-          <strong>{{ capturaActual.bpm != null ? `${capturaActual.bpm} BPM` : '-- BPM' }}</strong>
-          <span v-if="estaRecortado" class="tag-recortado">(tramo)</span>
+          <strong>{{ (modoEdicion ? bpmEstimado : capturaActual.bpm) != null ? `${(modoEdicion ? bpmEstimado : capturaActual.bpm)} BPM` : '-- BPM' }}</strong>
+          <span v-if="estaRecortado && !modoEdicion" class="tag-recortado">(recortado)</span>
+          <span v-else-if="limitesModificados" class="tag-recortado">(estimado en tramo)</span>
         </span>
         <span class="chip neutral">
           <AppIcon name="activity" :size="14" />
@@ -197,132 +421,92 @@ async function copiar() {
           <AppIcon name="clock" :size="14" />
           <span>{{ capturaActual.fecha }}</span>
         </span>
-        <span v-if="estaRecortado" class="chip warn" title="La captura ha sido recortada al tramo seleccionado">
+        <span v-if="estaRecortado && !modoEdicion" class="chip warn">
           <AppIcon name="scissors" :size="14" />
           <strong>Recorte: {{ capturaActual.recorte.inicioSeg }}s a {{ capturaActual.recorte.finSeg }}s ({{ capturaActual.recorte.duracionSeg }}s)</strong>
         </span>
       </div>
 
-      <!-- Herramienta interactiva de selección de límites y recorte -->
-      <section class="panel-recorte" aria-labelledby="titulo-herramienta-recorte">
-        <div class="cabecera-recorte">
-          <div class="titulo-con-icono">
+      <!-- Panel de herramientas y controles finos -->
+      <section class="panel-controles-recorte" aria-label="Controles de precisión del recorte">
+        <div class="fila-instruccion-directa">
+          <div class="instruccion-con-icono">
             <AppIcon name="scissors" :size="16" />
-            <h3 id="titulo-herramienta-recorte" class="subtitulo-recorte">
-              Seleccionar límites para recortar la captura
-            </h3>
-          </div>
-          <span class="badge-duracion">
-            Total original: {{ duracionTotal }} s
-          </span>
-        </div>
-
-        <p class="instruccion-recorte">
-          Ajusta los límites inicial y final para aislar la frecuencia cardíaca del tramo que desees. La captura y el BPM se recalcularán automáticamente con el segmento seleccionado.
-        </p>
-
-        <!-- Barra visual interactiva de línea de tiempo -->
-        <div class="timeline-visual" aria-hidden="true">
-          <div class="timeline-pista">
-            <div
-              class="timeline-seleccion"
-              :style="{ left: `${pctInicio}%`, width: `${pctAncho}%` }"
-            >
-              <span class="timeline-etiqueta inicio">{{ limiteInicio }}s</span>
-              <span class="timeline-etiqueta fin">{{ limiteFin }}s</span>
-            </div>
-          </div>
-          <div class="timeline-marcas">
-            <span>0s</span>
-            <span>{{ (duracionTotal * 0.25).toFixed(1) }}s</span>
-            <span>{{ (duracionTotal * 0.5).toFixed(1) }}s</span>
-            <span>{{ (duracionTotal * 0.75).toFixed(1) }}s</span>
-            <span>{{ duracionTotal }}s</span>
-          </div>
-        </div>
-
-        <!-- Controles deslizantes de los dos límites -->
-        <div class="grid-limites">
-          <div class="control-limite">
-            <div class="etiqueta-fila">
-              <label for="limite-inicio">
-                <strong>Límite inicial (Desde):</strong>
-              </label>
-              <span class="valor-limite">{{ limiteInicio }} s</span>
-            </div>
-            <div class="slider-con-input">
-              <input
-                id="limite-inicio"
-                v-model.number="limiteInicio"
-                type="range"
-                min="0"
-                :max="duracionTotal"
-                step="0.1"
-                class="slider-rango"
-              >
-              <input
-                v-model.number="limiteInicio"
-                type="number"
-                min="0"
-                :max="duracionTotal"
-                step="0.1"
-                class="input-numero"
-                aria-label="Límite inicial en segundos"
-              >
-            </div>
+            <p class="texto-ayuda">
+              <strong>Recorte interactivo sobre la imagen:</strong>
+              Arrastra las líneas rojas (Inicio y Fin) directamente sobre los picos o haz clic sobre la señal.
+            </p>
           </div>
 
-          <div class="control-limite">
-            <div class="etiqueta-fila">
-              <label for="limite-fin">
-                <strong>Límite final (Hasta):</strong>
-              </label>
-              <span class="valor-limite">{{ limiteFin }} s</span>
-            </div>
-            <div class="slider-con-input">
-              <input
-                id="limite-fin"
-                v-model.number="limiteFin"
-                type="range"
-                min="0"
-                :max="duracionTotal"
-                step="0.1"
-                class="slider-rango"
-              >
-              <input
-                v-model.number="limiteFin"
-                type="number"
-                min="0"
-                :max="duracionTotal"
-                step="0.1"
-                class="input-numero"
-                aria-label="Límite final en segundos"
-              >
-            </div>
-          </div>
-        </div>
-
-        <!-- Botones de selección rápida y datos del tramo -->
-        <div class="fila-meta-recorte">
-          <div class="presets-recorte">
+          <div class="presets-rapidos">
             <span class="label-presets">Atajos:</span>
             <button class="btn small ghost" type="button" @click="aplicarPreset('todo')">Todo ({{ duracionTotal }}s)</button>
             <button class="btn small ghost" type="button" @click="aplicarPreset('primeros')">Primeros 3s</button>
             <button class="btn small ghost" type="button" @click="aplicarPreset('centro')">Centro 3s</button>
             <button class="btn small ghost" type="button" @click="aplicarPreset('ultimos')">Últimos 3s</button>
           </div>
+        </div>
 
-          <div class="resumen-seleccion">
-            <span class="duracion-recorte">
-              Duración tramo: <strong>{{ duracionSeleccionada }} s</strong>
-            </span>
-            <span class="bpm-recorte">
-              BPM estimado: <strong>{{ bpmEstimado != null ? `${bpmEstimado} BPM` : '-- BPM' }}</strong>
-            </span>
+        <!-- Ajuste fino y milimétrico de los dos puntos -->
+        <div class="grid-ajuste-fino">
+          <!-- Control punto de inicio -->
+          <div class="card-punto">
+            <div class="cab-punto">
+              <span class="nombre-punto">Punto inicial:</span>
+              <span class="valor-punto">{{ limiteInicio }} s</span>
+            </div>
+            <div class="acciones-paso">
+              <button class="btn small ghost" type="button" title="Retroceder 0.1 s" @click="ajustarInicio(-0.1)">-0.1s</button>
+              <input
+                v-model.number="limiteInicio"
+                type="number"
+                min="0"
+                :max="duracionTotal"
+                step="0.05"
+                class="input-fino"
+                aria-label="Segundos de inicio"
+                @focus="modoEdicion = true"
+              >
+              <button class="btn small ghost" type="button" title="Avanzar 0.1 s" @click="ajustarInicio(0.1)">+0.1s</button>
+            </div>
+          </div>
+
+          <!-- Resumen central -->
+          <div class="card-punto centro">
+            <div class="cab-punto">
+              <span class="nombre-punto">Duración seleccionada:</span>
+            </div>
+            <div class="metricas-tramo">
+              <span class="duracion-grande">{{ duracionSeleccionada }} s</span>
+              <span class="bpm-tramo-destacado">{{ bpmEstimado != null ? `${bpmEstimado} BPM` : '-- BPM' }}</span>
+            </div>
+          </div>
+
+          <!-- Control punto de fin -->
+          <div class="card-punto">
+            <div class="cab-punto">
+              <span class="nombre-punto">Punto final:</span>
+              <span class="valor-punto">{{ limiteFin }} s</span>
+            </div>
+            <div class="acciones-paso">
+              <button class="btn small ghost" type="button" title="Retroceder 0.1 s" @click="ajustarFin(-0.1)">-0.1s</button>
+              <input
+                v-model.number="limiteFin"
+                type="number"
+                min="0"
+                :max="duracionTotal"
+                step="0.05"
+                class="input-fino"
+                aria-label="Segundos de fin"
+                @focus="modoEdicion = true"
+              >
+              <button class="btn small ghost" type="button" title="Avanzar 0.1 s" @click="ajustarFin(0.1)">+0.1s</button>
+            </div>
           </div>
         </div>
 
-        <div class="acciones-recorte">
+        <!-- Botones de acción del corte -->
+        <div class="fila-botones-corte">
           <button
             class="btn cardio"
             type="button"
@@ -330,7 +514,17 @@ async function copiar() {
             @click="aplicarRecorte"
           >
             <AppIcon name="scissors" :size="16" />
-            <span>{{ estaRecortado ? 'Actualizar recorte' : 'Recortar y aplicar a la captura' }}</span>
+            <span>{{ estaRecortado ? 'Actualizar corte' : 'Cortar y aplicar a la captura' }}</span>
+          </button>
+
+          <button
+            v-if="!modoEdicion && estaRecortado"
+            class="btn secondary"
+            type="button"
+            @click="modoEdicion = true"
+          >
+            <AppIcon name="scissors" :size="15" />
+            <span>Ajustar límites de nuevo</span>
           </button>
 
           <button
@@ -339,15 +533,11 @@ async function copiar() {
             type="button"
             @click="restablecerOriginal"
           >
-            <AppIcon name="rotate-ccw" :size="16" />
-            <span>Restablecer captura completa</span>
+            <AppIcon name="rotate-ccw" :size="15" />
+            <span>Restablecer captura original</span>
           </button>
         </div>
       </section>
-
-      <p class="hint small">
-        Esta captura {{ estaRecortado ? 'muestra el tramo recortado' : 'incluye los últimos ' + (capturaActual.ventanaSeg || 8) + ' segundos' }} de bioseñal con cuadrícula médica y cálculo de frecuencia cardíaca de alta resolución.
-      </p>
     </div>
 
     <template #acciones>
@@ -361,7 +551,7 @@ async function copiar() {
       </button>
       <button class="btn cardio" type="button" @click="descargar">
         <AppIcon name="download" :size="16" />
-        {{ estaRecortado ? 'Descargar imagen recortada (PNG)' : 'Descargar imagen (PNG)' }}
+        {{ estaRecortado && !modoEdicion ? 'Descargar imagen recortada (PNG)' : 'Descargar imagen (PNG)' }}
       </button>
       <button class="btn ghost" type="button" @click="emit('cerrar')">
         Cerrar
@@ -377,21 +567,193 @@ async function copiar() {
   gap: 16px;
 }
 
+/* Marco contenedor con posicionamiento relativo para la capa superpuesta */
 .vista-previa-marco {
+  position: relative;
   width: 100%;
-  border-radius: var(--radius);
+  border-radius: var(--radius, 10px);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #e2e8f0);
   background: #ffffff;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+  user-select: none;
 }
 
 .img-captura {
   display: block;
   width: 100%;
   height: auto;
+  pointer-events: none;
 }
 
+/* CAPA INTERACTIVA ENCIMA DE LA SEÑAL (Cubre exactamente el área del gráfico en el canvas) */
+.overlay-recorte {
+  position: absolute;
+  left: 5.833%;
+  width: 91.667%;
+  top: 16.429%;
+  height: 71.429%;
+  cursor: crosshair;
+  touch-action: none;
+  overflow: visible;
+}
+
+/* Máscaras oscuras que atenúan las partes fuera de los límites */
+.mascara-descarte {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.42);
+  pointer-events: none;
+  transition: width 0.05s linear, left 0.05s linear;
+}
+
+.mascara-descarte.izquierda {
+  left: 0;
+}
+
+.mascara-descarte.derecha {
+  right: 0;
+}
+
+/* Zona central activa (iluminada / seleccionada) */
+.zona-seleccionada {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(225, 29, 72, 0.08);
+  border-top: 2px dashed rgba(225, 29, 72, 0.6);
+  border-bottom: 2px dashed rgba(225, 29, 72, 0.6);
+  cursor: grab;
+  box-sizing: border-box;
+}
+
+.zona-seleccionada:active {
+  cursor: grabbing;
+  background: rgba(225, 29, 72, 0.14);
+}
+
+.badge-flotante-tramo {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--cardio, #e11d48);
+  border: 1px solid var(--cardio, #e11d48);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* LÍNEAS VERTICALES DE LÍMITE (INICIO Y FIN) */
+.linea-limite {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  margin-left: -16px; /* Centra el área táctil de 32px sobre el píxel exacto */
+  cursor: ew-resize;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.linea-resaltada {
+  width: 3px;
+  height: 100%;
+  background: var(--cardio, #e11d48);
+  box-shadow: 0 0 8px rgba(225, 29, 72, 0.7);
+  pointer-events: none;
+}
+
+.linea-limite:hover .linea-resaltada,
+.linea-limite:active .linea-resaltada {
+  width: 4px;
+  background: #be123c;
+  box-shadow: 0 0 12px rgba(225, 29, 72, 0.9);
+}
+
+/* Manillas tipo pestaña flotante */
+.manilla-handle {
+  background: var(--cardio, #e11d48);
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.manilla-handle.superior {
+  position: absolute;
+  top: -24px;
+}
+
+.manilla-handle.inferior {
+  position: absolute;
+  bottom: -20px;
+  padding: 1px 4px;
+  font-size: 0.65rem;
+}
+
+/* Línea guía que sigue el cursor */
+.guia-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed rgba(15, 23, 42, 0.6);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.tooltip-cursor {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Banner cuando se visualiza el recorte ya aplicado */
+.banner-vista-recortada {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.88);
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.84rem;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+}
+
+/* Resumen chips */
 .resumen-chips {
   display: flex;
   flex-wrap: wrap;
@@ -406,168 +768,39 @@ async function copiar() {
   margin-left: 4px;
 }
 
-/* Panel de recorte */
-.panel-recorte {
+/* Panel de controles finos */
+.panel-controles-recorte {
   background: var(--bg-elev, #f8fafc);
   border: 1px solid var(--border, #e2e8f0);
   border-radius: var(--radius, 10px);
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.cabecera-recorte {
+.fila-instruccion-directa {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
-.titulo-con-icono {
+.instruccion-con-icono {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--text, #0f172a);
 }
 
-.subtitulo-recorte {
-  font-size: 0.96rem;
-  font-weight: 700;
+.texto-ayuda {
+  font-size: 0.85rem;
   margin: 0;
-}
-
-.badge-duracion {
-  font-size: 0.78rem;
-  color: var(--text-muted, #64748b);
-  background: var(--bg-elev-2, rgba(0, 0, 0, 0.05));
-  padding: 2px 8px;
-  border-radius: 12px;
-}
-
-.instruccion-recorte {
-  font-size: 0.85rem;
-  color: var(--text-muted, #64748b);
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* Barra interactiva de línea de tiempo */
-.timeline-visual {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 0;
-}
-
-.timeline-pista {
-  position: relative;
-  width: 100%;
-  height: 24px;
-  background: var(--bg-elev-2, #e2e8f0);
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--border, #cbd5e1);
-}
-
-.timeline-seleccion {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: rgba(225, 29, 72, 0.22);
-  border-left: 3px solid var(--cardio, #e11d48);
-  border-right: 3px solid var(--cardio, #e11d48);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 4px;
-  box-sizing: border-box;
-  transition: left 0.08s ease, width 0.08s ease;
-}
-
-.timeline-etiqueta {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--cardio, #e11d48);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 1px 4px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-
-.timeline-marcas {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.72rem;
-  color: var(--text-muted, #94a3b8);
-  padding: 0 2px;
-}
-
-/* Grid con los dos controles de límites */
-.grid-limites {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 640px) {
-  .grid-limites {
-    grid-template-columns: 1fr;
-  }
-}
-
-.control-limite {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.etiqueta-fila {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-}
-
-.valor-limite {
-  font-weight: 700;
-  color: var(--cardio, #e11d48);
-}
-
-.slider-con-input {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.slider-rango {
-  flex: 1;
-  cursor: pointer;
-  accent-color: var(--cardio, #e11d48);
-}
-
-.input-numero {
-  width: 68px;
-  padding: 4px 6px;
-  font-size: 0.85rem;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--bg-surface, #ffffff);
   color: var(--text, #0f172a);
-  text-align: right;
 }
 
-/* Meta y presets */
-.fila-meta-recorte {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 4px 0;
-}
-
-.presets-recorte {
+.presets-rapidos {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -577,26 +810,97 @@ async function copiar() {
 .label-presets {
   font-size: 0.78rem;
   color: var(--text-muted, #64748b);
-  margin-right: 2px;
 }
 
-.resumen-seleccion {
-  display: flex;
-  align-items: center;
+/* Grid de ajuste fino */
+.grid-ajuste-fino {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
-  font-size: 0.85rem;
 }
 
-.duracion-recorte strong,
-.bpm-recorte strong {
+@media (max-width: 720px) {
+  .grid-ajuste-fino {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-punto {
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-punto.centro {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: var(--bg-elev-2, rgba(225, 29, 72, 0.04));
+  border-color: rgba(225, 29, 72, 0.25);
+}
+
+.cab-punto {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+
+.nombre-punto {
+  color: var(--text-muted, #64748b);
+}
+
+.valor-punto {
+  font-weight: 700;
   color: var(--cardio, #e11d48);
 }
 
-.acciones-recorte {
+.acciones-paso {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-fino {
+  flex: 1;
+  width: 60px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 4px;
+  text-align: center;
+  background: var(--bg-surface, #ffffff);
+  color: var(--text, #0f172a);
+}
+
+.metricas-tramo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.duracion-grande {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+}
+
+.bpm-tramo-destacado {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cardio, #e11d48);
+}
+
+.fila-botones-corte {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 4px;
+  padding-top: 4px;
 }
 </style>
+
